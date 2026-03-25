@@ -5,9 +5,14 @@ import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import dynamic from "next/dynamic";
 import { useAuthStore } from "@/stores/authStore";
-import { WalletProviders } from "@/providers/WalletProviders";
 import { Loader2 } from "lucide-react";
+
+const WalletProviders = dynamic(
+  () => import("@/providers/WalletProviders").then((mod) => mod.WalletProviders),
+  { ssr: false }
+);
 
 export default function DashboardLayout({
   children,

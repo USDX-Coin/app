@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Loader2 } from "lucide-react";
+import { TransactionListSkeleton } from "@/components/transactions/TransactionListSkeleton";
 import type { TransactionStatus } from "@/types";
 
 const statusStyles: Record<TransactionStatus, string> = {
@@ -25,11 +25,7 @@ export function TransactionList() {
   const { data: transactions, isLoading } = useTransactions();
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return <TransactionListSkeleton />;
   }
 
   if (!transactions?.length) {

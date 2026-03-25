@@ -38,7 +38,7 @@ export default function PaymentPage() {
 
   if (paid) {
     return (
-      <div className="flex min-h-screen items-center justify-center p-6">
+      <div className="flex min-h-screen items-center justify-center p-4 sm:p-6">
         <Card className="w-full max-w-md text-center">
           <CardContent className="pt-8 pb-8 space-y-4">
             <CheckCircle className="h-16 w-16 text-green-500 mx-auto" />
@@ -61,7 +61,7 @@ export default function PaymentPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-6">
+    <div className="flex min-h-screen items-center justify-center p-4 sm:p-6">
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle className="text-xl">Payment Gateway</CardTitle>

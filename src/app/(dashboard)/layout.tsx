@@ -44,7 +44,7 @@ export default function DashboardLayout({
   return (
     <div className="flex h-screen bg-background">
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex lg:w-60 flex-col border-r border-border bg-white">
+      <aside className="hidden md:flex md:w-60 flex-col border-r border-border bg-white">
         <div className="h-16 border-b border-border" />
         <Sidebar className="flex-1 px-3" />
       </aside>
@@ -65,7 +65,7 @@ export default function DashboardLayout({
           userName={user?.fullName ?? "User"}
           onMenuClick={() => setMobileMenuOpen(true)}
         />
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+        <main className="flex-1 overflow-y-auto p-4 md:p-6">
           <WalletProviders>{children}</WalletProviders>
         </main>
       </div>

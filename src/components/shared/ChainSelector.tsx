@@ -52,7 +52,7 @@ export function ChainSelector({
           <ChevronDown className="h-4 w-4 text-muted-foreground" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="max-w-sm max-w-[calc(100vw-2rem)]">
         <DialogHeader>
           <DialogTitle>Select Network</DialogTitle>
         </DialogHeader>
@@ -78,7 +78,7 @@ export function ChainSelector({
             </button>
           ))}
         </div>
-        <div className="max-h-64 overflow-y-auto space-y-1">
+        <div className="max-h-[60vh] overflow-y-auto space-y-1">
           {filteredChains.map((chain) => (
             <button
               key={chain.id}

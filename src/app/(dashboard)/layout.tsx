@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useAuthStore } from "@/stores/authStore";
+import { WalletProviders } from "@/providers/WalletProviders";
 import { Loader2 } from "lucide-react";
 
 export default function DashboardLayout({
@@ -64,7 +65,9 @@ export default function DashboardLayout({
           userName={user?.fullName ?? "User"}
           onMenuClick={() => setMobileMenuOpen(true)}
         />
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+          <WalletProviders>{children}</WalletProviders>
+        </main>
       </div>
     </div>
   );

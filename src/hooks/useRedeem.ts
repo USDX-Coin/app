@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useRedeemStore } from "@/stores/redeemStore";
 import { mockCreateRedeem } from "@/lib/api/mock-api";
@@ -18,7 +19,7 @@ export function useRedeem() {
   const parsedAmount = parseAmount(store.amount);
   const receiveAmount = parsedAmount * EXCHANGE_RATE - parsedAmount * MINTING_FEE_PERCENT;
   const fee = parsedAmount * MINTING_FEE_PERCENT;
-  const selectedChain = getChainById(store.chainId);
+  const selectedChain = useMemo(() => getChainById(store.chainId), [store.chainId]);
 
   const isFormValid =
     store.amount !== "" &&

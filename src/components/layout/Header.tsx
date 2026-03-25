@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Menu, User, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -20,12 +21,16 @@ interface HeaderProps {
 export function Header({ userName = "U", onMenuClick }: HeaderProps) {
   const router = useRouter();
   const logout = useAuthStore((s) => s.logout);
-  const initials = userName
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+  const initials = useMemo(
+    () =>
+      userName
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2),
+    [userName]
+  );
 
   function handleLogout() {
     logout();

@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useMintStore } from "@/stores/mintStore";
@@ -21,7 +22,7 @@ export function useMint() {
   const parsedAmount = parseAmount(store.amount);
   const paymentAmount = parsedAmount * EXCHANGE_RATE;
   const fee = parsedAmount * MINTING_FEE_PERCENT;
-  const selectedChain = getChainById(store.chainId);
+  const selectedChain = useMemo(() => getChainById(store.chainId), [store.chainId]);
 
   const isFormValid =
     store.amount !== "" &&

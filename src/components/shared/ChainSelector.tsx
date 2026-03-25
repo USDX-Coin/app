@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, memo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -20,7 +20,7 @@ interface ChainSelectorProps {
   onSelect: (chainId: string) => void;
 }
 
-export function ChainSelector({
+export const ChainSelector = memo(function ChainSelector({
   selectedChainId,
   onSelect,
 }: ChainSelectorProps) {
@@ -103,7 +103,7 @@ export function ChainSelector({
       </DialogContent>
     </Dialog>
   );
-}
+});
 
 function ChainIcon({
   chain,

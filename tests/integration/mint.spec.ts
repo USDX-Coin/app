@@ -77,8 +77,10 @@ test.describe("Mint Page", () => {
         .getByPlaceholder("Destination Address")
         .fill("0xabcdef1234567890abcdef1234567890abcdef12");
       await page.getByRole("button", { name: "Review Mint" }).click();
-      // 0.7% fee
-      await expect(page.getByText("7 USD")).toBeVisible();
+      // 0.7% fee of 1000 = $7
+      await expect(page.getByText("$7")).toBeVisible();
+      // Total payment section shows
+      await expect(page.getByText("Total payment")).toBeVisible();
     });
 
     test("chain selector dialog opens", async ({ page }) => {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useMintStore } from "@/stores/mintStore";
 import { mockCreateMint } from "@/lib/api/mock-api";
@@ -13,6 +13,7 @@ import { getChainById } from "@/lib/chains";
 export function useMint() {
   const store = useMintStore();
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const amountError = store.amount ? validateAmount(store.amount, "mint") : null;
   const addressError = store.destinationAddress
@@ -37,6 +38,9 @@ export function useMint() {
         amount: parsedAmount,
         destinationAddress: store.destinationAddress,
       }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+    },
   });
 
   function goToReview() {

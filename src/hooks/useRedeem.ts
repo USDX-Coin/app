@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRedeemStore } from "@/stores/redeemStore";
 import { mockCreateRedeem } from "@/lib/api/mock-api";
 import { validateAmount } from "@/lib/validations";
@@ -11,6 +11,7 @@ import { getChainById } from "@/lib/chains";
 
 export function useRedeem() {
   const store = useRedeemStore();
+  const queryClient = useQueryClient();
 
   const amountError = store.amount
     ? validateAmount(store.amount, "redeem")
@@ -34,6 +35,9 @@ export function useRedeem() {
         bankAccountId: store.bankAccountId,
         walletAddress,
       }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+    },
   });
 
   function goToReview() {
@@ -45,6 +49,7 @@ export function useRedeem() {
   }
 
   async function executeRedeem(walletAddress: string) {
+    if (createRedeemMutation.isPending) return;
     store.setStep("executing");
     await createRedeemMutation.mutateAsync(walletAddress);
     store.setStep("success");

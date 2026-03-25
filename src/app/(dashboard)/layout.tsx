@@ -19,16 +19,13 @@ export default function DashboardLayout({
   const router = useRouter();
   const { isAuthenticated, user } = useAuthStore();
 
-  // Wait for zustand to hydrate from localStorage
+  // Wait for zustand to hydrate, then check auth
   useEffect(() => {
     setHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    if (hydrated && !isAuthenticated) {
+    if (!useAuthStore.getState().isAuthenticated) {
       router.replace("/login");
     }
-  }, [hydrated, isAuthenticated, router]);
+  }, [router]);
 
   // Show loading while hydrating
   if (!hydrated) {

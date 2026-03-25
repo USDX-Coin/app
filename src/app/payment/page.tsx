@@ -6,8 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useMintStore } from "@/stores/mintStore";
 import { getChainById } from "@/lib/chains";
-import { formatAmount, truncateAddress } from "@/lib/utils";
-import { parseAmount } from "@/lib/utils";
+import { formatAmount, truncateAddress, parseAmount } from "@/lib/utils";
 import { CheckCircle, ArrowLeft } from "lucide-react";
 
 export default function PaymentPage() {
@@ -17,6 +16,12 @@ export default function PaymentPage() {
   const [processing, setProcessing] = useState(false);
   const chain = getChainById(chainId);
   const parsedAmount = parseAmount(amount);
+
+  // Redirect to /mint if accessed directly without mint data
+  if (!amount || parsedAmount <= 0) {
+    router.replace("/mint");
+    return null;
+  }
 
   async function handlePay() {
     setProcessing(true);

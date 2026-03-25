@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,8 +18,13 @@ export default function PaymentPage() {
   const parsedAmount = parseAmount(amount);
 
   // Redirect to /mint if accessed directly without mint data
+  useEffect(() => {
+    if (!amount || parsedAmount <= 0) {
+      router.replace("/mint");
+    }
+  }, [amount, parsedAmount, router]);
+
   if (!amount || parsedAmount <= 0) {
-    router.replace("/mint");
     return null;
   }
 

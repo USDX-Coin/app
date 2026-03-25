@@ -1,8 +1,5 @@
 import { test, expect } from "@playwright/test";
-
-async function clearAuth(page: import("@playwright/test").Page) {
-  await page.evaluate(() => localStorage.removeItem("usdx-auth"));
-}
+import { clearAuth } from "../helpers/playwright-utils";
 
 async function gotoLogin(page: import("@playwright/test").Page) {
   await page.goto("/login");
@@ -82,7 +79,6 @@ test.describe("Login Page", () => {
 
   test.describe("edge cases", () => {
     test("shows error for email that fails server validation", async ({ page }) => {
-      // Browser native type=email allows "a@b" but our mock API rejects it
       await gotoLogin(page);
       await page.getByPlaceholder("Email").fill("notregistered@test.com");
       await page.getByPlaceholder("Password").fill("WrongPass1");

@@ -1,25 +1,5 @@
 import { test, expect } from "@playwright/test";
-
-async function loginViaStorage(page: import("@playwright/test").Page) {
-  await page.goto("/login");
-  await page.evaluate(() => {
-    const authState = {
-      state: {
-        user: {
-          id: "usr_1",
-          fullName: "Demo User",
-          email: "demo@usdx.com",
-          isVerified: true,
-          createdAt: "2026-01-01T00:00:00Z",
-        },
-        token: "mock-token",
-        isAuthenticated: true,
-      },
-      version: 0,
-    };
-    localStorage.setItem("usdx-auth", JSON.stringify(authState));
-  });
-}
+import { loginViaStorage } from "../helpers/playwright-utils";
 
 test.beforeEach(async ({ page }) => {
   await loginViaStorage(page);
@@ -45,7 +25,6 @@ test.describe("Transactions Page", () => {
   });
 
   test.describe("negative", () => {
-    // Since we use mock data, there's always data. Testing the loading state.
     test("page loads without errors", async ({ page }) => {
       await expect(page.getByText("Transactions").first()).toBeVisible();
     });

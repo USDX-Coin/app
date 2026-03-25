@@ -1,8 +1,9 @@
 import { test, expect } from "@playwright/test";
+import { clearAuth } from "../helpers/playwright-utils";
 
 async function login(page: import("@playwright/test").Page) {
   await page.goto("/login");
-  await page.evaluate(() => localStorage.removeItem("usdx-auth"));
+  await clearAuth(page);
   await page.goto("/login");
   await expect(page.getByText("Welcome Back")).toBeVisible({ timeout: 15000 });
   await page.getByPlaceholder("Email").fill("demo@usdx.com");

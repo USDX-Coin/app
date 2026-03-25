@@ -1,11 +1,12 @@
 import { test, expect } from "@playwright/test";
+import { clearAuth } from "../helpers/playwright-utils";
 
 test.describe("Auth Flow", () => {
   test.describe("positive", () => {
     test("register -> logout -> login -> see dashboard", async ({ page }) => {
       // Clear any existing auth
       await page.goto("/login");
-      await page.evaluate(() => localStorage.removeItem("usdx-auth"));
+      await clearAuth(page);
       await page.goto("/register");
       await expect(
         page.getByRole("heading", { name: "Create Account" })
@@ -51,7 +52,7 @@ test.describe("Auth Flow", () => {
   test.describe("negative", () => {
     test("unauthenticated user is redirected to login", async ({ page }) => {
       await page.goto("/login");
-      await page.evaluate(() => localStorage.removeItem("usdx-auth"));
+      await clearAuth(page);
       await page.goto("/mint");
       await expect(page.getByText("Welcome Back")).toBeVisible({
         timeout: 15000,

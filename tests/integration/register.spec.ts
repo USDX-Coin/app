@@ -1,8 +1,9 @@
 import { test, expect } from "@playwright/test";
+import { clearAuth } from "../helpers/playwright-utils";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/register");
-  await page.evaluate(() => localStorage.removeItem("usdx-auth"));
+  await clearAuth(page);
   await page.reload();
   await page.waitForSelector("h1", { timeout: 10000 });
 });

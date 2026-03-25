@@ -34,14 +34,6 @@ export const SUPPORTED_CHAINS: Chain[] = [
     explorerUrl: "https://polygonscan.com",
   },
   {
-    id: "solana",
-    name: "Solana",
-    shortName: "Solana",
-    icon: "/chains/solana.svg",
-    contractAddress: "usdx...wDur",
-    explorerUrl: "https://solscan.io",
-  },
-  {
     id: "etherlink",
     name: "Etherlink",
     shortName: "Etherlink",

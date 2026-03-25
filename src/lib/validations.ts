@@ -43,16 +43,10 @@ export function validateAmount(
 
 export function validateAddress(address: string): string | null {
   if (!address) return "Destination address is required";
-  if (address.startsWith("0x")) {
-    if (address.length !== 42) return "Invalid EVM address (must be 42 chars)";
-    if (!/^0x[0-9a-fA-F]{40}$/.test(address))
-      return "Invalid EVM address format";
-  } else {
-    if (address.length < 32 || address.length > 44)
-      return "Invalid Solana address";
-    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address))
-      return "Invalid Solana address format";
-  }
+  if (!address.startsWith("0x")) return "Address must start with 0x";
+  if (address.length !== 42) return "Invalid EVM address (must be 42 chars)";
+  if (!/^0x[0-9a-fA-F]{40}$/.test(address))
+    return "Invalid EVM address format";
   return null;
 }
 

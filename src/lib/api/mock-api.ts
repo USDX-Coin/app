@@ -103,7 +103,7 @@ export async function mockGetTransactions(): Promise<Transaction[]> {
       id: "tx_5",
       type: "mint",
       amount: 5000,
-      chainId: "solana",
+      chainId: "polygon",
       status: "completed",
       txHash: "3xYz...AbCd",
       createdAt: "2026-03-16T11:20:00Z",

@@ -2,7 +2,7 @@
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ChainSelector } from "@/components/mint/ChainSelector";
+import { ChainSelector } from "@/components/shared/ChainSelector";
 import { BankAccountSelector } from "./BankAccountSelector";
 import { useRedeem } from "@/hooks/useRedeem";
 import { useWalletBalance } from "@/hooks/useWalletBalance";

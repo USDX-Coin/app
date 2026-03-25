@@ -2,7 +2,7 @@
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ChainSelector } from "./ChainSelector";
+import { ChainSelector } from "@/components/shared/ChainSelector";
 import { useMint } from "@/hooks/useMint";
 import { formatAmount } from "@/lib/utils";
 import { ArrowRight, BookOpen, ScanLine } from "lucide-react";

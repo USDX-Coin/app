@@ -59,8 +59,10 @@ export const SUPPORTED_CHAINS: Chain[] = [
   },
 ];
 
+const CHAIN_MAP = new Map(SUPPORTED_CHAINS.map((c) => [c.id, c]));
+
 export function getChainById(id: string): Chain | undefined {
-  return SUPPORTED_CHAINS.find((chain) => chain.id === id);
+  return CHAIN_MAP.get(id);
 }
 
 export const DEFAULT_CHAIN_ID = "base";

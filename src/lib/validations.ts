@@ -5,10 +5,12 @@ import {
   MAX_REDEEM_AMOUNT,
 } from "./constants";
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EVM_ADDRESS_REGEX = /^0x[0-9a-fA-F]{40}$/;
+
 export function validateEmail(email: string): string | null {
   if (!email) return "Email is required";
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) return "Invalid email format";
+  if (!EMAIL_REGEX.test(email)) return "Invalid email format";
   return null;
 }
 
@@ -45,7 +47,7 @@ export function validateAddress(address: string): string | null {
   if (!address) return "Destination address is required";
   if (!address.startsWith("0x")) return "Address must start with 0x";
   if (address.length !== 42) return "Invalid EVM address (must be 42 chars)";
-  if (!/^0x[0-9a-fA-F]{40}$/.test(address))
+  if (!EVM_ADDRESS_REGEX.test(address))
     return "Invalid EVM address format";
   return null;
 }

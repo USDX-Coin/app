@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
@@ -15,17 +15,22 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [hydrated, setHydrated] = useState(false);
   const router = useRouter();
   const { isAuthenticated, user } = useAuthStore();
 
-  // Wait for zustand to hydrate, then check auth
+  // Detect client-side hydration without triggering cascading renders
+  const hydrated = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
+
+  // Check auth after hydration
   useEffect(() => {
-    setHydrated(true);
-    if (!useAuthStore.getState().isAuthenticated) {
+    if (hydrated && !useAuthStore.getState().isAuthenticated) {
       router.replace("/login");
     }
-  }, [router]);
+  }, [hydrated, router]);
 
   // Show loading while hydrating
   if (!hydrated) {

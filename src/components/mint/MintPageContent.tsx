@@ -4,6 +4,12 @@ import { MintForm } from "@/components/mint/MintForm";
 import { MintReview } from "@/components/mint/MintReview";
 import { useMintStore } from "@/stores/mintStore";
 import { Info } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export function MintPageContent() {
   const step = useMintStore((s) => s.step);
@@ -16,7 +22,16 @@ export function MintPageContent() {
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold text-primary">Mint</h1>
-              <Info className="h-4 w-4 text-muted-foreground" />
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="max-w-xs text-sm">Mint USDX by sending USD payment. Tokens are delivered to your wallet within 24 hours.</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
             <div className="rounded-full bg-foreground text-white px-4 py-1.5 text-sm font-medium">
               Regular

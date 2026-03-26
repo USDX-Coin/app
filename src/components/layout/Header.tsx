@@ -48,7 +48,9 @@ export function Header({ userName = "U", onMenuClick }: HeaderProps) {
         >
           <Menu className="h-5 w-5" />
         </Button>
-        <Logo />
+        <div className="md:hidden">
+          <Logo />
+        </div>
       </div>
       <div className="flex items-center gap-3">
         <span className="text-sm text-muted-foreground hidden sm:inline">
@@ -63,7 +65,7 @@ export function Header({ userName = "U", onMenuClick }: HeaderProps) {
               {initials}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
+          <DropdownMenuContent align="end" className="w-44 bg-white border border-border shadow-lg">
             <DropdownMenuItem onClick={() => router.push("/profile")}>
               <User className="mr-2 h-4 w-4" />
               Profile

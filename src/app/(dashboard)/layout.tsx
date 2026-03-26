@@ -4,6 +4,7 @@ import { useState, useEffect, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
+import { Logo } from "@/components/layout/Logo";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import dynamic from "next/dynamic";
 import { useAuthStore } from "@/stores/authStore";
@@ -52,7 +53,9 @@ export default function DashboardLayout({
     <div className="flex h-screen bg-background">
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex md:w-60 flex-col border-r border-border bg-white">
-        <div className="h-16 border-b border-border" />
+        <div className="h-16 border-b border-border flex items-center px-4">
+          <Logo />
+        </div>
         <Sidebar className="flex-1 px-3" />
       </aside>
 

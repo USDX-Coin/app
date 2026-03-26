@@ -12,7 +12,7 @@ export function MintPageContent() {
     <div className="flex flex-col lg:flex-row gap-6 max-w-5xl mx-auto">
       {/* Main Form */}
       <div className="flex-1">
-        <div className="rounded-2xl border border-border bg-white p-4 md:p-6">
+        <div className="rounded-2xl border border-border bg-white p-4 md:p-6 shadow-sm">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold text-primary">Mint</h1>
@@ -29,12 +29,12 @@ export function MintPageContent() {
       {/* Review Panel */}
       {step === "review" && (
         <div className="lg:w-96">
-          <div className="rounded-2xl border border-border bg-white p-4 md:p-6">
+          <div className="rounded-2xl border border-border bg-white p-4 md:p-6 shadow-sm">
             <MintReview />
           </div>
 
           {/* Notes */}
-          <div className="mt-4 rounded-2xl border border-border bg-white p-4 md:p-6">
+          <div className="mt-4 rounded-2xl border border-border bg-white p-4 md:p-6 shadow-sm">
             <h3 className="text-sm font-semibold mb-3">Please Note</h3>
             <ul className="text-xs text-muted-foreground space-y-2 list-disc list-inside">
               <li>

@@ -5,6 +5,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "USDX - USD Stablecoin",
   description: "Mint and redeem USDX stablecoin",
+  icons: {
+    icon: "/image/Logo.svg",
+  },
 };
 
 export default function RootLayout({

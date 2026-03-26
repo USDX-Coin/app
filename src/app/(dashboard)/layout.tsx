@@ -59,7 +59,8 @@ export default function DashboardLayout({
       {/* Mobile Sidebar */}
       <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
         <SheetContent side="left" className="w-60 p-0">
-          <div className="p-4 border-b border-border">
+          <div className="flex items-center gap-2 p-4 border-b border-border">
+            <img src="/image/Logo.svg" alt="USDX" className="h-8 w-8" />
             <span className="text-xl font-bold text-primary">USDX</span>
           </div>
           <Sidebar className="px-3" />

@@ -15,23 +15,21 @@ test.describe("Profile Page", () => {
     });
 
     test("shows verification badge", async ({ page }) => {
-      await expect(
-        page.getByText("Your Account Is Verified")
-      ).toBeVisible();
+      await expect(page.getByText("Verified")).toBeVisible();
     });
   });
 
   test.describe("negative", () => {
     test("page renders without errors", async ({ page }) => {
-      await expect(page.getByText("Full Name")).toBeVisible();
-      await expect(page.getByText("Email")).toBeVisible();
+      await expect(page.getByText("Personal Information")).toBeVisible();
+      await expect(page.getByText("Security")).toBeVisible();
     });
   });
 
   test.describe("edge cases", () => {
-    test("shows member since date", async ({ page }) => {
+    test("shows member since date in formal format", async ({ page }) => {
       await expect(page.getByText("Member Since")).toBeVisible();
-      await expect(page.getByText("1/1/2026")).toBeVisible();
+      await expect(page.getByText("January 1, 2026")).toBeVisible();
     });
   });
 });

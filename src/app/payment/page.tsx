@@ -55,7 +55,7 @@ export default function PaymentPage() {
             </p>
             <Button
               onClick={handleDone}
-              className="w-full bg-primary hover:bg-primary-600"
+              className="w-full bg-gradient-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary-700"
             >
               Back to Mint
             </Button>
@@ -121,7 +121,7 @@ export default function PaymentPage() {
           <Button
             onClick={handlePay}
             disabled={processing}
-            className="w-full bg-primary hover:bg-primary-600 py-6"
+            className="w-full bg-gradient-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary-700 py-6"
           >
             {processing ? "Processing..." : `Pay $${formatAmount(parsedAmount)}`}
           </Button>

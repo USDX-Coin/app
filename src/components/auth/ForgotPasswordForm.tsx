@@ -70,7 +70,7 @@ export function ForgotPasswordForm() {
           )}
         </div>
 
-        <Button type="submit" className="w-full bg-primary hover:bg-primary-600">
+        <Button type="submit" className="w-full bg-gradient-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary-700">
           Send Reset Link
         </Button>
       </form>

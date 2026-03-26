@@ -45,7 +45,7 @@ export function RedeemReview() {
         </p>
         <Button
           onClick={reset}
-          className="w-full bg-primary hover:bg-primary-600"
+          className="w-full bg-gradient-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary-700"
         >
           New Redemption
         </Button>
@@ -118,7 +118,7 @@ export function RedeemReview() {
       <Button
         onClick={() => executeRedeem(address ?? "")}
         disabled={isExecuting}
-        className="w-full bg-primary hover:bg-primary-600 rounded-xl py-6 text-base"
+        className="w-full bg-gradient-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary-700 rounded-xl py-6 text-base"
       >
         <span className="flex-1">Execute Redeem</span>
         <ArrowRight className="h-5 w-5" />

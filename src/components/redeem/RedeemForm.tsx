@@ -125,7 +125,7 @@ export function RedeemForm() {
       <Button
         onClick={goToReview}
         disabled={!isFormValid}
-        className="w-full bg-primary hover:bg-primary-600 rounded-xl py-6 text-base"
+        className="w-full bg-gradient-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary-700 rounded-xl py-6 text-base"
       >
         <span className="flex-1">Review Redeem</span>
         <ArrowRight className="h-5 w-5" />

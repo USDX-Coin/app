@@ -141,7 +141,7 @@ export function RegisterForm() {
 
         <Button
           type="submit"
-          className="w-full bg-primary hover:bg-primary-600"
+          className="w-full bg-gradient-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary-700"
           disabled={registerLoading}
         >
           {registerLoading ? "Creating account..." : "Create Account"}

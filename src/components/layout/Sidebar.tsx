@@ -25,8 +25,8 @@ export function Sidebar({ className = "" }: { className?: string }) {
             className={cn(
               "flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-colors",
               isActive
-                ? "text-primary font-semibold"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                ? "bg-gradient-to-r from-primary-50 to-transparent text-primary font-semibold"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
             )}
           >
             <item.icon className="h-5 w-5" />

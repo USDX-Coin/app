@@ -113,6 +113,15 @@ function ChainIcon({
   size?: "sm" | "md";
 }) {
   const sizeClass = size === "sm" ? "h-5 w-5" : "h-8 w-8";
+  if (chain?.icon) {
+    return (
+      <img
+        src={chain.icon}
+        alt={chain.shortName}
+        className={`${sizeClass} rounded-full`}
+      />
+    );
+  }
   return (
     <div
       className={`${sizeClass} rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary`}

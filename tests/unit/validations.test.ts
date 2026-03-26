@@ -149,16 +149,16 @@ describe("validateAddress", () => {
         validateAddress("0x1234567890abcdef1234567890abcdef12345678")
       ).toBeNull();
     });
+    test("accepts valid Solana address", () => {
+      expect(
+        validateAddress("7EcDhSYGxXyscszYEp35KHN8vvw3svAuLKTzXwCFLtV")
+      ).toBeNull();
+    });
   });
 
   describe("negative", () => {
     test("rejects empty address", () => {
       expect(validateAddress("")).toBe("Destination address is required");
-    });
-    test("rejects non-0x address", () => {
-      expect(
-        validateAddress("7EcDhSYGxXyscszYEp35KHN8vvw3svAuLKTzXwCFLtV")
-      ).toBe("Address must start with 0x");
     });
     test("rejects EVM address with wrong length", () => {
       expect(validateAddress("0x1234")).toBe(
@@ -170,6 +170,9 @@ describe("validateAddress", () => {
         validateAddress("0xGGGG567890abcdef1234567890abcdef12345678")
       ).toBe("Invalid EVM address format");
     });
+    test("rejects short Solana address", () => {
+      expect(validateAddress("abc")).toBe("Invalid Solana address");
+    });
   });
 
   describe("edge cases", () => {
@@ -178,9 +181,9 @@ describe("validateAddress", () => {
         validateAddress("0xAbCdEf7890AbCdEf1234567890AbCdEf12345678")
       ).toBeNull();
     });
-    test("rejects plain text address", () => {
+    test("rejects plain text too short for Solana", () => {
       expect(validateAddress("notanaddress")).toBe(
-        "Address must start with 0x"
+        "Invalid Solana address"
       );
     });
   });

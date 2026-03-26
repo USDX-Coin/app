@@ -67,14 +67,14 @@ describe("useMint", () => {
         expect(result.current.addressError).toBeTruthy();
       });
 
-      test("addressError for non-0x address", () => {
+      test("addressError for invalid address", () => {
         useMintStore.getState().setDestinationAddress("notanaddress");
 
         const { result } = renderHook(() => useMint(), {
           wrapper: createWrapper(),
         });
 
-        expect(result.current.addressError).toBe("Address must start with 0x");
+        expect(result.current.addressError).toBeTruthy();
       });
     });
 

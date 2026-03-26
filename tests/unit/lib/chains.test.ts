@@ -6,8 +6,8 @@ import {
 } from "@/lib/chains";
 
 describe("SUPPORTED_CHAINS", () => {
-  test("contains exactly 7 chains", () => {
-    expect(SUPPORTED_CHAINS).toHaveLength(7);
+  test("contains exactly 8 chains", () => {
+    expect(SUPPORTED_CHAINS).toHaveLength(8);
   });
 
   test("each chain has all required fields", () => {
@@ -21,9 +21,15 @@ describe("SUPPORTED_CHAINS", () => {
     }
   });
 
-  test("does not contain Solana", () => {
+  test("contains Solana as UI-only chain", () => {
     const ids = SUPPORTED_CHAINS.map((c) => c.id);
-    expect(ids).not.toContain("solana");
+    expect(ids).toContain("solana");
+  });
+
+  test("each chain icon points to /icon/ directory", () => {
+    for (const chain of SUPPORTED_CHAINS) {
+      expect(chain.icon).toMatch(/^\/icon\/.+\.svg$/);
+    }
   });
 
   test("DEFAULT_CHAIN_ID is base", () => {

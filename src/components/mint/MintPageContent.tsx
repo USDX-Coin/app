@@ -3,7 +3,9 @@
 import { MintForm } from "@/components/mint/MintForm";
 import { MintReview } from "@/components/mint/MintReview";
 import { useMintStore } from "@/stores/mintStore";
-import { Info } from "lucide-react";
+import { useMint } from "@/hooks/useMint";
+import { Info, ArrowLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   Tooltip,
   TooltipContent,
@@ -13,6 +15,7 @@ import {
 
 export function MintPageContent() {
   const step = useMintStore((s) => s.step);
+  const { goBackToForm } = useMint();
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 max-w-5xl mx-auto">
@@ -39,6 +42,17 @@ export function MintPageContent() {
           </div>
           <MintForm />
         </div>
+
+        {step === "review" && (
+          <Button
+            onClick={goBackToForm}
+            variant="outline"
+            className="w-full mt-4 rounded-xl py-5 text-base flex items-center justify-center gap-2"
+          >
+            <ArrowLeft className="h-5 w-5" />
+            Change Amount
+          </Button>
+        )}
       </div>
 
       {/* Review Panel */}

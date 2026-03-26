@@ -5,7 +5,7 @@ import { useRedeem } from "@/hooks/useRedeem";
 import { useQuery } from "@tanstack/react-query";
 import { mockGetBankAccounts } from "@/lib/api/mock-api";
 import { formatAmount, truncateAddress } from "@/lib/utils";
-import { ArrowRight, ArrowLeft, CheckCircle, Loader2 } from "lucide-react";
+import { ArrowRight, CheckCircle, Loader2 } from "lucide-react";
 import { useAccount } from "wagmi";
 
 export function RedeemReview() {
@@ -17,7 +17,7 @@ export function RedeemReview() {
     fee,
     receiveAmount,
     bankAccountId,
-    goBackToForm,
+    // goBackToForm moved to RedeemPageContent
     executeRedeem,
     isExecuting,
     redeemOrder,
@@ -124,14 +124,6 @@ export function RedeemReview() {
         <ArrowRight className="h-5 w-5" />
       </Button>
 
-      <Button
-        onClick={goBackToForm}
-        variant="outline"
-        className="w-full rounded-xl py-6 text-base flex items-center justify-center gap-2"
-      >
-        <ArrowLeft className="h-5 w-5" />
-        Change Amount
-      </Button>
     </div>
   );
 }

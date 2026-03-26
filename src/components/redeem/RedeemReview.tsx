@@ -118,18 +118,18 @@ export function RedeemReview() {
       <Button
         onClick={() => executeRedeem(address ?? "")}
         disabled={isExecuting}
-        className="w-full bg-gradient-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary-700 rounded-xl py-6 text-base"
+        className="w-full bg-gradient-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary-700 rounded-xl py-6 text-base flex items-center justify-center gap-2"
       >
-        <span className="flex-1">Execute Redeem</span>
+        {isExecuting ? "Processing..." : "Execute Redeem"}
         <ArrowRight className="h-5 w-5" />
       </Button>
 
       <Button
         onClick={goBackToForm}
         variant="outline"
-        className="w-full rounded-xl py-6 text-base"
+        className="w-full rounded-xl py-6 text-base flex items-center justify-center gap-2"
       >
-        <ArrowLeft className="h-5 w-5 mr-2" />
+        <ArrowLeft className="h-5 w-5" />
         Change Amount
       </Button>
     </div>

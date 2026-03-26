@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ChainSelector } from "@/components/shared/ChainSelector";
 import { BankAccountSelector } from "./BankAccountSelector";
+import { AddRecipientDialog } from "./AddRecipientDialog";
 import { useRedeem } from "@/hooks/useRedeem";
 import { useWalletBalance } from "@/hooks/useWalletBalance";
 import { formatAmount } from "@/lib/utils";
@@ -86,7 +87,7 @@ export function RedeemForm() {
             value={receiveAmount > 0 ? formatAmount(receiveAmount) : ""}
             placeholder="Amount"
             disabled
-            className="border-0 text-lg font-medium p-0 focus-visible:ring-0 flex-1 disabled:opacity-50"
+            className="border-0 text-lg font-medium p-0 focus-visible:ring-0 flex-1 disabled:opacity-70 disabled:cursor-default"
           />
           <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
             <div className="h-6 w-6 rounded-full bg-green-100 flex items-center justify-center text-xs">
@@ -118,6 +119,7 @@ export function RedeemForm() {
           value={bankAccountId}
           onSelect={setBankAccountId}
         />
+        <AddRecipientDialog />
       </div>
 
       {/* Review button */}

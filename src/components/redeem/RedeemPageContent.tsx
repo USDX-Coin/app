@@ -4,6 +4,12 @@ import { RedeemForm } from "@/components/redeem/RedeemForm";
 import { RedeemReview } from "@/components/redeem/RedeemReview";
 import { useRedeemStore } from "@/stores/redeemStore";
 import { Info } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export function RedeemPageContent() {
   const step = useRedeemStore((s) => s.step);
@@ -15,7 +21,16 @@ export function RedeemPageContent() {
         <div className="rounded-2xl border border-border bg-white p-4 md:p-6 shadow-sm">
           <div className="flex items-center gap-2 mb-6">
             <h1 className="text-2xl font-bold text-primary">Redeem</h1>
-            <Info className="h-4 w-4 text-muted-foreground" />
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="max-w-xs text-sm">Redeem USDX tokens back to USD. Funds are transferred to your bank account.</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
           <RedeemForm />
         </div>

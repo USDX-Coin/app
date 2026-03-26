@@ -29,7 +29,7 @@ export function BankAccountSelector({
       <SelectTrigger className="rounded-xl h-14">
         <SelectValue placeholder="Choose Bank Account" />
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent className="bg-white border border-border shadow-lg">
         {accounts.map((account) => (
           <SelectItem key={account.id} value={account.id}>
             <div className="flex items-center gap-2">

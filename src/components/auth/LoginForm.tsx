@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { validateEmail } from "@/lib/validations";
+import { AlertCircle, Eye, EyeOff } from "lucide-react";
 
 export function LoginForm() {
   const { login, loginLoading, loginError } = useAuth();
@@ -52,7 +53,10 @@ export function LoginForm() {
             onChange={(e) => setEmail(e.target.value)}
           />
           {errors.email && (
-            <p className="text-sm text-destructive">{errors.email}</p>
+            <p className="text-xs text-destructive flex items-center gap-1.5 mt-1 animate-fade-in">
+              <AlertCircle className="h-3 w-3 shrink-0" />
+              {errors.email}
+            </p>
           )}
         </div>
 
@@ -79,11 +83,14 @@ export function LoginForm() {
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               onClick={() => setShowPassword(!showPassword)}
             >
-              {showPassword ? "Hide" : "Show"}
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
           {errors.password && (
-            <p className="text-sm text-destructive">{errors.password}</p>
+            <p className="text-xs text-destructive flex items-center gap-1.5 mt-1 animate-fade-in">
+              <AlertCircle className="h-3 w-3 shrink-0" />
+              {errors.password}
+            </p>
           )}
         </div>
 

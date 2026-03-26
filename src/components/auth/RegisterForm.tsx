@@ -12,6 +12,7 @@ import {
   validateConfirmPassword,
   validateFullName,
 } from "@/lib/validations";
+import { AlertCircle, Eye, EyeOff } from "lucide-react";
 
 export function RegisterForm() {
   const { register, registerLoading, registerError } = useAuth();
@@ -19,6 +20,7 @@ export function RegisterForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string | undefined>>({});
 
   async function handleSubmit(e: React.FormEvent) {
@@ -62,7 +64,10 @@ export function RegisterForm() {
             onChange={(e) => setFullName(e.target.value)}
           />
           {errors.fullName && (
-            <p className="text-sm text-destructive">{errors.fullName}</p>
+            <p className="text-xs text-destructive flex items-center gap-1.5 mt-1 animate-fade-in">
+              <AlertCircle className="h-3 w-3 shrink-0" />
+              {errors.fullName}
+            </p>
           )}
         </div>
 
@@ -76,35 +81,53 @@ export function RegisterForm() {
             onChange={(e) => setEmail(e.target.value)}
           />
           {errors.email && (
-            <p className="text-sm text-destructive">{errors.email}</p>
+            <p className="text-xs text-destructive flex items-center gap-1.5 mt-1 animate-fade-in">
+              <AlertCircle className="h-3 w-3 shrink-0" />
+              {errors.email}
+            </p>
           )}
         </div>
 
         <div className="space-y-2">
           <Label htmlFor="password">Password</Label>
-          <Input
-            id="password"
-            type="password"
-            placeholder="Create a password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
+          <div className="relative">
+            <Input
+              id="password"
+              type={showPassword ? "text" : "password"}
+              placeholder="Create a password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <button
+              type="button"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              onClick={() => setShowPassword(!showPassword)}
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
           {errors.password && (
-            <p className="text-sm text-destructive">{errors.password}</p>
+            <p className="text-xs text-destructive flex items-center gap-1.5 mt-1 animate-fade-in">
+              <AlertCircle className="h-3 w-3 shrink-0" />
+              {errors.password}
+            </p>
           )}
         </div>
 
         <div className="space-y-2">
           <Label htmlFor="confirmPassword">Confirm Password</Label>
-          <Input
-            id="confirmPassword"
-            type="password"
-            placeholder="Confirm your password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-          />
+          <div className="relative">
+            <Input
+              id="confirmPassword"
+              type={showPassword ? "text" : "password"}
+              placeholder="Confirm your password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+            />
+          </div>
           {errors.confirmPassword && (
-            <p className="text-sm text-destructive">
+            <p className="text-xs text-destructive flex items-center gap-1.5 mt-1 animate-fade-in">
+              <AlertCircle className="h-3 w-3 shrink-0" />
               {errors.confirmPassword}
             </p>
           )}

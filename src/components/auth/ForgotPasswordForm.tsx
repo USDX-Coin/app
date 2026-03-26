@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { validateEmail } from "@/lib/validations";
+import { AlertCircle } from "lucide-react";
 
 export function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
@@ -61,7 +62,12 @@ export function ForgotPasswordForm() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && (
+            <p className="text-xs text-destructive flex items-center gap-1.5 mt-1 animate-fade-in">
+              <AlertCircle className="h-3 w-3 shrink-0" />
+              {error}
+            </p>
+          )}
         </div>
 
         <Button type="submit" className="w-full bg-primary hover:bg-primary-600">

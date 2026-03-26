@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ChainSelector } from "@/components/shared/ChainSelector";
 import { useMint } from "@/hooks/useMint";
 import { formatAmount } from "@/lib/utils";
-import { ArrowRight, BookOpen, ScanLine } from "lucide-react";
+import { ArrowRight, BookOpen, ScanLine, AlertCircle } from "lucide-react";
 
 export function MintForm() {
   const {
@@ -43,7 +43,7 @@ export function MintForm() {
           <ChainSelector selectedChainId={chainId} onSelect={setChainId} />
         </div>
         {amountError && (
-          <p className="text-sm text-destructive mt-1">{amountError}</p>
+          <p className="text-xs text-destructive flex items-center gap-1.5 mt-1 animate-fade-in"><AlertCircle className="h-3 w-3 shrink-0" />{amountError}</p>
         )}
       </div>
 
@@ -104,7 +104,7 @@ export function MintForm() {
           </button>
         </div>
         {addressError && (
-          <p className="text-sm text-destructive mt-1">{addressError}</p>
+          <p className="text-xs text-destructive flex items-center gap-1.5 mt-1 animate-fade-in"><AlertCircle className="h-3 w-3 shrink-0" />{addressError}</p>
         )}
       </div>
 

@@ -5,9 +5,10 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FieldError } from "@/components/ui/field-error";
 import { useAuth } from "@/hooks/useAuth";
 import { validateEmail } from "@/lib/validations";
-import { AlertCircle, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 
 export function LoginForm() {
   const { login, loginLoading, loginError } = useAuth();
@@ -42,8 +43,8 @@ export function LoginForm() {
         </Link>
       </p>
 
-      <form onSubmit={handleSubmit} className="space-y-5">
-        <div className="space-y-2">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
           <Label htmlFor="email">Your Email Address</Label>
           <Input
             id="email"
@@ -51,16 +52,12 @@ export function LoginForm() {
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            className="mt-1.5"
           />
-          {errors.email && (
-            <p className="text-xs text-destructive flex items-center gap-1.5 mt-1 animate-fade-in">
-              <AlertCircle className="h-3 w-3 shrink-0" />
-              {errors.email}
-            </p>
-          )}
+          <FieldError message={errors.email} />
         </div>
 
-        <div className="space-y-2">
+        <div>
           <div className="flex items-center justify-between">
             <Label htmlFor="password">Your Password</Label>
             <Link
@@ -70,7 +67,7 @@ export function LoginForm() {
               Forgot Password
             </Link>
           </div>
-          <div className="relative">
+          <div className="relative mt-1.5">
             <Input
               id="password"
               type={showPassword ? "text" : "password"}
@@ -86,19 +83,10 @@ export function LoginForm() {
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
-          {errors.password && (
-            <p className="text-xs text-destructive flex items-center gap-1.5 mt-1 animate-fade-in">
-              <AlertCircle className="h-3 w-3 shrink-0" />
-              {errors.password}
-            </p>
-          )}
+          <FieldError message={errors.password} />
         </div>
 
-        {loginError && (
-          <p className="text-sm text-destructive bg-destructive/10 rounded-md p-3">
-            {loginError}
-          </p>
-        )}
+        <FieldError message={loginError} />
 
         <Button
           type="submit"

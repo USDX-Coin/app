@@ -7,7 +7,8 @@ import { BankAccountSelector } from "./BankAccountSelector";
 import { useRedeem } from "@/hooks/useRedeem";
 import { useWalletBalance } from "@/hooks/useWalletBalance";
 import { formatAmount } from "@/lib/utils";
-import { ArrowRight, Plus, Wallet, AlertCircle } from "lucide-react";
+import { ArrowRight, Plus, Wallet } from "lucide-react";
+import { FieldError } from "@/components/ui/field-error";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount } from "wagmi";
 
@@ -72,9 +73,7 @@ export function RedeemForm() {
         />
         <ChainSelector selectedChainId={chainId} onSelect={setChainId} />
       </div>
-      {amountError && (
-        <p className="text-xs text-destructive flex items-center gap-1.5 mt-1 animate-fade-in"><AlertCircle className="h-3 w-3 shrink-0" />{amountError}</p>
-      )}
+      <FieldError message={amountError} />
 
       {/* You will receive */}
       <div>

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { validateEmail } from "@/lib/validations";
-import { AlertCircle } from "lucide-react";
+import { FieldError } from "@/components/ui/field-error";
 
 export function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
@@ -52,8 +52,8 @@ export function ForgotPasswordForm() {
         Enter your email and we&apos;ll send you a reset link.
       </p>
 
-      <form onSubmit={handleSubmit} className="space-y-5">
-        <div className="space-y-2">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
           <Label htmlFor="email">Email Address</Label>
           <Input
             id="email"
@@ -61,13 +61,9 @@ export function ForgotPasswordForm() {
             placeholder="Enter your email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            className="mt-1.5"
           />
-          {error && (
-            <p className="text-xs text-destructive flex items-center gap-1.5 mt-1 animate-fade-in">
-              <AlertCircle className="h-3 w-3 shrink-0" />
-              {error}
-            </p>
-          )}
+          <FieldError message={error || undefined} />
         </div>
 
         <Button type="submit" className="w-full bg-gradient-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary-700">

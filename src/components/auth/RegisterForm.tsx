@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FieldError } from "@/components/ui/field-error";
 import { useAuth } from "@/hooks/useAuth";
 import {
   validateEmail,
@@ -12,7 +13,7 @@ import {
   validateConfirmPassword,
   validateFullName,
 } from "@/lib/validations";
-import { AlertCircle, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 
 export function RegisterForm() {
   const { register, registerLoading, registerError } = useAuth();
@@ -54,24 +55,20 @@ export function RegisterForm() {
         </Link>
       </p>
 
-      <form onSubmit={handleSubmit} className="space-y-5">
-        <div className="space-y-2">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
           <Label htmlFor="fullName">Full Name</Label>
           <Input
             id="fullName"
             placeholder="Enter your full name"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
+            className="mt-1.5"
           />
-          {errors.fullName && (
-            <p className="text-xs text-destructive flex items-center gap-1.5 mt-1 animate-fade-in">
-              <AlertCircle className="h-3 w-3 shrink-0" />
-              {errors.fullName}
-            </p>
-          )}
+          <FieldError message={errors.fullName} />
         </div>
 
-        <div className="space-y-2">
+        <div>
           <Label htmlFor="email">Email Address</Label>
           <Input
             id="email"
@@ -79,18 +76,14 @@ export function RegisterForm() {
             placeholder="Enter your email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            className="mt-1.5"
           />
-          {errors.email && (
-            <p className="text-xs text-destructive flex items-center gap-1.5 mt-1 animate-fade-in">
-              <AlertCircle className="h-3 w-3 shrink-0" />
-              {errors.email}
-            </p>
-          )}
+          <FieldError message={errors.email} />
         </div>
 
-        <div className="space-y-2">
+        <div>
           <Label htmlFor="password">Password</Label>
-          <div className="relative">
+          <div className="relative mt-1.5">
             <Input
               id="password"
               type={showPassword ? "text" : "password"}
@@ -106,17 +99,12 @@ export function RegisterForm() {
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
-          {errors.password && (
-            <p className="text-xs text-destructive flex items-center gap-1.5 mt-1 animate-fade-in">
-              <AlertCircle className="h-3 w-3 shrink-0" />
-              {errors.password}
-            </p>
-          )}
+          <FieldError message={errors.password} />
         </div>
 
-        <div className="space-y-2">
+        <div>
           <Label htmlFor="confirmPassword">Confirm Password</Label>
-          <div className="relative">
+          <div className="relative mt-1.5">
             <Input
               id="confirmPassword"
               type={showPassword ? "text" : "password"}
@@ -132,19 +120,10 @@ export function RegisterForm() {
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
-          {errors.confirmPassword && (
-            <p className="text-xs text-destructive flex items-center gap-1.5 mt-1 animate-fade-in">
-              <AlertCircle className="h-3 w-3 shrink-0" />
-              {errors.confirmPassword}
-            </p>
-          )}
+          <FieldError message={errors.confirmPassword} />
         </div>
 
-        {registerError && (
-          <p className="text-sm text-destructive bg-destructive/10 rounded-md p-3">
-            {registerError}
-          </p>
-        )}
+        <FieldError message={registerError} />
 
         <Button
           type="submit"

@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Menu, User, LogOut } from "lucide-react";
+import { User, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -15,10 +15,9 @@ import { useAuthStore } from "@/stores/authStore";
 
 interface HeaderProps {
   userName?: string;
-  onMenuClick?: () => void;
 }
 
-export function Header({ userName = "U", onMenuClick }: HeaderProps) {
+export function Header({ userName = "U" }: HeaderProps) {
   const router = useRouter();
   const logout = useAuthStore((s) => s.logout);
   const initials = useMemo(
@@ -39,18 +38,8 @@ export function Header({ userName = "U", onMenuClick }: HeaderProps) {
 
   return (
     <header className="flex h-16 items-center justify-between border-b border-border bg-white px-4 md:px-6">
-      <div className="flex items-center gap-3">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="md:hidden"
-          onClick={onMenuClick}
-        >
-          <Menu className="h-5 w-5" />
-        </Button>
-        <div className="md:hidden">
-          <Logo />
-        </div>
+      <div className="flex items-center gap-3 md:hidden">
+        <Logo />
       </div>
       <div className="flex items-center gap-3">
         <span className="text-sm text-muted-foreground hidden sm:inline">

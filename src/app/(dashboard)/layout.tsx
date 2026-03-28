@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect, useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { Logo } from "@/components/layout/Logo";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { BottomNav } from "@/components/layout/BottomNav";
 import dynamic from "next/dynamic";
 import { useAuthStore } from "@/stores/authStore";
 import { Loader2 } from "lucide-react";
@@ -20,7 +20,6 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const router = useRouter();
   const { isAuthenticated, user } = useAuthStore();
 
@@ -59,27 +58,16 @@ export default function DashboardLayout({
         <Sidebar className="flex-1 px-3" />
       </aside>
 
-      {/* Mobile Sidebar */}
-      <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-        <SheetContent side="left" className="w-60 p-0">
-          <div className="flex items-center gap-2 p-4 border-b border-border">
-            <img src="/image/Logo.svg" alt="USDX" className="h-8 w-8" />
-            <span className="text-xl font-bold text-primary">USDX</span>
-          </div>
-          <Sidebar className="px-3" />
-        </SheetContent>
-      </Sheet>
-
       {/* Main Content */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        <Header
-          userName={user?.fullName ?? "User"}
-          onMenuClick={() => setMobileMenuOpen(true)}
-        />
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">
+        <Header userName={user?.fullName ?? "User"} />
+        <main className="flex-1 overflow-y-auto p-4 pb-20 md:p-6 md:pb-6">
           <WalletProviders>{children}</WalletProviders>
         </main>
       </div>
+
+      {/* Mobile Bottom Nav */}
+      <BottomNav />
     </div>
   );
 }

@@ -79,7 +79,7 @@ export function RedeemForm() {
                 const val = e.target.value.replace(/[^0-9.]/g, "");
                 setAmount(val);
               }}
-              className="bg-transparent outline-none border-0 text-lg font-medium p-0 focus-visible:ring-0 flex-1 dark:bg-transparent shadow-none disabled:opacity-70 disabled:cursor-default"
+              className="bg-transparent outline-none border-0 text-sm font-medium p-0 focus-visible:ring-0 flex-1 dark:bg-transparent shadow-none disabled:opacity-70 disabled:cursor-default"
             />
             <ChainSelector selectedChainId={chainId} onSelect={setChainId} disabled={isReviewing} />
           </div>
@@ -100,7 +100,7 @@ export function RedeemForm() {
             value={receiveAmount > 0 ? formatAmount(receiveAmount) : ""}
             placeholder="Amount"
             disabled
-            className="bg-transparent outline-none border-0 text-lg font-medium p-0 focus-visible:ring-0 flex-1 disabled:opacity-70 disabled:cursor-default dark:bg-transparent shadow-none"
+            className="bg-transparent outline-none border-0 text-sm font-medium p-0 focus-visible:ring-0 flex-1 disabled:opacity-70 disabled:cursor-default dark:bg-transparent shadow-none"
           />
           <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
             <div className="h-6 w-6 rounded-full bg-green-100 flex items-center justify-center text-xs">

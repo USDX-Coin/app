@@ -1,20 +1,13 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useTransactions } from "@/hooks/useTransactions";
-import { getChainById } from "@/lib/chains";
-import { formatAmount, formatDate, truncateAddress } from "@/lib/utils";
+import { getChainById, SUPPORTED_CHAINS } from "@/lib/chains";
+import { formatAmount, formatDate, truncateAddress, cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { TransactionListSkeleton } from "@/components/transactions/TransactionListSkeleton";
-import { ArrowUpRight, ArrowDownLeft, Copy, Search } from "lucide-react";
+import { ArrowUpRight, ArrowDownLeft, ChevronDown, Copy, Search } from "lucide-react";
 import { toast } from "sonner";
 import type { Transaction, TransactionStatus } from "@/types";
 
@@ -44,6 +37,17 @@ function copyToClipboard(text: string) {
   navigator.clipboard.writeText(text);
   toast.success("Copied!");
 }
+
+const typeOptions = [
+  { value: "all", label: "All Transactions" },
+  { value: "mint", label: "Mint" },
+  { value: "redeem", label: "Redeem" },
+];
+
+const networkOptions = [
+  { value: "all", label: "All Networks" },
+  ...SUPPORTED_CHAINS.map((c) => ({ value: c.id, label: c.name })),
+];
 
 export function TransactionList() {
   const { data: transactions = [], isLoading } = useTransactions();
@@ -86,34 +90,16 @@ export function TransactionList() {
     <div className="space-y-6">
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
-        <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="rounded-xl bg-white sm:w-48">
-            <SelectValue placeholder="All Transactions" />
-          </SelectTrigger>
-          <SelectContent className="bg-white border border-border shadow-lg">
-            <SelectItem value="all">All Transactions</SelectItem>
-            <SelectItem value="mint">Mint</SelectItem>
-            <SelectItem value="redeem">Redeem</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select value={networkFilter} onValueChange={setNetworkFilter}>
-          <SelectTrigger className="rounded-xl bg-white sm:w-48">
-            <SelectValue placeholder="All Networks" />
-          </SelectTrigger>
-          <SelectContent className="bg-white border border-border shadow-lg">
-            <SelectItem value="all">All Networks</SelectItem>
-            <SelectItem value="base">Base</SelectItem>
-            <SelectItem value="ethereum">Ethereum</SelectItem>
-            <SelectItem value="polygon">Polygon</SelectItem>
-            <SelectItem value="bsc">BSC</SelectItem>
-            <SelectItem value="arbitrum">Arbitrum</SelectItem>
-            <SelectItem value="optimism">Optimism</SelectItem>
-            <SelectItem value="avalanche">Avalanche</SelectItem>
-            <SelectItem value="solana">Solana</SelectItem>
-          </SelectContent>
-        </Select>
-
+        <FilterSelect
+          value={typeFilter}
+          onChange={setTypeFilter}
+          options={typeOptions}
+        />
+        <FilterSelect
+          value={networkFilter}
+          onChange={setNetworkFilter}
+          options={networkOptions}
+        />
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -146,6 +132,66 @@ export function TransactionList() {
   );
 }
 
+function FilterSelect({
+  value,
+  onChange,
+  options,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const selectedLabel = options.find((o) => o.value === value)?.label ?? options[0].label;
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative w-full sm:w-48">
+      <button
+        onClick={() => setOpen((prev) => !prev)}
+        className="flex items-center justify-between px-4 w-full rounded-xl border border-border h-11 bg-white text-sm transition-colors hover:border-primary/50 cursor-pointer"
+      >
+        <span className="text-foreground truncate mr-2">{selectedLabel}</span>
+        <ChevronDown
+          className={cn(
+            "text-primary shrink-0 transition-transform duration-200 h-4 w-4",
+            open && "rotate-180"
+          )}
+        />
+      </button>
+      {open && (
+        <div className="absolute z-50 top-[calc(100%+4px)] left-0 right-0 bg-white border border-border rounded-xl shadow-lg overflow-hidden">
+          {options.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => {
+                onChange(opt.value);
+                setOpen(false);
+              }}
+              className={cn(
+                "flex w-full items-center px-4 py-2.5 text-sm text-left hover:bg-muted transition-colors",
+                value === opt.value && "text-primary font-medium"
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TransactionRow({ tx }: { tx: Transaction }) {
   const chain = getChainById(tx.chainId);
   const time = new Date(tx.createdAt).toLocaleTimeString("en-US", {
@@ -155,7 +201,7 @@ function TransactionRow({ tx }: { tx: Transaction }) {
   });
 
   return (
-    <div className="flex items-center gap-4 rounded-xl bg-white border border-border p-4 hover:shadow-sm transition-shadow">
+    <div className="flex items-center gap-3 rounded-xl bg-white border border-border p-4 hover:shadow-sm transition-shadow">
       {/* Icon */}
       <div
         className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${
@@ -171,48 +217,51 @@ function TransactionRow({ tx }: { tx: Transaction }) {
         )}
       </div>
 
-      {/* Type + Time + Chain */}
+      {/* Content */}
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold capitalize">{tx.type}</span>
-          <span className="text-xs text-muted-foreground">{time}</span>
-          {chain && (
-            <Badge variant="outline" className="text-xs gap-1 py-0 h-5">
-              {chain.icon && (
-                <img src={chain.icon} alt="" className="h-3.5 w-3.5 rounded-full" />
+        <div className="flex items-start justify-between gap-2">
+          {/* Left: type, time, chain, hash */}
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+              <span className="text-sm font-semibold capitalize">{tx.type}</span>
+              <span className="text-xs text-muted-foreground">{time}</span>
+              {chain && (
+                <Badge variant="outline" className="text-xs gap-1 py-0 h-5">
+                  {chain.icon && (
+                    <img src={chain.icon} alt="" className="h-3.5 w-3.5 rounded-full" />
+                  )}
+                  {chain.shortName}
+                </Badge>
               )}
-              {chain.shortName}
+            </div>
+            <div className="flex items-center gap-1 mt-0.5">
+              <span className="text-xs text-muted-foreground">To</span>
+              <span className="text-xs font-mono text-muted-foreground">
+                {truncateAddress(tx.txHash, 4)}
+              </span>
+              <button
+                onClick={() => copyToClipboard(tx.txHash)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <Copy className="h-3 w-3" />
+              </button>
+            </div>
+          </div>
+
+          {/* Right: status + amount stacked */}
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            <Badge
+              variant="outline"
+              className={`text-xs font-semibold ${statusStyles[tx.status]}`}
+            >
+              {statusLabels[tx.status]}
             </Badge>
-          )}
-        </div>
-        <div className="flex items-center gap-1 mt-0.5">
-          <span className="text-xs text-muted-foreground">To</span>
-          <span className="text-xs font-mono text-muted-foreground">
-            {truncateAddress(tx.txHash, 6)}
-          </span>
-          <button
-            onClick={() => copyToClipboard(tx.txHash)}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <Copy className="h-3 w-3" />
-          </button>
+            <span className="text-sm font-semibold tabular-nums">
+              {formatAmount(tx.amount)} USDX
+            </span>
+          </div>
         </div>
       </div>
-
-      {/* Amount */}
-      <div className="text-right shrink-0">
-        <span className="text-sm font-semibold tabular-nums">
-          {formatAmount(tx.amount)} USDX
-        </span>
-      </div>
-
-      {/* Status */}
-      <Badge
-        variant="outline"
-        className={`text-xs font-semibold shrink-0 ${statusStyles[tx.status]}`}
-      >
-        {statusLabels[tx.status]}
-      </Badge>
     </div>
   );
 }

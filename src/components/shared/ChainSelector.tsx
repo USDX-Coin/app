@@ -50,7 +50,8 @@ export const ChainSelector = memo(function ChainSelector({
         >
           <ChainIcon chain={selectedChain} />
           <span>
-            USDX on {selectedChain?.shortName ?? "Select"}
+            <span className="hidden sm:inline">USDX on </span>
+            {selectedChain?.shortName ?? "Select"}
           </span>
           <ChevronDown className="h-4 w-4 text-muted-foreground" />
         </Button>

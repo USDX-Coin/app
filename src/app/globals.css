@@ -53,3 +53,29 @@ body {
 .animate-fade-in {
   animation: fade-in 0.2s ease-out;
 }
+
+/* Sonner toast overrides — white bg with colored left accent */
+[data-rich-colors=true][data-sonner-toast][data-type=error] {
+  background: #ffffff !important;
+  color: #0a0a0a !important;
+  border-color: #fecaca !important;
+  box-shadow: inset 4px 0 0 #ef4444, 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+}
+[data-rich-colors=true][data-sonner-toast][data-type=success] {
+  background: #ffffff !important;
+  color: #0a0a0a !important;
+  border-color: #bbf7d0 !important;
+  box-shadow: inset 4px 0 0 #22c55e, 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+}
+[data-rich-colors=true][data-sonner-toast][data-type=warning] {
+  background: #ffffff !important;
+  color: #0a0a0a !important;
+  border-color: #fef08a !important;
+  box-shadow: inset 4px 0 0 #eab308, 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+}
+[data-rich-colors=true][data-sonner-toast][data-type=info] {
+  background: #ffffff !important;
+  color: #0a0a0a !important;
+  border-color: #bfdbfe !important;
+  box-shadow: inset 4px 0 0 #3b82f6, 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+}

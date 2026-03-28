@@ -9,9 +9,10 @@ import { FieldError } from "@/components/ui/field-error";
 import { useAuth } from "@/hooks/useAuth";
 import { validateEmail } from "@/lib/validations";
 import { Eye, EyeOff } from "lucide-react";
+import { toast } from "sonner";
 
 export function LoginForm() {
-  const { login, loginLoading, loginError } = useAuth();
+  const { login, loginLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -28,8 +29,8 @@ export function LoginForm() {
     setErrors({});
     try {
       await login({ email, password });
-    } catch {
-      // Error is handled by loginError from the hook
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Login failed");
     }
   }
 

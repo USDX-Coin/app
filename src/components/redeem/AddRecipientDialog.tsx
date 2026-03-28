@@ -73,7 +73,7 @@ export function AddRecipientDialog({ open, onOpenChange }: AddRecipientDialogPro
           </div>
           <Button
             onClick={handleSave}
-            className="w-full bg-gradient-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary-700"
+            className="w-full bg-linear-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary-700"
           >
             Save Recipient
           </Button>

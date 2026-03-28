@@ -14,9 +14,10 @@ import {
   validateFullName,
 } from "@/lib/validations";
 import { Eye, EyeOff } from "lucide-react";
+import { toast } from "sonner";
 
 export function RegisterForm() {
-  const { register, registerLoading, registerError } = useAuth();
+  const { register, registerLoading } = useAuth();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -40,8 +41,8 @@ export function RegisterForm() {
 
     try {
       await register({ fullName, email, password });
-    } catch {
-      // Error is handled by registerError
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Registration failed");
     }
   }
 

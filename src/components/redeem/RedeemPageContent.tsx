@@ -24,7 +24,7 @@ export function RedeemPageContent() {
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                  <Info className="h-4 w-4 text-muted-foreground" />
                 </TooltipTrigger>
                 <TooltipContent>
                   <p className="max-w-xs text-sm">Redeem USDX tokens back to USD. Funds are transferred to your bank account.</p>

@@ -61,12 +61,13 @@ export function ForgotPasswordForm() {
             placeholder="Enter your email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="mt-1.5"
+            className="mt-1.5 bg-transparent dark:bg-transparent"
+            aria-invalid={!!error}
           />
           <FieldError message={error || undefined} />
         </div>
 
-        <Button type="submit" className="w-full bg-gradient-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary-700">
+        <Button type="submit" className="w-full bg-linear-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary-700">
           Send Reset Link
         </Button>
       </form>

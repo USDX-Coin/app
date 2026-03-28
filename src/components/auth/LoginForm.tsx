@@ -9,9 +9,10 @@ import { FieldError } from "@/components/ui/field-error";
 import { useAuth } from "@/hooks/useAuth";
 import { validateEmail } from "@/lib/validations";
 import { Eye, EyeOff } from "lucide-react";
+import { toast } from "sonner";
 
 export function LoginForm() {
-  const { login, loginLoading, loginError } = useAuth();
+  const { login, loginLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -28,8 +29,8 @@ export function LoginForm() {
     setErrors({});
     try {
       await login({ email, password });
-    } catch {
-      // Error is handled by loginError from the hook
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Login failed");
     }
   }
 
@@ -52,7 +53,8 @@ export function LoginForm() {
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="mt-1.5"
+            className="mt-1.5 bg-transparent dark:bg-transparent"
+            aria-invalid={!!errors.email}
           />
           <FieldError message={errors.email} />
         </div>
@@ -74,6 +76,8 @@ export function LoginForm() {
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              aria-invalid={!!errors.password}
+              className="bg-transparent dark:bg-transparent text-lg font-medium"
             />
             <button
               type="button"
@@ -86,11 +90,9 @@ export function LoginForm() {
           <FieldError message={errors.password} />
         </div>
 
-        <FieldError message={loginError} />
-
         <Button
           type="submit"
-          className="w-full bg-gradient-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary-700"
+          className="w-full bg-linear-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary-700"
           disabled={loginLoading}
         >
           {loginLoading ? "Logging in..." : "Login"}

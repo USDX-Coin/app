@@ -18,11 +18,13 @@ import type { Chain } from "@/types";
 interface ChainSelectorProps {
   selectedChainId: string;
   onSelect: (chainId: string) => void;
+  disabled?: boolean;
 }
 
 export const ChainSelector = memo(function ChainSelector({
   selectedChainId,
   onSelect,
+  disabled,
 }: ChainSelectorProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -43,6 +45,7 @@ export const ChainSelector = memo(function ChainSelector({
       <DialogTrigger asChild>
         <Button
           variant="outline"
+          disabled={disabled}
           className="flex items-center gap-2 rounded-full px-3 py-1.5 h-auto text-sm"
         >
           <ChainIcon chain={selectedChain} />

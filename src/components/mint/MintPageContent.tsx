@@ -25,7 +25,7 @@ export function MintPageContent() {
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                    <Info className="h-4 w-4 text-muted-foreground" />
                   </TooltipTrigger>
                   <TooltipContent>
                     <p className="max-w-xs text-sm">Mint USDX by sending USD payment. Tokens are delivered to your wallet within 24 hours.</p>

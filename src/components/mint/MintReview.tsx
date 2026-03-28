@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { useMint } from "@/hooks/useMint";
 import { formatAmount, truncateAddress } from "@/lib/utils";
-import { Copy, ArrowRight, ArrowLeft } from "lucide-react";
+import { Copy, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 
 export function MintReview() {
@@ -13,7 +13,6 @@ export function MintReview() {
     parsedAmount,
     fee,
     paymentAmount,
-    goBackToForm,
     proceedPayment,
     isCreating,
   } = useMint();
@@ -81,14 +80,6 @@ export function MintReview() {
         <ArrowRight className="h-5 w-5" />
       </Button>
 
-      <Button
-        onClick={goBackToForm}
-        variant="outline"
-        className="w-full rounded-xl py-6 text-base flex items-center justify-center gap-2"
-      >
-        <ArrowLeft className="h-5 w-5" />
-        Change Amount
-      </Button>
     </div>
   );
 }

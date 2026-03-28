@@ -14,9 +14,10 @@ import {
   validateFullName,
 } from "@/lib/validations";
 import { Eye, EyeOff } from "lucide-react";
+import { toast } from "sonner";
 
 export function RegisterForm() {
-  const { register, registerLoading, registerError } = useAuth();
+  const { register, registerLoading } = useAuth();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -40,8 +41,8 @@ export function RegisterForm() {
 
     try {
       await register({ fullName, email, password });
-    } catch {
-      // Error is handled by registerError
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Registration failed");
     }
   }
 
@@ -63,7 +64,8 @@ export function RegisterForm() {
             placeholder="Enter your full name"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
-            className="mt-1.5"
+            className="mt-1.5 bg-transparent dark:bg-transparent"
+            aria-invalid={!!errors.fullName}
           />
           <FieldError message={errors.fullName} />
         </div>
@@ -76,7 +78,8 @@ export function RegisterForm() {
             placeholder="Enter your email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="mt-1.5"
+            className="mt-1.5 bg-transparent dark:bg-transparent"
+            aria-invalid={!!errors.email}
           />
           <FieldError message={errors.email} />
         </div>
@@ -90,6 +93,8 @@ export function RegisterForm() {
               placeholder="Create a password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              aria-invalid={!!errors.password}
+              className="bg-transparent dark:bg-transparent"
             />
             <button
               type="button"
@@ -111,6 +116,8 @@ export function RegisterForm() {
               placeholder="Confirm your password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
+              aria-invalid={!!errors.confirmPassword}
+              className="bg-transparent dark:bg-transparent"
             />
             <button
               type="button"
@@ -123,11 +130,9 @@ export function RegisterForm() {
           <FieldError message={errors.confirmPassword} />
         </div>
 
-        <FieldError message={registerError} />
-
         <Button
           type="submit"
-          className="w-full bg-gradient-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary-700"
+          className="w-full bg-linear-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary-700"
           disabled={registerLoading}
         >
           {registerLoading ? "Creating account..." : "Create Account"}

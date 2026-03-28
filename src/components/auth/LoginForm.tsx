@@ -77,7 +77,7 @@ export function LoginForm() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               aria-invalid={!!errors.password}
-              className="bg-transparent dark:bg-transparent text-lg font-medium"
+              className="bg-transparent dark:bg-transparent"
             />
             <button
               type="button"

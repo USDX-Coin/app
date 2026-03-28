@@ -6,16 +6,18 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
-export function AddRecipientDialog() {
-  const [open, setOpen] = useState(false);
+interface AddRecipientDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export function AddRecipientDialog({ open, onOpenChange }: AddRecipientDialogProps) {
   const [bankName, setBankName] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [accountHolder, setAccountHolder] = useState("");
@@ -29,17 +31,11 @@ export function AddRecipientDialog() {
     setBankName("");
     setAccountNumber("");
     setAccountHolder("");
-    setOpen(false);
+    onOpenChange(false);
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="w-full mt-2 gap-1.5">
-          <Plus className="h-4 w-4" />
-          Add New Recipient
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm bg-white">
         <DialogHeader>
           <DialogTitle>Add New Recipient</DialogTitle>

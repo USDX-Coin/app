@@ -35,9 +35,9 @@ export function RedeemPageContent() {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 max-w-5xl mx-auto">
+    <div className="flex flex-col lg:flex-row gap-6 max-w-5xl mx-auto lg:justify-center">
       {/* Main Form */}
-      <div className="flex-1">
+      <div className="flex-1 lg:max-w-[600px]">
         <div className="bg-white p-4 md:p-6 lg:rounded-2xl lg:border lg:border-border lg:shadow-sm">
           <div className="flex items-center gap-2 mb-6">
             <h1 className="text-2xl font-bold text-primary">Redeem</h1>

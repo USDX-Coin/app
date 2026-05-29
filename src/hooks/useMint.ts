@@ -7,7 +7,7 @@ import { useMintStore } from "@/stores/mintStore";
 import { mockCreateMint } from "@/lib/api/mock-api";
 import { validateAmount, validateAddress } from "@/lib/validations";
 import { parseAmount } from "@/lib/utils";
-import { EXCHANGE_RATE, MINTING_FEE_PERCENT } from "@/lib/constants";
+import { EXCHANGE_RATE, MINTING_FEE_PERCENT, USD_TO_IDR_RATE } from "@/lib/constants";
 import { getChainById } from "@/lib/chains";
 
 export function useMint() {
@@ -23,6 +23,8 @@ export function useMint() {
   const parsedAmount = parseAmount(store.amount);
   const paymentAmount = parsedAmount * EXCHANGE_RATE;
   const fee = parsedAmount * MINTING_FEE_PERCENT;
+  const paymentAmountIdr = paymentAmount * USD_TO_IDR_RATE;
+  const feeIdr = fee * USD_TO_IDR_RATE;
   const selectedChain = useMemo(() => getChainById(store.chainId), [store.chainId]);
 
   const isFormValid =
@@ -63,7 +65,9 @@ export function useMint() {
     addressError,
     parsedAmount,
     paymentAmount,
+    paymentAmountIdr,
     fee,
+    feeIdr,
     selectedChain,
     isFormValid,
     goToReview,

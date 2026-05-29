@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { useMint } from "@/hooks/useMint";
-import { formatAmount, truncateAddress } from "@/lib/utils";
+import { formatAmount, formatIDR, truncateAddress } from "@/lib/utils";
 import { Copy, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 
@@ -13,6 +13,7 @@ export function MintReview() {
     parsedAmount,
     fee,
     paymentAmount,
+    paymentAmountIdr,
     proceedPayment,
     isCreating,
   } = useMint();
@@ -65,9 +66,14 @@ export function MintReview() {
 
         <div className="border-t border-border pt-3 flex items-center justify-between">
           <span className="text-sm font-semibold">Total payment</span>
-          <span className="text-sm font-bold">
-            {formatAmount(paymentAmount)} USD
-          </span>
+          <div className="text-right">
+            <span className="block text-sm font-bold">
+              {formatAmount(paymentAmount)} USD
+            </span>
+            <span className="block text-xs font-medium text-muted-foreground">
+              ≈ {formatIDR(paymentAmountIdr)}
+            </span>
+          </div>
         </div>
       </div>
 

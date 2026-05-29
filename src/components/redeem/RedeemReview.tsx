@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { useRedeem } from "@/hooks/useRedeem";
 import { useQuery } from "@tanstack/react-query";
 import { mockGetBankAccounts } from "@/lib/api/mock-api";
-import { formatAmount, truncateAddress } from "@/lib/utils";
+import { formatAmount, formatIDR, truncateAddress } from "@/lib/utils";
+import { USD_TO_IDR_RATE } from "@/lib/constants";
 import { ArrowRight, CheckCircle, Loader2 } from "lucide-react";
 import { useAccount } from "wagmi";
 
@@ -15,7 +16,9 @@ export function RedeemReview() {
     selectedChain,
     parsedAmount,
     fee,
+    feeIdr,
     receiveAmount,
+    receiveAmountIdr,
     bankAccountId,
     // goBackToForm moved to RedeemPageContent
     executeRedeem,
@@ -37,8 +40,9 @@ export function RedeemReview() {
         <h2 className="text-xl font-bold">Redeem Successful</h2>
         <p className="text-sm text-muted-foreground">
           {formatAmount(redeemOrder.amount)} USDX has been redeemed.
-          ${formatAmount(redeemOrder.totalReceiveUsd)} will be sent to your bank
-          account within 24 hours.
+          ${formatAmount(redeemOrder.totalReceiveUsd)} (≈{" "}
+          {formatIDR(redeemOrder.totalReceiveUsd * USD_TO_IDR_RATE)}) will be sent
+          to your bank account within 24 hours.
         </p>
         <p className="text-xs text-muted-foreground font-mono">
           Tx: {truncateAddress(redeemOrder.txHash, 8)}
@@ -102,16 +106,26 @@ export function RedeemReview() {
 
         <div className="flex items-center justify-between">
           <span className="text-sm text-muted-foreground">Fee (0.7%)</span>
-          <span className="text-sm font-medium">
-            ${formatAmount(fee)}
-          </span>
+          <div className="text-right">
+            <span className="block text-sm font-medium">
+              ${formatAmount(fee)}
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              ≈ {formatIDR(feeIdr)}
+            </span>
+          </div>
         </div>
 
         <div className="border-t border-border pt-3 flex items-center justify-between">
           <span className="text-sm font-semibold">You will receive</span>
-          <span className="text-sm font-bold">
-            ${formatAmount(receiveAmount)}
-          </span>
+          <div className="text-right">
+            <span className="block text-sm font-bold">
+              ${formatAmount(receiveAmount)}
+            </span>
+            <span className="block text-xs font-medium text-muted-foreground">
+              ≈ {formatIDR(receiveAmountIdr)}
+            </span>
+          </div>
         </div>
       </div>
 

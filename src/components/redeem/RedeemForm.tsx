@@ -8,7 +8,7 @@ import { AddRecipientDialog } from "./AddRecipientDialog";
 import { useState } from "react";
 import { useRedeem } from "@/hooks/useRedeem";
 import { useWalletBalance } from "@/hooks/useWalletBalance";
-import { cn, formatAmount } from "@/lib/utils";
+import { cn, formatAmount, formatIDR } from "@/lib/utils";
 import { ArrowLeft, ArrowRight, Plus, Wallet } from "lucide-react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount } from "wagmi";
@@ -28,6 +28,7 @@ export function RedeemForm() {
     goToReview,
     goBackToForm,
     receiveAmount,
+    receiveAmountIdr,
     step,
   } = useRedeem();
   const { data: balance = 0 } = useWalletBalance(address);
@@ -109,6 +110,11 @@ export function RedeemForm() {
             USD
           </div>
         </div>
+        {receiveAmount > 0 && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            ≈ {formatIDR(receiveAmountIdr)}
+          </p>
+        )}
       </div>
 
       {/* Exchange rate */}

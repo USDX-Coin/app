@@ -6,7 +6,7 @@ import { useRedeemStore } from "@/stores/redeemStore";
 import { mockCreateRedeem } from "@/lib/api/mock-api";
 import { validateAmount } from "@/lib/validations";
 import { parseAmount } from "@/lib/utils";
-import { EXCHANGE_RATE, MINTING_FEE_PERCENT } from "@/lib/constants";
+import { EXCHANGE_RATE, MINTING_FEE_PERCENT, USD_TO_IDR_RATE } from "@/lib/constants";
 import { getChainById } from "@/lib/chains";
 
 export function useRedeem() {
@@ -20,6 +20,8 @@ export function useRedeem() {
   const parsedAmount = parseAmount(store.amount);
   const receiveAmount = parsedAmount * EXCHANGE_RATE - parsedAmount * MINTING_FEE_PERCENT;
   const fee = parsedAmount * MINTING_FEE_PERCENT;
+  const receiveAmountIdr = receiveAmount * USD_TO_IDR_RATE;
+  const feeIdr = fee * USD_TO_IDR_RATE;
   const selectedChain = useMemo(() => getChainById(store.chainId), [store.chainId]);
 
   const isFormValid =
@@ -60,7 +62,9 @@ export function useRedeem() {
     amountError,
     parsedAmount,
     receiveAmount,
+    receiveAmountIdr,
     fee,
+    feeIdr,
     selectedChain,
     isFormValid,
     goToReview,

@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ChainSelector } from "@/components/shared/ChainSelector";
 import { useMint } from "@/hooks/useMint";
-import { cn, formatAmount } from "@/lib/utils";
+import { cn, formatAmount, formatIDR } from "@/lib/utils";
 import { ArrowLeft, ArrowRight, BookOpen, ScanLine } from "lucide-react";
 
 export function MintForm() {
@@ -16,6 +16,7 @@ export function MintForm() {
     destinationAddress,
     setDestinationAddress,
     paymentAmount,
+    paymentAmountIdr,
     amountError,
     addressError,
     isFormValid,
@@ -76,6 +77,11 @@ export function MintForm() {
             USD
           </div>
         </div>
+        {paymentAmount > 0 && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            ≈ {formatIDR(paymentAmountIdr)}
+          </p>
+        )}
       </div>
 
       {/* Exchange rate */}

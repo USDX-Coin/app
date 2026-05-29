@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useMintStore } from "@/stores/mintStore";
 import { getChainById } from "@/lib/chains";
-import { formatAmount, truncateAddress, parseAmount } from "@/lib/utils";
+import { formatAmount, formatIDR, truncateAddress, parseAmount } from "@/lib/utils";
+import { USD_TO_IDR_RATE } from "@/lib/constants";
 import { CheckCircle, ArrowLeft } from "lucide-react";
 
 export default function PaymentPage() {
@@ -16,6 +17,7 @@ export default function PaymentPage() {
   const [processing, setProcessing] = useState(false);
   const chain = getChainById(chainId);
   const parsedAmount = parseAmount(amount);
+  const totalIdr = parsedAmount * USD_TO_IDR_RATE;
 
   // Redirect to /mint if accessed directly without mint data
   useEffect(() => {
@@ -98,9 +100,14 @@ export default function PaymentPage() {
             </div>
             <div className="border-t border-border pt-3 flex justify-between text-sm">
               <span className="font-semibold">Total</span>
-              <span className="font-bold">
-                ${formatAmount(parsedAmount)}
-              </span>
+              <div className="text-right">
+                <span className="block font-bold">
+                  ${formatAmount(parsedAmount)}
+                </span>
+                <span className="block text-xs font-medium text-muted-foreground">
+                  ≈ {formatIDR(totalIdr)}
+                </span>
+              </div>
             </div>
           </div>
 

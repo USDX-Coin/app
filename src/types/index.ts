@@ -76,4 +76,4 @@ export interface AuthResponse {
 }
 
 export type MintStep = "form" | "confirmation" | "status";
-export type RedeemStep = "form" | "review" | "executing" | "success";
+export type RedeemStep = "form" | "confirmation" | "status";

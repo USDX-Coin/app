@@ -44,7 +44,7 @@ export function AddRecipientDialog({ open, onOpenChange }: AddRecipientDialogPro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="gap-0 overflow-hidden border-4 border-white/20 p-0 sm:max-w-[520px]">
+      <DialogContent className="gap-0 overflow-hidden rounded-2xl border-4 border-white/20 p-0 sm:max-w-[520px]">
         <div className="border-b border-border p-4">
           <DialogTitle className="text-base font-medium text-foreground">{t("modal.addRecipient")}</DialogTitle>
         </div>
@@ -83,7 +83,7 @@ export function AddRecipientDialog({ open, onOpenChange }: AddRecipientDialogPro
           <Field label={t("modal.accountNumber")}>
             <input
               inputMode="numeric"
-              placeholder="999123458900"
+              placeholder={t("modal.accountNumberPh")}
               value={accountNumber}
               onChange={(e) => setAccountNumber(e.target.value.replace(/[^0-9]/g, ""))}
               className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
@@ -92,7 +92,7 @@ export function AddRecipientDialog({ open, onOpenChange }: AddRecipientDialogPro
 
           <Field label={t("modal.holderName")}>
             <input
-              placeholder="Pranatha W"
+              placeholder={t("modal.holderNamePh")}
               value={holderName}
               onChange={(e) => setHolderName(e.target.value)}
               className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"

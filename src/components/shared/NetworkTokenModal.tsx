@@ -31,7 +31,7 @@ export function NetworkTokenModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="gap-0 overflow-hidden border-4 border-white/20 p-0 sm:max-w-[520px]">
+      <DialogContent className="gap-0 overflow-hidden rounded-2xl border-4 border-white/20 p-0 sm:max-w-[520px]">
         <div className="border-b border-border p-4">
           <DialogTitle className="text-base font-medium text-foreground">{title}</DialogTitle>
         </div>

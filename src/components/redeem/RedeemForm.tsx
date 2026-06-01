@@ -2,9 +2,7 @@
 
 import { useState } from "react";
 import { ArrowDown, Wallet } from "lucide-react";
-import { toast } from "sonner";
 import { useRedeem } from "@/hooks/useRedeem";
-import { useRedeemStore } from "@/stores/redeemStore";
 import { formatAmount } from "@/lib/utils";
 import { useLang } from "@/providers/LanguageProvider";
 import { TokenButton } from "@/components/shared/TokenButton";
@@ -14,7 +12,6 @@ import { AddRecipientDialog } from "./AddRecipientDialog";
 
 // Mock redeemable balance (data is mocked; sidebar holds the headline balance).
 const REDEEMABLE_BALANCE = 999105.89;
-const MOCK_WALLET = "0xRedeemMockWallet000000000000000000000000";
 
 export function RedeemForm() {
   const { t } = useLang();
@@ -30,18 +27,10 @@ export function RedeemForm() {
     exchangeRateIdr,
     isFormValid,
     selectedChain,
-    executeRedeem,
-    isExecuting,
+    goToConfirmation,
   } = useRedeem();
-  const reset = useRedeemStore((s) => s.reset);
   const [networkOpen, setNetworkOpen] = useState(false);
   const [recipientOpen, setRecipientOpen] = useState(false);
-
-  async function handleRedeem() {
-    await executeRedeem(MOCK_WALLET);
-    toast.success(t("toast.redeemSubmitted"));
-    reset();
-  }
 
   return (
     <div className="flex w-full max-w-[500px] flex-col gap-6 rounded-xl border border-border bg-card p-5">
@@ -122,11 +111,11 @@ export function RedeemForm() {
 
       <button
         type="button"
-        disabled={!isFormValid || isExecuting}
-        onClick={handleRedeem}
+        disabled={!isFormValid}
+        onClick={goToConfirmation}
         className="brand-gradient flex h-[42px] items-center justify-center rounded-lg text-sm font-medium text-white transition-opacity disabled:opacity-50"
       >
-        {isExecuting ? t("common.processing") : t("btn.redeem")}
+        {t("btn.redeem")}
       </button>
 
       <NetworkTokenModal

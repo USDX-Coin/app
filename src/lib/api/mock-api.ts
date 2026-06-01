@@ -9,6 +9,8 @@ import type {
   MintOrder,
   RedeemOrder,
   Transaction,
+  TransactionType,
+  TransactionStatus,
   BankAccount,
   User,
 } from "@/types";
@@ -62,125 +64,20 @@ export async function mockRegister(
 
 export async function mockGetTransactions(): Promise<Transaction[]> {
   await delay(300);
-  return [
-    {
-      id: "tx_1",
-      type: "mint",
-      amount: 1000,
-      chainId: "base",
-      status: "completed",
-      txHash: "0xabc123...def456",
-      createdAt: "2026-03-20T10:30:00Z",
-    },
-    {
-      id: "tx_2",
-      type: "redeem",
-      amount: 500,
-      chainId: "polygon",
-      status: "completed",
-      txHash: "0x789abc...123def",
-      createdAt: "2026-03-19T14:15:00Z",
-    },
-    {
-      id: "tx_3",
-      type: "mint",
-      amount: 2500,
-      chainId: "bsc",
-      status: "pending",
-      txHash: "0xdef789...abc123",
-      createdAt: "2026-03-18T09:00:00Z",
-    },
-    {
-      id: "tx_4",
-      type: "redeem",
-      amount: 100,
-      chainId: "base",
-      status: "failed",
-      txHash: "0x456def...789abc",
-      createdAt: "2026-03-17T16:45:00Z",
-    },
-    {
-      id: "tx_5",
-      type: "mint",
-      amount: 5000,
-      chainId: "polygon",
-      status: "completed",
-      txHash: "3xYz...AbCd",
-      createdAt: "2026-03-16T11:20:00Z",
-    },
-    {
-      id: "tx_6",
-      type: "mint",
-      amount: 750,
-      chainId: "arbitrum",
-      status: "completed",
-      txHash: "0xfed321...cba654",
-      createdAt: "2026-03-15T08:00:00Z",
-    },
-    {
-      id: "tx_7",
-      type: "redeem",
-      amount: 3000,
-      chainId: "optimism",
-      status: "completed",
-      txHash: "0x111aaa...222bbb",
-      createdAt: "2026-03-14T13:30:00Z",
-    },
-    {
-      id: "tx_8",
-      type: "mint",
-      amount: 200,
-      chainId: "ethereum",
-      status: "pending",
-      txHash: "0x333ccc...444ddd",
-      createdAt: "2026-03-13T07:15:00Z",
-    },
-    {
-      id: "tx_9",
-      type: "redeem",
-      amount: 1500,
-      chainId: "avalanche",
-      status: "completed",
-      txHash: "0x555eee...666fff",
-      createdAt: "2026-03-12T19:00:00Z",
-    },
-    {
-      id: "tx_10",
-      type: "mint",
-      amount: 10000,
-      chainId: "base",
-      status: "completed",
-      txHash: "0x777ggg...888hhh",
-      createdAt: "2026-03-11T12:00:00Z",
-    },
-    {
-      id: "tx_11",
-      type: "bridge",
-      amount: 3200,
-      chainId: "arbitrum",
-      status: "pending",
-      txHash: "0x999iii...000jjj",
-      createdAt: "2026-03-10T15:40:00Z",
-    },
-    {
-      id: "tx_12",
-      type: "send",
-      amount: 250,
-      chainId: "base",
-      status: "completed",
-      txHash: "0xaaa111...bbb222",
-      createdAt: "2026-03-09T18:05:00Z",
-    },
-    {
-      id: "tx_13",
-      type: "bridge",
-      amount: 8000,
-      chainId: "polygon",
-      status: "failed",
-      txHash: "0xccc333...ddd444",
-      createdAt: "2026-03-08T09:25:00Z",
-    },
-  ];
+  const types: TransactionType[] = ["mint", "redeem", "redeem", "bridge", "send", "mint", "bridge", "send"];
+  const statuses: TransactionStatus[] = ["completed", "completed", "completed", "pending", "pending", "failed"];
+  const chains = ["base", "polygon", "ethereum", "arbitrum", "bsc", "avalanche", "optimism"];
+  const amounts = [240, 500, 1000, 2500, 750, 5000, 100, 3200, 1500, 8000];
+  const base = new Date("2026-04-30T14:00:00Z").getTime();
+  return Array.from({ length: 96 }, (_, i) => ({
+    id: `tx_${String(i + 1).padStart(3, "0")}`,
+    type: types[i % types.length],
+    amount: amounts[i % amounts.length],
+    chainId: chains[i % chains.length],
+    status: statuses[i % statuses.length],
+    txHash: `B9Qm4Y${(2_000_000 + i * 7919).toString(36)}WzPaQqjKoX`,
+    createdAt: new Date(base - i * 7 * 3_600_000).toISOString(),
+  }));
 }
 
 export async function mockCreateMint(

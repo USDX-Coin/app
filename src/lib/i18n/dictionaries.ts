@@ -109,6 +109,7 @@ const en: Dict = {
   "tx.empty": "No Transactions Found",
   "tx.emptyDesc": "It looks like there are no transactions to display at the moment",
   "tx.mintNow": "Mint Now",
+  "tx.viewDetails": "View Details",
   // coming soon
   "soon.help": "Help center is coming soon.",
   "soon.support": "Support is coming soon.",
@@ -245,6 +246,7 @@ const id: Dict = {
   "tx.empty": "Tidak Ada Transaksi",
   "tx.emptyDesc": "Sepertinya belum ada transaksi untuk ditampilkan saat ini",
   "tx.mintNow": "Mint Sekarang",
+  "tx.viewDetails": "Lihat Detail",
   "soon.help": "Pusat bantuan segera hadir.",
   "soon.support": "Dukungan segera hadir.",
   "soon.settings": "Pengaturan segera hadir.",

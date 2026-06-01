@@ -1,29 +1,147 @@
 @import "tailwindcss";
 
-@theme {
-  --color-primary: #1eaed5;
-  --color-primary-foreground: #ffffff;
-  --color-primary-50: #eef9fc;
-  --color-primary-100: #d4f0f8;
-  --color-primary-200: #aee2f1;
-  --color-primary-300: #76cde7;
-  --color-primary-400: #38b3d6;
-  --color-primary-500: #1eaed5;
-  --color-primary-600: #1a8db3;
-  --color-primary-700: #1b7291;
-  --color-primary-800: #1e5d77;
-  --color-primary-900: #1e4e64;
-  --color-primary-950: #0f3344;
+/* Dark mode driven by a `.dark` class on <html> (next-themes attribute="class") */
+@custom-variant dark (&:where(.dark, .dark *));
 
-  --color-background: #ffffff;
-  --color-foreground: #0a0a0a;
-  --color-muted: #f5f5f5;
-  --color-muted-foreground: #737373;
-  --color-border: #e5e5e5;
-  --color-input: #e5e5e5;
-  --color-ring: #1eaed5;
-  --color-destructive: #ef4444;
-  --color-destructive-foreground: #ffffff;
+/*
+ * Brand: maroon (#800000 → #ac0004) + gold accent (#f7a100), per Figma.
+ * Brand hues stay constant across themes; neutrals flip between light & dark.
+ */
+:root {
+  --background: #f2f2f2;
+  --foreground: #1a1a1a;
+
+  --card: #ffffff;
+  --card-foreground: #1a1a1a;
+  --popover: #ffffff;
+  --popover-foreground: #1a1a1a;
+
+  --muted: #f0f0f0;
+  --muted-foreground: #777777;
+  --accent: #f0f0f0;
+  --accent-foreground: #1a1a1a;
+  --secondary: #f0f0f0;
+  --secondary-foreground: #1a1a1a;
+
+  --border: #dddddd;
+  --input: #e5e5e5;
+  --ring: #800000;
+
+  --sidebar: #ffffff;
+  --sidebar-foreground: #1a1a1a;
+  --sidebar-muted: #777777;
+
+  --primary: #800000;
+  --primary-foreground: #ffffff;
+  /* maroon gradient (balance card, primary buttons, active nav) */
+  --brand-from: #800000;
+  --brand-to: #ac0004;
+  /* dark "Dapatkan USDX" pill that sits on the red balance card */
+  --brand-dark: #141414;
+
+  --gold: #f7a100;
+
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --success: #16a34a;
+  --warning: #d97706;
+
+  color-scheme: light;
+}
+
+.dark {
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+
+  --card: #1a1a1a;
+  --card-foreground: #fafafa;
+  --popover: #1a1a1a;
+  --popover-foreground: #fafafa;
+
+  --muted: #202020;
+  --muted-foreground: #9a9a9a;
+  --accent: #262626;
+  --accent-foreground: #fafafa;
+  --secondary: #202020;
+  --secondary-foreground: #fafafa;
+
+  --border: #2c2c2c;
+  --input: #2c2c2c;
+  --ring: #ac0004;
+
+  --sidebar: #000000;
+  --sidebar-foreground: #fafafa;
+  --sidebar-muted: #888888;
+
+  --primary: #800000;
+  --primary-foreground: #ffffff;
+  --brand-from: #800000;
+  --brand-to: #ac0004;
+  --brand-dark: #141414;
+
+  --gold: #f7a100;
+
+  --destructive: #f87171;
+  --destructive-foreground: #1a1a1a;
+  --success: #22c55e;
+  --warning: #f59e0b;
+
+  color-scheme: dark;
+}
+
+/* Map flipping CSS vars onto Tailwind color utilities (theme-aware) */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-muted: var(--sidebar-muted);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-gold: var(--gold);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+}
+
+/* Static brand ramp (maroon). 600–700 = the on-brand interactive shades. */
+@theme {
+  --color-primary-50: #fcf3f3;
+  --color-primary-100: #fae3e3;
+  --color-primary-200: #f3c4c4;
+  --color-primary-300: #e89a9a;
+  --color-primary-400: #d65f5f;
+  --color-primary-500: #bd2b2b;
+  --color-primary-600: #a30808;
+  --color-primary-700: #800000;
+  --color-primary-800: #6a0303;
+  --color-primary-900: #560808;
+  --color-primary-950: #2f0000;
+
+  --color-gold-400: #ffb733;
+  --color-gold-500: #f7a100;
+  --color-gold-600: #c47e00;
 
   --radius-sm: 0.25rem;
   --radius-md: 0.375rem;
@@ -37,6 +155,29 @@ body {
   font-family: var(--font-sans);
   background: var(--color-background);
   color: var(--color-foreground);
+}
+
+/*
+ * Brand gradient surfaces (Figma): a subtle white top-highlight over a base.
+ * `.brand-gradient` = maroon primary (buttons, active nav, balance card base).
+ * `.brand-dark-gradient` = dark pill ("Dapatkan USDX").
+ */
+.brand-gradient {
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 100%),
+    linear-gradient(90deg, var(--brand-from) 0%, var(--brand-from) 100%);
+  box-shadow: 0 1px 2px 0 rgba(128, 0, 0, 0.4), 0 0 0 1px var(--brand-from);
+}
+
+.balance-gradient {
+  background-image: linear-gradient(33deg, var(--brand-from) 0%, var(--brand-to) 100%);
+}
+
+.brand-dark-gradient {
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 100%),
+    linear-gradient(90deg, var(--brand-dark) 0%, var(--brand-dark) 100%);
+  box-shadow: 0 1px 2px 0 rgba(20, 20, 20, 0.4), 0 0 0 1px var(--brand-dark);
 }
 
 @keyframes fade-in {
@@ -54,28 +195,24 @@ body {
   animation: fade-in 0.2s ease-out;
 }
 
-/* Sonner toast overrides — white bg with colored left accent */
+/* Sonner toast overrides — surface bg with colored left accent (theme-aware) */
+[data-rich-colors=true][data-sonner-toast] {
+  background: var(--popover) !important;
+  color: var(--popover-foreground) !important;
+}
 [data-rich-colors=true][data-sonner-toast][data-type=error] {
-  background: #ffffff !important;
-  color: #0a0a0a !important;
-  border-color: #fecaca !important;
-  box-shadow: inset 4px 0 0 #ef4444, 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+  border-color: color-mix(in srgb, var(--destructive) 40%, transparent) !important;
+  box-shadow: inset 4px 0 0 var(--destructive), 0 4px 12px rgba(0, 0, 0, 0.08) !important;
 }
 [data-rich-colors=true][data-sonner-toast][data-type=success] {
-  background: #ffffff !important;
-  color: #0a0a0a !important;
-  border-color: #bbf7d0 !important;
-  box-shadow: inset 4px 0 0 #22c55e, 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+  border-color: color-mix(in srgb, var(--success) 40%, transparent) !important;
+  box-shadow: inset 4px 0 0 var(--success), 0 4px 12px rgba(0, 0, 0, 0.08) !important;
 }
 [data-rich-colors=true][data-sonner-toast][data-type=warning] {
-  background: #ffffff !important;
-  color: #0a0a0a !important;
-  border-color: #fef08a !important;
-  box-shadow: inset 4px 0 0 #eab308, 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+  border-color: color-mix(in srgb, var(--warning) 40%, transparent) !important;
+  box-shadow: inset 4px 0 0 var(--warning), 0 4px 12px rgba(0, 0, 0, 0.08) !important;
 }
 [data-rich-colors=true][data-sonner-toast][data-type=info] {
-  background: #ffffff !important;
-  color: #0a0a0a !important;
-  border-color: #bfdbfe !important;
-  box-shadow: inset 4px 0 0 #3b82f6, 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+  border-color: color-mix(in srgb, var(--gold) 40%, transparent) !important;
+  box-shadow: inset 4px 0 0 var(--gold), 0 4px 12px rgba(0, 0, 0, 0.08) !important;
 }

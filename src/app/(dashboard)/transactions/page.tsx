@@ -1,9 +1,10 @@
+import { PageHeader } from "@/components/shared/PageHeader";
 import { TransactionList } from "@/components/transactions/TransactionList";
 
 export default function TransactionsPage() {
   return (
-    <div className="max-w-5xl mx-auto">
-      <h1 className="text-2xl font-bold text-primary mb-4">Transactions</h1>
+    <div className="flex h-full flex-col gap-6">
+      <PageHeader crumbs={["More", "Transaction"]} title="Transaction History" />
       <TransactionList />
     </div>
   );

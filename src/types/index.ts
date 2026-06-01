@@ -51,7 +51,7 @@ export interface RedeemOrder {
 }
 
 export type TransactionStatus = "pending" | "completed" | "failed";
-export type TransactionType = "mint" | "redeem";
+export type TransactionType = "mint" | "redeem" | "bridge" | "send";
 
 export interface Transaction {
   id: string;

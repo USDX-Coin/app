@@ -153,6 +153,33 @@ export async function mockGetTransactions(): Promise<Transaction[]> {
       txHash: "0x777ggg...888hhh",
       createdAt: "2026-03-11T12:00:00Z",
     },
+    {
+      id: "tx_11",
+      type: "bridge",
+      amount: 3200,
+      chainId: "arbitrum",
+      status: "pending",
+      txHash: "0x999iii...000jjj",
+      createdAt: "2026-03-10T15:40:00Z",
+    },
+    {
+      id: "tx_12",
+      type: "send",
+      amount: 250,
+      chainId: "base",
+      status: "completed",
+      txHash: "0xaaa111...bbb222",
+      createdAt: "2026-03-09T18:05:00Z",
+    },
+    {
+      id: "tx_13",
+      type: "bridge",
+      amount: 8000,
+      chainId: "polygon",
+      status: "failed",
+      txHash: "0xccc333...ddd444",
+      createdAt: "2026-03-08T09:25:00Z",
+    },
   ];
 }
 

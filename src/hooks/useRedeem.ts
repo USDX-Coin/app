@@ -6,28 +6,23 @@ import { useRedeemStore } from "@/stores/redeemStore";
 import { mockCreateRedeem } from "@/lib/api/mock-api";
 import { validateAmount } from "@/lib/validations";
 import { parseAmount } from "@/lib/utils";
-import { EXCHANGE_RATE, MINTING_FEE_PERCENT, USD_TO_IDR_RATE } from "@/lib/constants";
+import { MINTING_FEE_PERCENT, USD_TO_IDR_RATE } from "@/lib/constants";
 import { getChainById } from "@/lib/chains";
 
 export function useRedeem() {
   const store = useRedeemStore();
   const queryClient = useQueryClient();
 
-  const amountError = store.amount
-    ? validateAmount(store.amount, "redeem")
-    : null;
+  const amountError = store.amount ? validateAmount(store.amount, "redeem") : null;
 
   const parsedAmount = parseAmount(store.amount);
-  const receiveAmount = parsedAmount * EXCHANGE_RATE - parsedAmount * MINTING_FEE_PERCENT;
+  // Redeem USDX, receive IDR (per Figma).
+  const receiveAmountIdr = parsedAmount * USD_TO_IDR_RATE;
   const fee = parsedAmount * MINTING_FEE_PERCENT;
-  const receiveAmountIdr = receiveAmount * USD_TO_IDR_RATE;
-  const feeIdr = fee * USD_TO_IDR_RATE;
   const selectedChain = useMemo(() => getChainById(store.chainId), [store.chainId]);
 
   const isFormValid =
-    store.amount !== "" &&
-    store.bankAccountId !== "" &&
-    !amountError;
+    store.amount !== "" && store.bankAccountId !== "" && !amountError;
 
   const createRedeemMutation = useMutation({
     mutationFn: (walletAddress: string) =>
@@ -42,33 +37,20 @@ export function useRedeem() {
     },
   });
 
-  function goToReview() {
-    if (isFormValid) store.setStep("review");
-  }
-
-  function goBackToForm() {
-    store.setStep("form");
-  }
-
   async function executeRedeem(walletAddress: string) {
     if (createRedeemMutation.isPending) return;
-    store.setStep("executing");
     await createRedeemMutation.mutateAsync(walletAddress);
-    store.setStep("success");
   }
 
   return {
     ...store,
     amountError,
     parsedAmount,
-    receiveAmount,
     receiveAmountIdr,
+    exchangeRateIdr: USD_TO_IDR_RATE,
     fee,
-    feeIdr,
     selectedChain,
     isFormValid,
-    goToReview,
-    goBackToForm,
     executeRedeem,
     isExecuting: createRedeemMutation.isPending,
     redeemOrder: createRedeemMutation.data,

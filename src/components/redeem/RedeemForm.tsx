@@ -1,21 +1,21 @@
 "use client";
 
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { ChainSelector } from "@/components/shared/ChainSelector";
+import { useState } from "react";
+import { ArrowDown, Wallet } from "lucide-react";
+import { toast } from "sonner";
+import { useRedeem } from "@/hooks/useRedeem";
+import { useRedeemStore } from "@/stores/redeemStore";
+import { formatAmount } from "@/lib/utils";
+import { TokenButton } from "@/components/shared/TokenButton";
+import { NetworkTokenModal } from "@/components/shared/NetworkTokenModal";
 import { BankAccountSelector } from "./BankAccountSelector";
 import { AddRecipientDialog } from "./AddRecipientDialog";
-import { useState } from "react";
-import { useRedeem } from "@/hooks/useRedeem";
-import { useWalletBalance } from "@/hooks/useWalletBalance";
-import { cn, formatAmount, formatIDR } from "@/lib/utils";
-import { ArrowLeft, ArrowRight, Plus, Wallet } from "lucide-react";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { useAccount } from "wagmi";
+
+// Mock redeemable balance (data is mocked; sidebar holds the headline balance).
+const REDEEMABLE_BALANCE = 999105.89;
+const MOCK_WALLET = "0xRedeemMockWallet000000000000000000000000";
 
 export function RedeemForm() {
-  const [recipientDialogOpen, setRecipientDialogOpen] = useState(false);
-  const { address, isConnected } = useAccount();
   const {
     amount,
     setAmount,
@@ -24,149 +24,119 @@ export function RedeemForm() {
     bankAccountId,
     setBankAccountId,
     amountError,
-    isFormValid,
-    goToReview,
-    goBackToForm,
-    receiveAmount,
     receiveAmountIdr,
-    step,
+    exchangeRateIdr,
+    isFormValid,
+    selectedChain,
+    executeRedeem,
+    isExecuting,
   } = useRedeem();
-  const { data: balance = 0 } = useWalletBalance(address);
-  const isReviewing = step !== "form";
+  const reset = useRedeemStore((s) => s.reset);
+  const [networkOpen, setNetworkOpen] = useState(false);
+  const [recipientOpen, setRecipientOpen] = useState(false);
 
-  if (!isConnected) {
-    return (
-      <div className="flex flex-col items-center gap-4 py-8">
-        <Wallet className="h-12 w-12 text-muted-foreground" />
-        <p className="text-sm text-muted-foreground">
-          Connect your wallet to redeem USDX
-        </p>
-        <ConnectButton />
-      </div>
-    );
+  async function handleRedeem() {
+    await executeRedeem(MOCK_WALLET);
+    toast.success("Redeem request submitted");
+    reset();
   }
 
   return (
-    <div className="space-y-6">
-      {/* Balance */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-foreground">
-          You will redeem
-        </h2>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Wallet className="h-3.5 w-3.5" />
-          <span>{formatAmount(balance)} USDX</span>
-          {!isReviewing && (
-            <button
-              className="text-xs font-medium text-primary hover:underline"
-              onClick={() => setAmount(String(balance))}
-            >
-              Max
-            </button>
-          )}
-        </div>
-      </div>
+    <div className="flex w-full max-w-[500px] flex-col gap-6 rounded-xl border border-border bg-card p-5">
+      <h2 className="text-xl font-medium tracking-tight text-foreground">Redeem USDX</h2>
 
-      {/* Amount input */}
-      <div className="space-y-2">
-        <div className={cn("rounded-xl border p-4", amountError ? "border-destructive" : "border-border")}>
-          <div className="flex items-center gap-3">
-            <Input
-              type="text"
-              placeholder="Amount"
-              value={amount}
-              disabled={isReviewing}
-              onChange={(e) => {
-                const val = e.target.value.replace(/[^0-9.]/g, "");
-                setAmount(val);
-              }}
-              className="bg-transparent outline-none border-0 text-sm font-medium p-0 focus-visible:ring-0 flex-1 dark:bg-transparent shadow-none disabled:opacity-70 disabled:cursor-default"
-            />
-            <ChainSelector selectedChainId={chainId} onSelect={setChainId} disabled={isReviewing} />
-          </div>
-        </div>
-        <div className="h-[20px]">
-          {amountError && <p className="text-sm text-destructive mt-2">{amountError}</p>}
-        </div>
-      </div>
-
-      {/* You will receive */}
-      <div>
-        <h2 className="text-sm font-semibold text-foreground mb-3">
-          You will receive
-        </h2>
-        <div className="flex items-center gap-3 rounded-xl border border-border p-4">
-          <Input
-            type="text"
-            value={receiveAmount > 0 ? formatAmount(receiveAmount) : ""}
-            placeholder="Amount"
-            disabled
-            className="bg-transparent outline-none border-0 text-sm font-medium p-0 focus-visible:ring-0 flex-1 disabled:opacity-70 disabled:cursor-default dark:bg-transparent shadow-none"
-          />
-          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-            <div className="h-6 w-6 rounded-full bg-green-100 flex items-center justify-center text-xs">
-              $
+      <div className="flex flex-col gap-4">
+        <div className="relative flex flex-col gap-2">
+          {/* You will redeem */}
+          <div className="flex flex-col gap-4 rounded-xl bg-muted p-4">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-medium text-muted-foreground">You will redeem</p>
+              <div className="flex items-center gap-2 text-sm">
+                <Wallet className="size-[18px] text-muted-foreground" />
+                <span className="text-muted-foreground">{formatAmount(REDEEMABLE_BALANCE)}</span>
+                <button
+                  type="button"
+                  onClick={() => setAmount(String(REDEEMABLE_BALANCE))}
+                  className="font-semibold text-gold underline-offset-2 hover:underline"
+                >
+                  Max
+                </button>
+              </div>
             </div>
-            USD
+            <div className="flex items-center justify-between gap-2">
+              <TokenButton chain={selectedChain} onClick={() => setNetworkOpen(true)} />
+              <input
+                inputMode="decimal"
+                placeholder="0"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
+                className="min-w-0 flex-1 bg-transparent text-right text-2xl font-semibold tracking-tight text-foreground outline-none placeholder:text-muted-foreground"
+              />
+            </div>
+          </div>
+
+          {/* You will receive */}
+          <div className="flex flex-col gap-4 rounded-xl bg-muted p-4">
+            <p className="text-sm font-medium text-muted-foreground">You will receive</p>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex shrink-0 items-center gap-2 rounded-full bg-primary py-1.5 pl-1.5 pr-3 text-white">
+                <span className="flex size-8 items-center justify-center rounded-full bg-gold text-sm font-semibold text-[#1a1a1a]">
+                  Rp
+                </span>
+                <span className="text-base font-semibold tracking-tight">IDR</span>
+              </div>
+              <p className="truncate text-2xl font-semibold tracking-tight text-foreground">
+                {receiveAmountIdr > 0 ? formatAmount(receiveAmountIdr) : "0"}
+              </p>
+            </div>
+          </div>
+
+          <div className="absolute left-1/2 top-1/2 flex size-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-card">
+            <ArrowDown className="size-5 text-muted-foreground" />
           </div>
         </div>
-        {receiveAmount > 0 && (
-          <p className="mt-2 text-xs text-muted-foreground">
-            ≈ {formatIDR(receiveAmountIdr)}
+
+        {amountError && <p className="-mt-2 text-sm text-destructive">{amountError}</p>}
+
+        <div className="flex flex-col gap-2">
+          <p className="text-sm font-medium text-muted-foreground">Exchange rate</p>
+          <p className="text-base font-medium tracking-tight text-foreground">
+            1 USDX ≈ {formatAmount(exchangeRateIdr)} IDR
           </p>
-        )}
-      </div>
+        </div>
 
-      {/* Exchange rate */}
-      <div>
-        <h2 className="text-sm font-semibold text-foreground mb-1">
-          Exchange rate
-        </h2>
-        <p className="text-sm text-muted-foreground">1 USDX = 1 USD</p>
-      </div>
-
-      {/* Bank Account */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-foreground">To</h2>
-          {!isReviewing && (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between text-sm font-medium">
+            <p className="text-muted-foreground">To this bank account</p>
             <button
-              className="text-sm text-primary hover:underline flex items-center gap-1"
-              onClick={() => setRecipientDialogOpen(true)}
+              type="button"
+              onClick={() => setRecipientOpen(true)}
+              className="text-gold underline-offset-2 hover:underline"
             >
-              <Plus className="h-3.5 w-3.5" />
               Add new recipient
             </button>
-          )}
+          </div>
+          <BankAccountSelector value={bankAccountId} onSelect={setBankAccountId} />
         </div>
-        <BankAccountSelector
-          value={bankAccountId}
-          onSelect={setBankAccountId}
-          disabled={isReviewing}
-        />
-        <AddRecipientDialog open={recipientDialogOpen} onOpenChange={setRecipientDialogOpen} />
       </div>
 
-      {/* Button */}
-      {isReviewing ? (
-        <Button
-          onClick={goBackToForm}
-          variant="outline"
-          className="w-full rounded-xl py-6 text-base flex items-center justify-center gap-2"
-        >
-          <ArrowLeft className="h-5 w-5" />
-          Change Amount
-        </Button>
-      ) : (
-        <Button
-          onClick={goToReview}
-          disabled={!isFormValid}
-          className="w-full bg-linear-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary-700 rounded-xl py-6 text-base"
-        >
-          <span className="flex-1">Review Redeem</span>
-          <ArrowRight className="h-5 w-5" />
-        </Button>
-      )}
+      <button
+        type="button"
+        disabled={!isFormValid || isExecuting}
+        onClick={handleRedeem}
+        className="brand-gradient flex h-[42px] items-center justify-center rounded-lg text-sm font-medium text-white transition-opacity disabled:opacity-50"
+      >
+        {isExecuting ? "Processing..." : "Redeem"}
+      </button>
+
+      <NetworkTokenModal
+        open={networkOpen}
+        onOpenChange={setNetworkOpen}
+        title="Redeem From"
+        selectedChainId={chainId}
+        onSelectChain={setChainId}
+      />
+      <AddRecipientDialog open={recipientOpen} onOpenChange={setRecipientOpen} />
     </div>
   );
 }

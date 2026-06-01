@@ -18,6 +18,8 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   // Read persisted choice after mount (server renders the default "id").
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
+    // Sync persisted choice after mount to avoid SSR hydration mismatch.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (saved === "id" || saved === "en") setLangState(saved);
   }, []);
 

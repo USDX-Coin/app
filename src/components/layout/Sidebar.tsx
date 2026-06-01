@@ -159,10 +159,16 @@ export function Sidebar({
       {/* Total Saldo card */}
       <div className="balance-gradient relative flex w-full flex-col gap-3.5 overflow-hidden rounded-lg border border-white/20 p-3">
         <img
+          src="/image/balance-texture.jpg"
+          alt=""
+          aria-hidden
+          className="pointer-events-none absolute inset-0 size-full object-cover opacity-60"
+        />
+        <img
           src="/image/balance-watermark.svg"
           alt=""
           aria-hidden
-          className="pointer-events-none absolute -right-[51px] -top-px h-[143px] w-[165px] opacity-15"
+          className="pointer-events-none absolute -right-[51px] -top-px h-[143px] w-[165px] opacity-10"
         />
         <div className="relative flex flex-col gap-1">
           <p className="text-xs font-medium tracking-tight text-white/60">{t("sidebar.totalBalance")}</p>

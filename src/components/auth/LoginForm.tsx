@@ -116,11 +116,6 @@ export function LoginForm() {
           <Button variant="outline" disabled className="h-11">Web3 Wallet</Button>
         </div>
       </div>
-
-      <div className="rounded-lg border border-border bg-muted/50 p-3 text-center text-xs text-muted-foreground">
-        Demo — <span className="font-medium text-foreground">demo@usdx.com</span> /{" "}
-        <span className="font-medium text-foreground">Demo1234</span>
-      </div>
     </div>
   );
 }

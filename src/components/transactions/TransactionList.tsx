@@ -6,12 +6,14 @@ import {
   ArrowDownLeft,
   ArrowLeftRight,
   ArrowUpRight,
+  ArrowUpDown,
   Calendar,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Copy,
   History,
+  MoreHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTransactions } from "@/hooks/useTransactions";
@@ -67,6 +69,15 @@ export function TransactionList() {
   const [typeFilter, setTypeFilter] = useState("all");
   const [networkFilter, setNetworkFilter] = useState("all");
   const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<{ key: "date" | "hash"; dir: "asc" | "desc" }>({
+    key: "date",
+    dir: "desc",
+  });
+
+  function toggleSort(key: "date" | "hash") {
+    setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
+    setPage(1);
+  }
 
   const typeOptions = [
     { value: "all", label: t("tx.allTransaction") },
@@ -95,9 +106,21 @@ export function TransactionList() {
     [transactions, typeFilter, networkFilter]
   );
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const sorted = useMemo(() => {
+    const arr = [...filtered];
+    arr.sort((a, b) => {
+      const cmp =
+        sort.key === "date"
+          ? a.createdAt.localeCompare(b.createdAt)
+          : a.txHash.localeCompare(b.txHash);
+      return sort.dir === "asc" ? cmp : -cmp;
+    });
+    return arr;
+  }, [filtered, sort]);
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
-  const pageItems = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const pageItems = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   if (isLoading) return <TransactionListSkeleton />;
 
@@ -122,11 +145,20 @@ export function TransactionList() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/50 hover:bg-muted/50">
-                  <TableHead>{t("tx.dateTime")}</TableHead>
-                  <TableHead>{t("tx.txHash")}</TableHead>
+                  <TableHead>
+                    <button onClick={() => toggleSort("date")} className="flex items-center gap-1 hover:text-foreground">
+                      {t("tx.dateTime")} <ArrowUpDown className="size-3.5 opacity-60" />
+                    </button>
+                  </TableHead>
+                  <TableHead>
+                    <button onClick={() => toggleSort("hash")} className="flex items-center gap-1 hover:text-foreground">
+                      {t("tx.txHash")} <ArrowUpDown className="size-3.5 opacity-60" />
+                    </button>
+                  </TableHead>
                   <TableHead>{t("tx.transaction")}</TableHead>
                   <TableHead>{t("tx.amount")}</TableHead>
                   <TableHead>{t("tx.status")}</TableHead>
+                  <TableHead className="w-10" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -159,6 +191,14 @@ export function TransactionList() {
                         <span className={cn("inline-flex rounded-md px-2 py-0.5 text-xs font-medium", statusStyles[tx.status])}>
                           {t(`tx.${tx.status}`)}
                         </span>
+                      </TableCell>
+                      <TableCell>
+                        <button
+                          aria-label="Actions"
+                          className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                        >
+                          <MoreHorizontal className="size-4" />
+                        </button>
                       </TableCell>
                     </TableRow>
                   );

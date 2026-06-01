@@ -2,17 +2,15 @@
 
 import { useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
 import { useMintStore } from "@/stores/mintStore";
 import { mockCreateMint } from "@/lib/api/mock-api";
 import { validateAmount, validateAddress } from "@/lib/validations";
 import { parseAmount } from "@/lib/utils";
-import { EXCHANGE_RATE, MINTING_FEE_PERCENT, USD_TO_IDR_RATE } from "@/lib/constants";
+import { MINTING_FEE_PERCENT, USD_TO_IDR_RATE } from "@/lib/constants";
 import { getChainById } from "@/lib/chains";
 
 export function useMint() {
   const store = useMintStore();
-  const router = useRouter();
   const queryClient = useQueryClient();
 
   const amountError = store.amount ? validateAmount(store.amount, "mint") : null;
@@ -21,10 +19,10 @@ export function useMint() {
     : null;
 
   const parsedAmount = parseAmount(store.amount);
-  const paymentAmount = parsedAmount * EXCHANGE_RATE;
+  // Mint USDX, pay in IDR (per Figma).
+  const paymentAmountIdr = parsedAmount * USD_TO_IDR_RATE;
   const fee = parsedAmount * MINTING_FEE_PERCENT;
-  const paymentAmountIdr = paymentAmount * USD_TO_IDR_RATE;
-  const feeIdr = fee * USD_TO_IDR_RATE;
+  const receiveAmount = parsedAmount;
   const selectedChain = useMemo(() => getChainById(store.chainId), [store.chainId]);
 
   const isFormValid =
@@ -45,18 +43,18 @@ export function useMint() {
     },
   });
 
-  function goToReview() {
-    if (isFormValid) store.setStep("review");
+  function goToConfirmation() {
+    if (isFormValid) store.setStep("confirmation");
   }
 
-  function goBackToForm() {
+  function backToForm() {
     store.setStep("form");
   }
 
   async function proceedPayment() {
-    await createMintMutation.mutateAsync();
-    store.setStep("payment");
-    router.push("/payment");
+    const order = await createMintMutation.mutateAsync();
+    store.setResult(order);
+    store.setStep("status");
   }
 
   return {
@@ -64,14 +62,14 @@ export function useMint() {
     amountError,
     addressError,
     parsedAmount,
-    paymentAmount,
     paymentAmountIdr,
+    exchangeRateIdr: USD_TO_IDR_RATE,
     fee,
-    feeIdr,
+    receiveAmount,
     selectedChain,
     isFormValid,
-    goToReview,
-    goBackToForm,
+    goToConfirmation,
+    backToForm,
     proceedPayment,
     isCreating: createMintMutation.isPending,
     mintOrder: createMintMutation.data,

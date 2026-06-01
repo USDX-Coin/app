@@ -75,5 +75,5 @@ export interface AuthResponse {
   token: string;
 }
 
-export type MintStep = "form" | "review" | "payment";
+export type MintStep = "form" | "confirmation" | "status";
 export type RedeemStep = "form" | "review" | "executing" | "success";

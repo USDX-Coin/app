@@ -1,11 +1,11 @@
 "use client";
 
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { ChainSelector } from "@/components/shared/ChainSelector";
+import { useState } from "react";
+import { ArrowDown, BookText, ScanLine } from "lucide-react";
 import { useMint } from "@/hooks/useMint";
-import { cn, formatAmount, formatIDR } from "@/lib/utils";
-import { ArrowLeft, ArrowRight, BookOpen, ScanLine } from "lucide-react";
+import { formatAmount } from "@/lib/utils";
+import { TokenButton } from "@/components/shared/TokenButton";
+import { NetworkTokenModal } from "@/components/shared/NetworkTokenModal";
 
 export function MintForm() {
   const {
@@ -15,145 +15,103 @@ export function MintForm() {
     setChainId,
     destinationAddress,
     setDestinationAddress,
-    paymentAmount,
     paymentAmountIdr,
+    exchangeRateIdr,
     amountError,
-    addressError,
     isFormValid,
-    goToReview,
-    goBackToForm,
-    step,
+    goToConfirmation,
+    selectedChain,
   } = useMint();
-
-  const isReviewing = step === "review";
+  const [modalOpen, setModalOpen] = useState(false);
 
   return (
-    <div className="space-y-6">
-      {/* You will mint */}
-      <div>
-        <h2 className="text-sm font-semibold text-foreground mb-3">
-          You will mint
-        </h2>
-        <div className="space-y-2">
-          <div className={cn("rounded-xl border p-4", amountError ? "border-destructive" : "border-border")}>
-            <div className="flex items-center gap-3">
-              <Input
-                type="text"
-                placeholder="Amount"
+    <div className="flex w-full max-w-[500px] flex-col gap-6 rounded-xl border border-border bg-card p-5">
+      <h2 className="text-xl font-medium tracking-tight text-foreground">Mint USDX</h2>
+
+      <div className="flex flex-col gap-4">
+        {/* Amount boxes with center swap */}
+        <div className="relative flex flex-col gap-2">
+          <div className="flex flex-col gap-4 rounded-xl bg-muted p-4">
+            <p className="text-sm font-medium text-muted-foreground">You will mint</p>
+            <div className="flex items-center justify-between gap-2">
+              <TokenButton chain={selectedChain} onClick={() => setModalOpen(true)} />
+              <input
+                inputMode="decimal"
+                placeholder="0"
                 value={amount}
-                disabled={isReviewing}
-                onChange={(e) => {
-                  const val = e.target.value.replace(/[^0-9.]/g, "");
-                  setAmount(val);
-                }}
-                className="bg-transparent outline-none border-0 text-sm font-medium p-0 focus-visible:ring-0 flex-1 dark:bg-transparent shadow-none disabled:opacity-70 disabled:cursor-default"
+                onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
+                className="min-w-0 flex-1 bg-transparent text-right text-2xl font-semibold tracking-tight text-foreground outline-none placeholder:text-muted-foreground"
               />
-              <ChainSelector selectedChainId={chainId} onSelect={setChainId} disabled={isReviewing} />
             </div>
           </div>
-          <div className="h-[20px]">
-            {amountError && <p className="text-sm text-destructive mt-2">{amountError}</p>}
-          </div>
-        </div>
-      </div>
 
-      {/* You will pay */}
-      <div>
-        <h2 className="text-sm font-semibold text-foreground mb-3">
-          You will pay
-        </h2>
-        <div className="flex items-center gap-3 rounded-xl border border-border p-4">
-          <Input
-            type="text"
-            value={paymentAmount > 0 ? formatAmount(paymentAmount) : ""}
-            placeholder="Amount"
-            disabled
-            className="bg-transparent outline-none border-0 text-sm font-medium p-0 focus-visible:ring-0 flex-1 disabled:opacity-70 disabled:cursor-default dark:bg-transparent shadow-none"
-          />
-          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-            <div className="h-6 w-6 rounded-full bg-green-100 flex items-center justify-center text-xs">
-              $
+          <div className="flex flex-col gap-4 rounded-xl bg-muted p-4">
+            <p className="text-sm font-medium text-muted-foreground">You will pay</p>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex shrink-0 items-center gap-2 rounded-full bg-primary py-1.5 pl-1.5 pr-3 text-white">
+                <span className="flex size-8 items-center justify-center rounded-full bg-gold text-sm font-semibold text-[#1a1a1a]">
+                  Rp
+                </span>
+                <span className="text-base font-semibold tracking-tight">IDR</span>
+              </div>
+              <p className="truncate text-2xl font-semibold tracking-tight text-foreground">
+                {paymentAmountIdr > 0 ? formatAmount(paymentAmountIdr) : "0"}
+              </p>
             </div>
-            USD
+          </div>
+
+          <div className="absolute left-1/2 top-1/2 flex size-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-card">
+            <ArrowDown className="size-5 text-muted-foreground" />
           </div>
         </div>
-        {paymentAmount > 0 && (
-          <p className="mt-2 text-xs text-muted-foreground">
-            ≈ {formatIDR(paymentAmountIdr)}
+
+        {amountError && <p className="-mt-2 text-sm text-destructive">{amountError}</p>}
+
+        {/* Exchange rate */}
+        <div className="flex flex-col gap-2">
+          <p className="text-sm font-medium text-muted-foreground">Exchange rate</p>
+          <p className="text-base font-medium tracking-tight text-foreground">
+            1 USDX ≈ {formatAmount(exchangeRateIdr)} IDR
           </p>
-        )}
-      </div>
+        </div>
 
-      {/* Exchange rate */}
-      <div>
-        <h2 className="text-sm font-semibold text-foreground mb-1">
-          Exchange rate
-        </h2>
-        <p className="text-sm text-muted-foreground">1 USDX = 1 USD</p>
-      </div>
-
-      {/* Destination address */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-foreground">
-            To this address
-          </h2>
-          {!isReviewing && (
-            <button className="text-sm text-primary hover:underline flex items-center gap-1">
-              <BookOpen className="h-3.5 w-3.5" />
-              Add Address Book
+        {/* Destination address */}
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between text-sm font-medium">
+            <p className="text-muted-foreground">To this address</p>
+            <button type="button" className="text-gold underline-offset-2 hover:underline">
+              Add address book
             </button>
-          )}
-        </div>
-        <div className="space-y-2">
-          <div className={cn("rounded-xl border p-4", addressError ? "border-destructive" : "border-border")}>
-            <div className="flex items-center gap-2">
-              <Input
-                type="text"
-                placeholder="Destination Address"
-                value={destinationAddress}
-                disabled={isReviewing}
-                onChange={(e) => setDestinationAddress(e.target.value)}
-                className="bg-transparent outline-none border-0 text-sm p-0 focus-visible:ring-0 flex-1 dark:bg-transparent shadow-none disabled:opacity-70 disabled:cursor-default"
-              />
-              {!isReviewing && (
-                <>
-                  <button className="text-muted-foreground hover:text-foreground">
-                    <BookOpen className="h-4 w-4" />
-                  </button>
-                  <button className="text-muted-foreground hover:text-foreground">
-                    <ScanLine className="h-4 w-4" />
-                  </button>
-                </>
-              )}
-            </div>
           </div>
-          <div className="h-[20px]">
-            {addressError && <p className="text-sm text-destructive mt-2">{addressError}</p>}
+          <div className="flex items-center gap-2.5 rounded-md bg-muted p-3">
+            <input
+              placeholder="Select destination address"
+              value={destinationAddress}
+              onChange={(e) => setDestinationAddress(e.target.value)}
+              className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+            />
+            <BookText className="size-4 shrink-0 text-muted-foreground" />
+            <ScanLine className="size-4 shrink-0 text-muted-foreground" />
           </div>
         </div>
       </div>
 
-      {/* Button */}
-      {isReviewing ? (
-        <Button
-          onClick={goBackToForm}
-          variant="outline"
-          className="w-full rounded-xl py-6 text-base flex items-center justify-center gap-2"
-        >
-          <ArrowLeft className="h-5 w-5" />
-          Change Amount
-        </Button>
-      ) : (
-        <Button
-          onClick={goToReview}
-          disabled={!isFormValid}
-          className="w-full bg-linear-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary-700 rounded-xl py-6 text-base"
-        >
-          <span className="flex-1">Review Mint</span>
-          <ArrowRight className="h-5 w-5" />
-        </Button>
-      )}
+      <button
+        type="button"
+        disabled={!isFormValid}
+        onClick={goToConfirmation}
+        className="brand-gradient flex h-[42px] items-center justify-center rounded-lg text-sm font-medium text-white transition-opacity disabled:opacity-50"
+      >
+        Mint
+      </button>
+
+      <NetworkTokenModal
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        title="Mint to"
+        selectedChainId={chainId}
+        onSelectChain={setChainId}
+      />
     </div>
   );
 }

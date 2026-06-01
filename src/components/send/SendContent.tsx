@@ -9,10 +9,12 @@ import { NetworkTokenModal } from "@/components/shared/NetworkTokenModal";
 import { getChainById } from "@/lib/chains";
 import { validateAddress } from "@/lib/validations";
 import { formatAmount } from "@/lib/utils";
+import { useLang } from "@/providers/LanguageProvider";
 
 const BALANCE = 999105.89;
 
 export function SendContent() {
+  const { t } = useLang();
   const [chain, setChain] = useState("base");
   const [amount, setAmount] = useState("");
   const [address, setAddress] = useState("");
@@ -22,22 +24,22 @@ export function SendContent() {
   const isValid = amount !== "" && Number(amount) > 0 && address !== "" && !addressError;
 
   function handleSend() {
-    toast.success("Send request submitted");
+    toast.success(t("toast.sendSubmitted"));
     setAmount("");
     setAddress("");
   }
 
   return (
     <div className="flex h-full flex-col gap-2">
-      <PageHeader crumbs={["Transaction", "Send"]} title="Send USDX" />
+      <PageHeader crumbs={["crumb.transaction", "nav.send"]} title="title.send" />
       <div className="flex flex-1 justify-center pt-8">
         <div className="flex w-full max-w-[500px] flex-col gap-6 rounded-xl border border-border bg-card p-5">
-          <h2 className="text-xl font-medium tracking-tight text-foreground">Send USDX</h2>
+          <h2 className="text-xl font-medium tracking-tight text-foreground">{t("title.send")}</h2>
 
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-4 rounded-xl bg-muted p-4">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-medium text-muted-foreground">You will send</p>
+                <p className="text-sm font-medium text-muted-foreground">{t("form.youWillSend")}</p>
                 <div className="flex items-center gap-2 text-sm">
                   <Wallet className="size-[18px] text-muted-foreground" />
                   <span className="text-muted-foreground">{formatAmount(BALANCE)}</span>
@@ -46,7 +48,7 @@ export function SendContent() {
                     onClick={() => setAmount(String(BALANCE))}
                     className="font-semibold text-gold underline-offset-2 hover:underline"
                   >
-                    Max
+                    {t("common.max")}
                   </button>
                 </div>
               </div>
@@ -64,14 +66,14 @@ export function SendContent() {
 
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between text-sm font-medium">
-                <p className="text-muted-foreground">To this address</p>
+                <p className="text-muted-foreground">{t("form.toThisAddress")}</p>
                 <button type="button" className="text-gold underline-offset-2 hover:underline">
-                  Add address book
+                  {t("form.addAddressBook")}
                 </button>
               </div>
               <div className="flex items-center gap-2.5 rounded-md bg-muted p-3">
                 <input
-                  placeholder="Select destination address"
+                  placeholder={t("form.selectDestination")}
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
                   className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
@@ -89,13 +91,13 @@ export function SendContent() {
             onClick={handleSend}
             className="brand-gradient flex h-[42px] items-center justify-center rounded-lg text-sm font-medium text-white transition-opacity disabled:opacity-50"
           >
-            Send
+            {t("btn.send")}
           </button>
 
           <NetworkTokenModal
             open={modalOpen}
             onOpenChange={setModalOpen}
-            title="Send From"
+            title={t("modal.sendFrom")}
             selectedChainId={chain}
             onSelectChain={setChain}
           />

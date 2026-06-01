@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { SUPPORTED_CHAINS, getChainById } from "@/lib/chains";
 import { cn } from "@/lib/utils";
+import { useLang } from "@/providers/LanguageProvider";
 
 interface NetworkTokenModalProps {
   open: boolean;
@@ -26,6 +27,7 @@ export function NetworkTokenModal({
   onSelectChain,
 }: NetworkTokenModalProps) {
   const selected = getChainById(selectedChainId);
+  const { t } = useLang();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -36,7 +38,7 @@ export function NetworkTokenModal({
 
         <div className="flex flex-col gap-3 p-4">
           <div className="flex items-center gap-2.5">
-            <span className="text-sm font-medium text-muted-foreground">Selected Network</span>
+            <span className="text-sm font-medium text-muted-foreground">{t("modal.selectedNetwork")}</span>
             <span className="flex items-center gap-1.5">
               {selected && <img src={selected.icon} alt="" className="size-4 rounded-sm" />}
               <span className="text-sm text-foreground">{selected?.name}</span>
@@ -65,7 +67,7 @@ export function NetworkTokenModal({
             })}
           </div>
 
-          <p className="text-sm font-medium text-muted-foreground">Token</p>
+          <p className="text-sm font-medium text-muted-foreground">{t("modal.token")}</p>
           <button
             type="button"
             onClick={() => onOpenChange(false)}

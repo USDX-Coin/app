@@ -6,8 +6,10 @@ import { useMint } from "@/hooks/useMint";
 import { formatAmount } from "@/lib/utils";
 import { TokenButton } from "@/components/shared/TokenButton";
 import { NetworkTokenModal } from "@/components/shared/NetworkTokenModal";
+import { useLang } from "@/providers/LanguageProvider";
 
 export function MintForm() {
+  const { t } = useLang();
   const {
     amount,
     setAmount,
@@ -26,13 +28,13 @@ export function MintForm() {
 
   return (
     <div className="flex w-full max-w-[500px] flex-col gap-6 rounded-xl border border-border bg-card p-5">
-      <h2 className="text-xl font-medium tracking-tight text-foreground">Mint USDX</h2>
+      <h2 className="text-xl font-medium tracking-tight text-foreground">{t("title.mint")}</h2>
 
       <div className="flex flex-col gap-4">
         {/* Amount boxes with center swap */}
         <div className="relative flex flex-col gap-2">
           <div className="flex flex-col gap-4 rounded-xl bg-muted p-4">
-            <p className="text-sm font-medium text-muted-foreground">You will mint</p>
+            <p className="text-sm font-medium text-muted-foreground">{t("form.youWillMint")}</p>
             <div className="flex items-center justify-between gap-2">
               <TokenButton chain={selectedChain} onClick={() => setModalOpen(true)} />
               <input
@@ -46,7 +48,7 @@ export function MintForm() {
           </div>
 
           <div className="flex flex-col gap-4 rounded-xl bg-muted p-4">
-            <p className="text-sm font-medium text-muted-foreground">You will pay</p>
+            <p className="text-sm font-medium text-muted-foreground">{t("form.youWillPay")}</p>
             <div className="flex items-center justify-between gap-2">
               <div className="flex shrink-0 items-center gap-2 rounded-full bg-primary py-1.5 pl-1.5 pr-3 text-white">
                 <span className="flex size-8 items-center justify-center rounded-full bg-gold text-sm font-semibold text-[#1a1a1a]">
@@ -69,7 +71,7 @@ export function MintForm() {
 
         {/* Exchange rate */}
         <div className="flex flex-col gap-2">
-          <p className="text-sm font-medium text-muted-foreground">Exchange rate</p>
+          <p className="text-sm font-medium text-muted-foreground">{t("form.exchangeRate")}</p>
           <p className="text-base font-medium tracking-tight text-foreground">
             1 USDX ≈ {formatAmount(exchangeRateIdr)} IDR
           </p>
@@ -78,14 +80,14 @@ export function MintForm() {
         {/* Destination address */}
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between text-sm font-medium">
-            <p className="text-muted-foreground">To this address</p>
+            <p className="text-muted-foreground">{t("form.toThisAddress")}</p>
             <button type="button" className="text-gold underline-offset-2 hover:underline">
-              Add address book
+              {t("form.addAddressBook")}
             </button>
           </div>
           <div className="flex items-center gap-2.5 rounded-md bg-muted p-3">
             <input
-              placeholder="Select destination address"
+              placeholder={t("form.selectDestination")}
               value={destinationAddress}
               onChange={(e) => setDestinationAddress(e.target.value)}
               className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
@@ -102,13 +104,13 @@ export function MintForm() {
         onClick={goToConfirmation}
         className="brand-gradient flex h-[42px] items-center justify-center rounded-lg text-sm font-medium text-white transition-opacity disabled:opacity-50"
       >
-        Mint
+        {t("btn.mint")}
       </button>
 
       <NetworkTokenModal
         open={modalOpen}
         onOpenChange={setModalOpen}
-        title="Mint to"
+        title={t("modal.mintTo")}
         selectedChainId={chainId}
         onSelectChain={setChainId}
       />

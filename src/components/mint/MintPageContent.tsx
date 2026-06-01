@@ -7,9 +7,9 @@ import { MintConfirmation } from "@/components/mint/MintConfirmation";
 import { MintStatus } from "@/components/mint/MintStatus";
 
 const HEADERS = {
-  form: { crumbs: ["Transaction", "Mint"], title: "Mint USDX" },
-  confirmation: { crumbs: ["Transaction", "Mint", "Confirmation"], title: "Mint Confirmation" },
-  status: { crumbs: ["Transaction", "Mint", "Status"], title: "Mint Status" },
+  form: { crumbs: ["crumb.transaction", "nav.mint"], title: "title.mint" },
+  confirmation: { crumbs: ["crumb.transaction", "nav.mint", "crumb.confirmation"], title: "title.mintConfirmation" },
+  status: { crumbs: ["crumb.transaction", "nav.mint", "crumb.status"], title: "title.mintStatus" },
 } as const;
 
 export function MintPageContent() {

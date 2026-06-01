@@ -9,10 +9,12 @@ import { NetworkTokenModal } from "@/components/shared/NetworkTokenModal";
 import { getChainById } from "@/lib/chains";
 import { validateAddress } from "@/lib/validations";
 import { formatAmount } from "@/lib/utils";
+import { useLang } from "@/providers/LanguageProvider";
 
 const BALANCE = 999105.89;
 
 export function BridgeContent() {
+  const { t } = useLang();
   const [fromChain, setFromChain] = useState("base");
   const [toChain, setToChain] = useState("polygon");
   const [amount, setAmount] = useState("");
@@ -28,23 +30,23 @@ export function BridgeContent() {
   }
 
   function handleBridge() {
-    toast.success("Bridge request submitted");
+    toast.success(t("toast.bridgeSubmitted"));
     setAmount("");
     setAddress("");
   }
 
   return (
     <div className="flex h-full flex-col gap-2">
-      <PageHeader crumbs={["Transaction", "Bridge"]} title="Bridge USDX" />
+      <PageHeader crumbs={["crumb.transaction", "nav.bridge"]} title="title.bridge" />
       <div className="flex flex-1 justify-center pt-8">
         <div className="flex w-full max-w-[500px] flex-col gap-6 rounded-xl border border-border bg-card p-5">
-          <h2 className="text-xl font-medium tracking-tight text-foreground">Bridge USDX</h2>
+          <h2 className="text-xl font-medium tracking-tight text-foreground">{t("title.bridge")}</h2>
 
           <div className="flex flex-col gap-4">
             <div className="relative flex flex-col gap-2">
               <div className="flex flex-col gap-4 rounded-xl bg-muted p-4">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium text-muted-foreground">From</p>
+                  <p className="text-sm font-medium text-muted-foreground">{t("form.from")}</p>
                   <div className="flex items-center gap-2 text-sm">
                     <Wallet className="size-[18px] text-muted-foreground" />
                     <span className="text-muted-foreground">{formatAmount(BALANCE)}</span>
@@ -53,7 +55,7 @@ export function BridgeContent() {
                       onClick={() => setAmount(String(BALANCE))}
                       className="font-semibold text-gold underline-offset-2 hover:underline"
                     >
-                      Max
+                      {t("common.max")}
                     </button>
                   </div>
                 </div>
@@ -70,7 +72,7 @@ export function BridgeContent() {
               </div>
 
               <div className="flex flex-col gap-4 rounded-xl bg-muted p-4">
-                <p className="text-sm font-medium text-muted-foreground">To</p>
+                <p className="text-sm font-medium text-muted-foreground">{t("form.to")}</p>
                 <div className="flex items-center justify-between gap-2">
                   <TokenButton chain={getChainById(toChain)} onClick={() => setModal("to")} />
                   <p className="truncate text-2xl font-semibold tracking-tight text-foreground">
@@ -91,14 +93,14 @@ export function BridgeContent() {
 
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between text-sm font-medium">
-                <p className="text-muted-foreground">To this address</p>
+                <p className="text-muted-foreground">{t("form.toThisAddress")}</p>
                 <button type="button" className="text-gold underline-offset-2 hover:underline">
-                  Add address book
+                  {t("form.addAddressBook")}
                 </button>
               </div>
               <div className="flex items-center gap-2.5 rounded-md bg-muted p-3">
                 <input
-                  placeholder="Select destination address"
+                  placeholder={t("form.selectDestination")}
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
                   className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
@@ -116,20 +118,20 @@ export function BridgeContent() {
             onClick={handleBridge}
             className="brand-gradient flex h-[42px] items-center justify-center rounded-lg text-sm font-medium text-white transition-opacity disabled:opacity-50"
           >
-            Bridge
+            {t("btn.bridge")}
           </button>
 
           <NetworkTokenModal
             open={modal === "from"}
             onOpenChange={(o) => setModal(o ? "from" : null)}
-            title="Bridge From"
+            title={t("modal.bridgeFrom")}
             selectedChainId={fromChain}
             onSelectChain={setFromChain}
           />
           <NetworkTokenModal
             open={modal === "to"}
             onOpenChange={(o) => setModal(o ? "to" : null)}
-            title="Bridge To"
+            title={t("modal.bridgeTo")}
             selectedChainId={toChain}
             onSelectChain={setToChain}
           />

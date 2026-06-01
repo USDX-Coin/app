@@ -16,10 +16,13 @@ import {
   PanelLeft,
   User,
   LogOut,
+  Check,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/authStore";
+import { useLang } from "@/providers/LanguageProvider";
+import { LANGUAGES } from "@/lib/i18n/dictionaries";
 import { ThemeToggle } from "./ThemeToggle";
 import {
   DropdownMenu,
@@ -30,36 +33,28 @@ import {
 
 interface NavItem {
   href: string;
-  label: string;
+  labelKey: string;
   icon: LucideIcon;
 }
 
 const transactionItems: NavItem[] = [
-  { href: "/mint", label: "Mint", icon: Coins },
-  { href: "/redeem", label: "Redeem", icon: ArrowDownToLine },
-  { href: "/bridge", label: "Bridge", icon: ArrowLeftRight },
-  { href: "/send", label: "Send", icon: ArrowUp },
+  { href: "/mint", labelKey: "nav.mint", icon: Coins },
+  { href: "/redeem", labelKey: "nav.redeem", icon: ArrowDownToLine },
+  { href: "/bridge", labelKey: "nav.bridge", icon: ArrowLeftRight },
+  { href: "/send", labelKey: "nav.send", icon: ArrowUp },
 ];
 
 const moreItems: NavItem[] = [
-  { href: "/transactions", label: "Transaction", icon: History },
-  { href: "/help", label: "Help", icon: CircleHelp },
-  { href: "/support", label: "Support", icon: Headset },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/transactions", labelKey: "nav.transaction", icon: History },
+  { href: "/help", labelKey: "nav.help", icon: CircleHelp },
+  { href: "/support", labelKey: "nav.support", icon: Headset },
+  { href: "/settings", labelKey: "nav.settings", icon: Settings },
 ];
 
-// Mock balance (sidebar lives outside the wallet provider; matches Figma).
 const MOCK_BALANCE = { usdx: "240,000", usd: "240,000" };
 
-function NavLink({
-  item,
-  active,
-  onNavigate,
-}: {
-  item: NavItem;
-  active: boolean;
-  onNavigate?: () => void;
-}) {
+function NavLink({ item, active, onNavigate }: { item: NavItem; active: boolean; onNavigate?: () => void }) {
+  const { t } = useLang();
   const Icon = item.icon;
   return (
     <Link
@@ -73,7 +68,7 @@ function NavLink({
       )}
     >
       <Icon className="size-[18px] shrink-0" />
-      <span>{item.label}</span>
+      <span>{t(item.labelKey)}</span>
     </Link>
   );
 }
@@ -93,9 +88,7 @@ function NavGroup({
 }) {
   return (
     <div className={cn("flex w-full flex-col gap-3", className)}>
-      <p className="text-sm font-medium uppercase tracking-[0.7px] text-sidebar-muted">
-        {label}
-      </p>
+      <p className="text-sm font-medium uppercase tracking-[0.7px] text-sidebar-muted">{label}</p>
       <div className="flex flex-col gap-1">
         {items.map((item) => (
           <NavLink
@@ -121,7 +114,9 @@ export function Sidebar({
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+  const { t, lang, setLang } = useLang();
   const name = user?.fullName ?? "Pranatha Widya";
+  const currentLang = LANGUAGES.find((l) => l.value === lang) ?? LANGUAGES[0];
 
   function handleLogout() {
     logout();
@@ -135,9 +130,7 @@ export function Sidebar({
         <DropdownMenu>
           <DropdownMenuTrigger className="flex items-center gap-1.5 outline-none">
             <img src="/image/Logo.svg" alt="USDX" className="size-8 rounded-full" />
-            <span className="max-w-[150px] truncate text-base font-medium tracking-tight">
-              {name}
-            </span>
+            <span className="max-w-[150px] truncate text-base font-medium tracking-tight">{name}</span>
             <ChevronsUpDown className="size-5 text-sidebar-muted" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-44">
@@ -166,11 +159,9 @@ export function Sidebar({
       {/* Total Saldo card */}
       <div className="balance-gradient relative flex w-full flex-col gap-3.5 overflow-hidden rounded-lg border border-white/20 p-3">
         <div className="flex flex-col gap-1">
-          <p className="text-xs font-medium tracking-tight text-white/60">Total Saldo</p>
+          <p className="text-xs font-medium tracking-tight text-white/60">{t("sidebar.totalBalance")}</p>
           <div className="flex flex-col">
-            <p className="text-base font-medium tracking-tight text-white">
-              {MOCK_BALANCE.usdx} USDX
-            </p>
+            <p className="text-base font-medium tracking-tight text-white">{MOCK_BALANCE.usdx} USDX</p>
             <p className="text-[11px] text-white/60">≈ ${MOCK_BALANCE.usd}</p>
           </div>
         </div>
@@ -178,39 +169,35 @@ export function Sidebar({
           type="button"
           className="brand-dark-gradient flex h-[38px] w-full items-center justify-center rounded-lg px-4 text-sm font-medium text-white"
         >
-          Dapatkan USDX
+          {t("sidebar.getUsdx")}
         </button>
       </div>
 
-      <NavGroup
-        label="Transaction"
-        items={transactionItems}
-        pathname={pathname}
-        onNavigate={onNavigate}
-      />
-      <NavGroup
-        label="More"
-        items={moreItems}
-        pathname={pathname}
-        onNavigate={onNavigate}
-        className="flex-1"
-      />
+      <NavGroup label={t("sidebar.transaction")} items={transactionItems} pathname={pathname} onNavigate={onNavigate} />
+      <NavGroup label={t("sidebar.more")} items={moreItems} pathname={pathname} onNavigate={onNavigate} className="flex-1" />
 
-      {/* Language + theme */}
+      {/* Language */}
       <div className="flex flex-col gap-2">
-        <p className="text-sm text-sidebar-muted">Selected Language</p>
+        <p className="text-sm text-sidebar-muted">{t("sidebar.selectedLanguage")}</p>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="flex flex-1 items-center gap-2.5 rounded-md border border-border p-2.5 text-sm text-sidebar-muted transition-colors hover:bg-accent"
-          >
-            <span className="relative h-3.5 w-5 shrink-0 overflow-hidden rounded-[2px] border border-border">
-              <span className="absolute inset-x-0 top-0 h-1/2 bg-[#e70011]" />
-              <span className="absolute inset-x-0 bottom-0 h-1/2 bg-white" />
-            </span>
-            <span className="flex-1 text-left">Indonesia</span>
-            <ChevronDown className="size-4" />
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger className="flex flex-1 items-center gap-2.5 rounded-md border border-border p-2.5 text-sm text-sidebar-muted outline-none transition-colors hover:bg-accent">
+              <span className="relative h-3.5 w-5 shrink-0 overflow-hidden rounded-[2px] border border-border">
+                <span className="absolute inset-x-0 top-0 h-1/2 bg-[#e70011]" />
+                <span className="absolute inset-x-0 bottom-0 h-1/2 bg-white" />
+              </span>
+              <span className="flex-1 text-left">{currentLang.label}</span>
+              <ChevronDown className="size-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)]">
+              {LANGUAGES.map((l) => (
+                <DropdownMenuItem key={l.value} onClick={() => setLang(l.value)}>
+                  <span className="flex-1">{l.label}</span>
+                  {l.value === lang && <Check className="size-4" />}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <ThemeToggle />
         </div>
       </div>

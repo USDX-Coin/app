@@ -5,6 +5,7 @@ import { Landmark, Wallet } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useLang } from "@/providers/LanguageProvider";
 
 interface AddRecipientDialogProps {
   open: boolean;
@@ -17,6 +18,7 @@ const EWALLETS = ["OVO", "GoPay", "DANA", "ShopeePay", "LinkAja"];
 type AccountType = "bank" | "ewallet";
 
 export function AddRecipientDialog({ open, onOpenChange }: AddRecipientDialogProps) {
+  const { t } = useLang();
   const [accountType, setAccountType] = useState<AccountType>("bank");
   const [provider, setProvider] = useState(BANKS[0]);
   const [accountNumber, setAccountNumber] = useState("");
@@ -44,31 +46,29 @@ export function AddRecipientDialog({ open, onOpenChange }: AddRecipientDialogPro
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="gap-0 overflow-hidden border-4 border-white/20 p-0 sm:max-w-[520px]">
         <div className="border-b border-border p-4">
-          <DialogTitle className="text-base font-medium text-foreground">Add New Recipient</DialogTitle>
+          <DialogTitle className="text-base font-medium text-foreground">{t("modal.addRecipient")}</DialogTitle>
         </div>
 
         <div className="flex flex-col gap-3 p-4">
-          {/* Account type */}
           <div className="flex flex-col gap-2">
-            <p className="text-sm font-medium text-muted-foreground">Account Type</p>
+            <p className="text-sm font-medium text-muted-foreground">{t("modal.accountType")}</p>
             <div className="flex gap-2">
               <TypeCard
                 active={accountType === "bank"}
                 onClick={() => selectType("bank")}
                 icon={<Landmark className="size-5" />}
-                label="Bank Account"
+                label={t("modal.bankAccount")}
               />
               <TypeCard
                 active={accountType === "ewallet"}
                 onClick={() => selectType("ewallet")}
                 icon={<Wallet className="size-5" />}
-                label="E-Wallet"
+                label={t("modal.eWallet")}
               />
             </div>
           </div>
 
-          {/* Provider */}
-          <Field label={accountType === "bank" ? "Bank Name" : "E-Wallet Provider"}>
+          <Field label={accountType === "bank" ? t("modal.bankName") : t("modal.ewalletProvider")}>
             <select
               value={provider}
               onChange={(e) => setProvider(e.target.value)}
@@ -80,7 +80,7 @@ export function AddRecipientDialog({ open, onOpenChange }: AddRecipientDialogPro
             </select>
           </Field>
 
-          <Field label="Account Number">
+          <Field label={t("modal.accountNumber")}>
             <input
               inputMode="numeric"
               placeholder="999123458900"
@@ -90,7 +90,7 @@ export function AddRecipientDialog({ open, onOpenChange }: AddRecipientDialogPro
             />
           </Field>
 
-          <Field label="Holder Name">
+          <Field label={t("modal.holderName")}>
             <input
               placeholder="Pranatha W"
               value={holderName}
@@ -106,14 +106,14 @@ export function AddRecipientDialog({ open, onOpenChange }: AddRecipientDialogPro
             onClick={() => onOpenChange(false)}
             className="flex h-[38px] flex-1 items-center justify-center rounded-lg border border-border text-sm font-medium text-foreground transition-colors hover:bg-accent"
           >
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             type="button"
             onClick={handleConfirm}
             className="brand-gradient flex h-[38px] flex-1 items-center justify-center rounded-lg text-sm font-medium text-white"
           >
-            Confirm
+            {t("common.confirm")}
           </button>
         </div>
       </DialogContent>

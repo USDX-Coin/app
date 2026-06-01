@@ -4,7 +4,7 @@ import { TransactionList } from "@/components/transactions/TransactionList";
 export default function TransactionsPage() {
   return (
     <div className="flex h-full flex-col gap-6">
-      <PageHeader crumbs={["More", "Transaction"]} title="Transaction History" />
+      <PageHeader crumbs={["sidebar.more", "nav.transaction"]} title="title.transactionHistory" />
       <TransactionList />
     </div>
   );

@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { mockGetBankAccounts } from "@/lib/api/mock-api";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useLang } from "@/providers/LanguageProvider";
 
 interface BankAccountSelectorProps {
   value: string;
@@ -12,6 +13,7 @@ interface BankAccountSelectorProps {
 }
 
 export function BankAccountSelector({ value, onSelect }: BankAccountSelectorProps) {
+  const { t } = useLang();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -47,7 +49,7 @@ export function BankAccountSelector({ value, onSelect }: BankAccountSelectorProp
             </span>
           </span>
         ) : (
-          <span className="flex-1 text-sm text-muted-foreground">Select bank account</span>
+          <span className="flex-1 text-sm text-muted-foreground">{t("form.selectBank")}</span>
         )}
         <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
       </button>

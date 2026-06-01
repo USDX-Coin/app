@@ -24,7 +24,7 @@ export function TokenButton({
       )}
     >
       <span className="relative inline-block size-8 shrink-0">
-        <img src="/image/Logo.svg" alt="" className="size-8 rounded-full" />
+        <img src="/image/usdx-logo.png" alt="" className="size-8 rounded-full" />
         {chain && (
           <img
             src={chain.icon}

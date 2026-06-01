@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: "USDX - USD Stablecoin",
   description: "Mint and redeem USDX stablecoin",
   icons: {
-    icon: "/image/Logo.svg",
+    icon: "/image/usdx-logo.png",
   },
 };
 

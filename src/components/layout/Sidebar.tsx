@@ -129,7 +129,7 @@ export function Sidebar({
       <div className="flex items-center justify-between">
         <DropdownMenu>
           <DropdownMenuTrigger className="flex items-center gap-1.5 outline-none">
-            <img src="/image/Logo.svg" alt="USDX" className="size-8 rounded-full" />
+            <img src="/image/usdx-logo.png" alt="USDX" className="size-8 rounded-full" />
             <span className="max-w-[150px] truncate text-base font-medium tracking-tight">{name}</span>
             <ChevronsUpDown className="size-5 text-sidebar-muted" />
           </DropdownMenuTrigger>
@@ -158,7 +158,13 @@ export function Sidebar({
 
       {/* Total Saldo card */}
       <div className="balance-gradient relative flex w-full flex-col gap-3.5 overflow-hidden rounded-lg border border-white/20 p-3">
-        <div className="flex flex-col gap-1">
+        <img
+          src="/image/balance-watermark.svg"
+          alt=""
+          aria-hidden
+          className="pointer-events-none absolute -right-[51px] -top-px h-[143px] w-[165px] opacity-15"
+        />
+        <div className="relative flex flex-col gap-1">
           <p className="text-xs font-medium tracking-tight text-white/60">{t("sidebar.totalBalance")}</p>
           <div className="flex flex-col">
             <p className="text-base font-medium tracking-tight text-white">{MOCK_BALANCE.usdx} USDX</p>
@@ -167,7 +173,7 @@ export function Sidebar({
         </div>
         <button
           type="button"
-          className="brand-dark-gradient flex h-[38px] w-full items-center justify-center rounded-lg px-4 text-sm font-medium text-white"
+          className="brand-dark-gradient relative flex h-[38px] w-full items-center justify-center rounded-lg px-4 text-sm font-medium text-white"
         >
           {t("sidebar.getUsdx")}
         </button>
@@ -182,16 +188,14 @@ export function Sidebar({
         <div className="flex items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger className="flex flex-1 items-center gap-2.5 rounded-md border border-border p-2.5 text-sm text-sidebar-muted outline-none transition-colors hover:bg-accent">
-              <span className="relative h-3.5 w-5 shrink-0 overflow-hidden rounded-[2px] border border-border">
-                <span className="absolute inset-x-0 top-0 h-1/2 bg-[#e70011]" />
-                <span className="absolute inset-x-0 bottom-0 h-1/2 bg-white" />
-              </span>
+              <img src={currentLang.flag} alt="" className="size-5 shrink-0 rounded-full object-cover" />
               <span className="flex-1 text-left">{currentLang.label}</span>
               <ChevronDown className="size-4" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)]">
               {LANGUAGES.map((l) => (
-                <DropdownMenuItem key={l.value} onClick={() => setLang(l.value)}>
+                <DropdownMenuItem key={l.value} onClick={() => setLang(l.value)} className="gap-2.5">
+                  <img src={l.flag} alt="" className="size-5 shrink-0 rounded-full object-cover" />
                   <span className="flex-1">{l.label}</span>
                   {l.value === lang && <Check className="size-4" />}
                 </DropdownMenuItem>

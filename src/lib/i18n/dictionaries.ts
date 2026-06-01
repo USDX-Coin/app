@@ -230,7 +230,7 @@ const id: Dict = {
 
 export const dictionaries: Record<Lang, Dict> = { id, en };
 
-export const LANGUAGES: { value: Lang; label: string }[] = [
-  { value: "id", label: "Indonesia" },
-  { value: "en", label: "English" },
+export const LANGUAGES: { value: Lang; label: string; flag: string }[] = [
+  { value: "id", label: "Indonesia", flag: "/image/flags/id.png" },
+  { value: "en", label: "English", flag: "/image/flags/en.svg" },
 ];

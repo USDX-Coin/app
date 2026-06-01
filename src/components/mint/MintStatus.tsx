@@ -55,7 +55,7 @@ export function MintStatus() {
 
         <p className="pt-1 text-base font-medium text-foreground">{t("sum.title")}</p>
         <Row label={t("sum.youWillMint")}>
-          <img src="/image/Logo.svg" alt="" className="size-5 rounded-full" /> USDX
+          <img src="/image/usdx-logo.png" alt="" className="size-5 rounded-full" /> USDX
         </Row>
         <Row label={t("sum.network")}>
           {selectedChain && <img src={selectedChain.icon} alt="" className="size-4 rounded-sm" />}

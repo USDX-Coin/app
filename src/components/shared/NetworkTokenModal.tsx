@@ -73,7 +73,7 @@ export function NetworkTokenModal({
             onClick={() => onOpenChange(false)}
             className="flex w-full items-center gap-2.5 rounded-lg border border-primary bg-primary/15 p-3 text-left"
           >
-            <img src="/image/Logo.svg" alt="" className="size-8 rounded-full" />
+            <img src="/image/usdx-logo.png" alt="" className="size-8 rounded-full" />
             <span className="flex-1">
               <span className="block text-sm font-medium text-foreground">USDX</span>
               <span className="block text-xs text-muted-foreground">USD Dollar Index</span>

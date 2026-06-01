@@ -151,7 +151,7 @@ export function TransactionList() {
                       </TableCell>
                       <TableCell>
                         <span className="flex items-center gap-1.5 font-medium text-foreground">
-                          <img src="/image/Logo.svg" alt="" className="size-4 rounded-full" />
+                          <img src="/image/usdx-logo.png" alt="" className="size-4 rounded-full" />
                           {formatAmount(tx.amount)}
                         </span>
                       </TableCell>
@@ -189,7 +189,7 @@ export function TransactionList() {
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">{t("tx.amount")}</span>
                     <span className="flex items-center gap-1.5 font-medium text-foreground">
-                      <img src="/image/Logo.svg" alt="" className="size-4 rounded-full" />{formatAmount(tx.amount)}
+                      <img src="/image/usdx-logo.png" alt="" className="size-4 rounded-full" />{formatAmount(tx.amount)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-sm">

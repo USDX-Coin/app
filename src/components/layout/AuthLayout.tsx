@@ -14,9 +14,8 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
           className="pointer-events-none absolute -right-24 -top-10 h-[520px] w-[600px] opacity-10"
         />
 
-        <div className="relative flex items-center gap-3">
-          <img src="/image/usdx-logo.png" alt="USDX" className="size-11 rounded-full" />
-          <span className="text-2xl font-semibold tracking-tight">USDX</span>
+        <div className="relative">
+          <img src="/image/usdx-wordmark.png" alt="USDX" className="h-11 w-auto" />
         </div>
 
         <div className="relative flex flex-col gap-6">
@@ -47,9 +46,8 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
       {/* Form panel */}
       <div className="flex flex-1 items-center justify-center px-6 py-12 lg:px-12">
         <div className="w-full max-w-md">
-          <div className="mb-8 flex items-center gap-2 lg:hidden">
-            <img src="/image/usdx-logo.png" alt="USDX" className="size-9 rounded-full" />
-            <span className="text-xl font-semibold tracking-tight text-foreground">USDX</span>
+          <div className="mb-8 lg:hidden">
+            <img src="/image/usdx-wordmark.png" alt="USDX" className="h-9 w-auto" />
           </div>
           {children}
         </div>

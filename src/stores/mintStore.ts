@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { MintStep } from "@/types";
+import type { MintStep, MintOrder } from "@/types";
 import { DEFAULT_CHAIN_ID } from "@/lib/chains";
 
 interface MintState {
@@ -7,10 +7,12 @@ interface MintState {
   chainId: string;
   amount: string;
   destinationAddress: string;
+  result: MintOrder | null;
   setStep: (step: MintStep) => void;
   setChainId: (chainId: string) => void;
   setAmount: (amount: string) => void;
   setDestinationAddress: (address: string) => void;
+  setResult: (result: MintOrder) => void;
   reset: () => void;
 }
 
@@ -19,6 +21,7 @@ const initialState = {
   chainId: DEFAULT_CHAIN_ID,
   amount: "",
   destinationAddress: "",
+  result: null as MintOrder | null,
 };
 
 export const useMintStore = create<MintState>()((set) => ({
@@ -27,5 +30,6 @@ export const useMintStore = create<MintState>()((set) => ({
   setChainId: (chainId) => set({ chainId }),
   setAmount: (amount) => set({ amount }),
   setDestinationAddress: (address) => set({ destinationAddress: address }),
+  setResult: (result) => set({ result }),
   reset: () => set(initialState),
 }));

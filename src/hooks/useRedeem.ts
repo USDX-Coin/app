@@ -1,76 +1,76 @@
 "use client";
 
 import { useMemo } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRedeemStore } from "@/stores/redeemStore";
-import { mockCreateRedeem } from "@/lib/api/mock-api";
+import { mockCreateRedeem, mockGetBankAccounts } from "@/lib/api/mock-api";
 import { validateAmount } from "@/lib/validations";
 import { parseAmount } from "@/lib/utils";
-import { EXCHANGE_RATE, MINTING_FEE_PERCENT, USD_TO_IDR_RATE } from "@/lib/constants";
+import { MINTING_FEE_PERCENT, USD_TO_IDR_RATE } from "@/lib/constants";
 import { getChainById } from "@/lib/chains";
+
+const MOCK_WALLET = "0xRedeemMockWallet000000000000000000000000";
 
 export function useRedeem() {
   const store = useRedeemStore();
   const queryClient = useQueryClient();
 
-  const amountError = store.amount
-    ? validateAmount(store.amount, "redeem")
-    : null;
+  const amountError = store.amount ? validateAmount(store.amount, "redeem") : null;
 
   const parsedAmount = parseAmount(store.amount);
-  const receiveAmount = parsedAmount * EXCHANGE_RATE - parsedAmount * MINTING_FEE_PERCENT;
+  const receiveAmountIdr = parsedAmount * USD_TO_IDR_RATE;
   const fee = parsedAmount * MINTING_FEE_PERCENT;
-  const receiveAmountIdr = receiveAmount * USD_TO_IDR_RATE;
-  const feeIdr = fee * USD_TO_IDR_RATE;
   const selectedChain = useMemo(() => getChainById(store.chainId), [store.chainId]);
 
+  const { data: bankAccounts = [] } = useQuery({
+    queryKey: ["bankAccounts"],
+    queryFn: mockGetBankAccounts,
+  });
+  const selectedBank = bankAccounts.find((a) => a.id === store.bankAccountId);
+
   const isFormValid =
-    store.amount !== "" &&
-    store.bankAccountId !== "" &&
-    !amountError;
+    store.amount !== "" && store.bankAccountId !== "" && !amountError;
 
   const createRedeemMutation = useMutation({
-    mutationFn: (walletAddress: string) =>
+    mutationFn: () =>
       mockCreateRedeem({
         chainId: store.chainId,
         amount: parsedAmount,
         bankAccountId: store.bankAccountId,
-        walletAddress,
+        walletAddress: MOCK_WALLET,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
     },
   });
 
-  function goToReview() {
-    if (isFormValid) store.setStep("review");
+  function goToConfirmation() {
+    if (isFormValid) store.setStep("confirmation");
   }
 
-  function goBackToForm() {
+  function backToForm() {
     store.setStep("form");
   }
 
-  async function executeRedeem(walletAddress: string) {
-    if (createRedeemMutation.isPending) return;
-    store.setStep("executing");
-    await createRedeemMutation.mutateAsync(walletAddress);
-    store.setStep("success");
+  async function proceedRedeem() {
+    const order = await createRedeemMutation.mutateAsync();
+    store.setResult(order);
+    store.setStep("status");
   }
 
   return {
     ...store,
     amountError,
     parsedAmount,
-    receiveAmount,
     receiveAmountIdr,
+    exchangeRateIdr: USD_TO_IDR_RATE,
     fee,
-    feeIdr,
     selectedChain,
+    selectedBank,
     isFormValid,
-    goToReview,
-    goBackToForm,
-    executeRedeem,
-    isExecuting: createRedeemMutation.isPending,
-    redeemOrder: createRedeemMutation.data,
+    goToConfirmation,
+    backToForm,
+    proceedRedeem,
+    isProcessing: createRedeemMutation.isPending,
   };
 }

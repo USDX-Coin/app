@@ -5,14 +5,15 @@ import { useQuery } from "@tanstack/react-query";
 import { mockGetBankAccounts } from "@/lib/api/mock-api";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useLang } from "@/providers/LanguageProvider";
 
 interface BankAccountSelectorProps {
   value: string;
   onSelect: (id: string) => void;
-  disabled?: boolean;
 }
 
-export function BankAccountSelector({ value, onSelect, disabled }: BankAccountSelectorProps) {
+export function BankAccountSelector({ value, onSelect }: BankAccountSelectorProps) {
+  const { t } = useLang();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -21,7 +22,7 @@ export function BankAccountSelector({ value, onSelect, disabled }: BankAccountSe
     queryFn: mockGetBankAccounts,
   });
 
-  const selectedAccount = accounts.find((a) => a.id === value);
+  const selected = accounts.find((a) => a.id === value);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -35,37 +36,29 @@ export function BankAccountSelector({ value, onSelect, disabled }: BankAccountSe
 
   return (
     <div ref={containerRef} className="relative w-full">
-      {/* Trigger */}
       <button
         type="button"
-        onClick={() => !disabled && setOpen((prev) => !prev)}
-        className={cn(
-          "flex gap-4 items-center justify-start px-4 w-full rounded-[8px] border border-border h-20 bg-background transition-colors",
-          disabled ? "opacity-70 cursor-default" : "cursor-pointer hover:border-primary/50"
-        )}
+        onClick={() => setOpen((p) => !p)}
+        className="flex w-full items-center gap-2.5 rounded-md bg-muted p-3 text-left"
       >
-        {selectedAccount ? (
-          <div className="flex flex-col items-start gap-0.5 text-left">
-            <span className="font-medium text-foreground">{selectedAccount.bankName}</span>
-            <span className="text-xs text-muted-foreground">
-              {selectedAccount.accountNumber} · {selectedAccount.accountHolder}
+        {selected ? (
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate text-sm font-medium text-foreground">{selected.bankName}</span>
+            <span className="truncate text-xs text-muted-foreground">
+              {selected.accountNumber} · {selected.accountHolder}
             </span>
-          </div>
+          </span>
         ) : (
-          <span className="text-muted-foreground">Choose Bank Account</span>
+          <span className="flex-1 text-sm text-muted-foreground">{t("form.selectBank")}</span>
         )}
-        <ChevronDown
-          className={cn(
-            "ml-auto text-primary shrink-0 transition-transform duration-200",
-            open && "rotate-180"
-          )}
-          size={18}
-        />
+        <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
       </button>
 
-      {/* Dropdown */}
       {open && (
-        <div className="absolute z-50 top-[calc(100%+4px)] left-0 right-0 bg-white border border-border rounded-[8px] shadow-lg overflow-hidden">
+        <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-50 overflow-hidden rounded-md border border-border bg-popover shadow-lg">
+          {accounts.length === 0 && (
+            <p className="px-3 py-3 text-sm text-muted-foreground">No saved accounts</p>
+          )}
           {accounts.map((account) => (
             <button
               key={account.id}
@@ -75,11 +68,11 @@ export function BankAccountSelector({ value, onSelect, disabled }: BankAccountSe
                 setOpen(false);
               }}
               className={cn(
-                "w-full flex flex-col items-start px-4 py-3 hover:bg-muted/50 transition-colors text-left",
-                value === account.id && "bg-primary/5"
+                "flex w-full flex-col items-start px-3 py-3 text-left transition-colors hover:bg-accent",
+                value === account.id && "bg-primary/10"
               )}
             >
-              <span className="font-medium text-foreground text-sm">{account.bankName}</span>
+              <span className="text-sm font-medium text-foreground">{account.bankName}</span>
               <span className="text-xs text-muted-foreground">
                 {account.accountNumber} · {account.accountHolder}
               </span>

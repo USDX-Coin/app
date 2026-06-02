@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: "USDX - USD Stablecoin",
   description: "Mint and redeem USDX stablecoin",
   icons: {
-    icon: "/image/Logo.svg",
+    icon: "/image/usdx-logo.png",
   },
 };
 
@@ -16,7 +16,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body>
         <Providers>{children}</Providers>
       </body>

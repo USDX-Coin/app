@@ -35,56 +35,59 @@ export function LoginForm() {
   }
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-primary mb-1">Welcome Back</h1>
-      <p className="text-sm text-muted-foreground mb-8">
-        New to USDX?{" "}
-        <Link href="/register" className="text-primary underline">
-          Create a Personal Account
-        </Link>
-      </p>
+    <div className="flex flex-col gap-8">
+      <div className="flex flex-col gap-1.5">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Welcome back</h1>
+        <p className="text-sm text-muted-foreground">
+          New to USDX?{" "}
+          <Link href="/register" className="font-medium text-gold underline-offset-2 hover:underline">
+            Create an account
+          </Link>
+        </p>
+      </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <Label htmlFor="email">Your Email Address</Label>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="email">Email address</Label>
           <Input
             id="email"
             type="email"
-            placeholder="Email"
+            placeholder="you@email.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="mt-1.5 bg-transparent dark:bg-transparent"
+            className="h-11"
             aria-invalid={!!errors.email}
           />
           <FieldError message={errors.email} />
         </div>
 
-        <div>
+        <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
-            <Label htmlFor="password">Your Password</Label>
+            <Label htmlFor="password">Password</Label>
             <Link
               href="/forgot-password"
-              className="text-sm text-primary hover:underline"
+              className="text-sm font-medium text-gold underline-offset-2 hover:underline"
             >
-              Forgot Password
+              Forgot password?
             </Link>
           </div>
-          <div className="relative mt-1.5">
+          <div className="relative">
             <Input
               id="password"
               type={showPassword ? "text" : "password"}
-              placeholder="Password"
+              placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               aria-invalid={!!errors.password}
-              className="bg-transparent dark:bg-transparent"
+              className="h-11 pr-10"
             />
             <button
               type="button"
+              aria-label={showPassword ? "Hide password" : "Show password"}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               onClick={() => setShowPassword(!showPassword)}
             >
-              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
             </button>
           </div>
           <FieldError message={errors.password} />
@@ -92,31 +95,25 @@ export function LoginForm() {
 
         <Button
           type="submit"
-          className="w-full bg-linear-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary-700"
           disabled={loginLoading}
+          className="brand-gradient h-11 w-full text-white hover:opacity-95"
         >
           {loginLoading ? "Logging in..." : "Login"}
         </Button>
       </form>
 
-      <div className="mt-6">
+      <div className="flex flex-col gap-4">
         <div className="relative">
           <div className="absolute inset-0 flex items-center">
             <div className="w-full border-t border-border" />
           </div>
           <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-white px-2 text-muted-foreground">
-              Or login with
-            </span>
+            <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
           </div>
         </div>
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <Button variant="outline" disabled className="w-full">
-            Google
-          </Button>
-          <Button variant="outline" disabled className="w-full">
-            Web3 Wallet
-          </Button>
+        <div className="grid grid-cols-2 gap-3">
+          <Button variant="outline" disabled className="h-11">Google</Button>
+          <Button variant="outline" disabled className="h-11">Web3 Wallet</Button>
         </div>
       </div>
     </div>

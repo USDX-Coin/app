@@ -72,7 +72,7 @@ export default function PaymentPage() {
       <Card className="w-full max-w-md">
         <CardHeader>
           <div className="flex items-center gap-2 mb-2">
-            <img src="/image/Logo.svg" alt="USDX" className="h-7 w-7" />
+            <img src="/image/usdx-logo.png" alt="USDX" className="h-7 w-7" />
             <span className="text-sm font-semibold text-primary">USDX</span>
           </div>
           <CardTitle className="text-xl">Payment Gateway</CardTitle>

@@ -11,6 +11,7 @@ import {
   CircleHelp,
   Headset,
   Settings,
+  ShieldCheck,
   ChevronsUpDown,
   ChevronDown,
   PanelLeft,
@@ -45,6 +46,7 @@ const transactionItems: NavItem[] = [
 ];
 
 const moreItems: NavItem[] = [
+  { href: "/kyc", labelKey: "nav.kyc", icon: ShieldCheck },
   { href: "/transactions", labelKey: "nav.transaction", icon: History },
   { href: "/help", labelKey: "nav.help", icon: CircleHelp },
   { href: "/support", labelKey: "nav.support", icon: Headset },
@@ -115,7 +117,7 @@ export function Sidebar({
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const { t, lang, setLang } = useLang();
-  const name = user?.fullName ?? "Pranatha Widya";
+  const name = user?.name ?? user?.email ?? "Pranatha Widya";
   const currentLang = LANGUAGES.find((l) => l.value === lang) ?? LANGUAGES[0];
 
   function handleLogout() {

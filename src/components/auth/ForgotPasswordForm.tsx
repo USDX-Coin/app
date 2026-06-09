@@ -7,13 +7,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { validateEmail } from "@/lib/validations";
 import { FieldError } from "@/components/ui/field-error";
+import { useAuth } from "@/hooks/useAuth";
+import { getErrorMessage, getRateLimitSeconds } from "@/lib/api/errors";
+import { toast } from "sonner";
 
 export function ForgotPasswordForm() {
+  const { forgotPassword, forgotPasswordLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const emailErr = validateEmail(email);
     if (emailErr) {
@@ -21,7 +25,23 @@ export function ForgotPasswordForm() {
       return;
     }
     setError("");
-    setSubmitted(true);
+    try {
+      // Backend returns a generic 200 even for unknown emails (avoid enumeration),
+      // so we always advance to the check-email screen on success.
+      await forgotPassword({ email });
+      setSubmitted(true);
+    } catch (err) {
+      const retryAfter = getRateLimitSeconds(err);
+      if (retryAfter !== null) {
+        toast.error(
+          retryAfter > 0
+            ? `Please wait ${retryAfter}s before requesting another link.`
+            : "Too many requests. Please try again later.",
+        );
+        return;
+      }
+      toast.error(getErrorMessage(err, "Could not send reset link"));
+    }
   }
 
   if (submitted) {
@@ -67,8 +87,12 @@ export function ForgotPasswordForm() {
           <FieldError message={error || undefined} />
         </div>
 
-        <Button type="submit" className="w-full bg-linear-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary-700">
-          Send Reset Link
+        <Button
+          type="submit"
+          disabled={forgotPasswordLoading}
+          className="w-full bg-linear-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary-700"
+        >
+          {forgotPasswordLoading ? "Sending..." : "Send Reset Link"}
         </Button>
       </form>
 

@@ -74,7 +74,8 @@ describe("useRedeem", () => {
         });
 
         expect(result.current.fee).toBeCloseTo(7, 2);
-        expect(result.current.receiveAmount).toBeCloseTo(993, 0);
+        // Redeem now surfaces the gross IDR payout (amount × USD_TO_IDR_RATE).
+        expect(result.current.receiveAmountIdr).toBeCloseTo(1000 * 17_880, 0);
       });
     });
 
@@ -88,7 +89,7 @@ describe("useRedeem", () => {
 
         expect(result.current.parsedAmount).toBe(0);
         expect(result.current.fee).toBe(0);
-        expect(result.current.receiveAmount).toBe(0);
+        expect(result.current.receiveAmountIdr).toBe(0);
       });
     });
   });
@@ -104,10 +105,10 @@ describe("useRedeem", () => {
         });
 
         act(() => {
-          result.current.goToReview();
+          result.current.goToConfirmation();
         });
 
-        expect(useRedeemStore.getState().step).toBe("review");
+        expect(useRedeemStore.getState().step).toBe("confirmation");
       });
     });
 
@@ -118,7 +119,7 @@ describe("useRedeem", () => {
         });
 
         act(() => {
-          result.current.goToReview();
+          result.current.goToConfirmation();
         });
 
         expect(useRedeemStore.getState().step).toBe("form");
@@ -129,14 +130,14 @@ describe("useRedeem", () => {
       test("form data preserved after goBackToForm", () => {
         useRedeemStore.getState().setAmount("500");
         useRedeemStore.getState().setBankAccountId("bank_1");
-        useRedeemStore.getState().setStep("review");
+        useRedeemStore.getState().setStep("confirmation");
 
         const { result } = renderHook(() => useRedeem(), {
           wrapper: createWrapper(),
         });
 
         act(() => {
-          result.current.goBackToForm();
+          result.current.backToForm();
         });
 
         expect(useRedeemStore.getState().amount).toBe("500");

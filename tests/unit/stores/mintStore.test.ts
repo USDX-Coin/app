@@ -8,8 +8,8 @@ describe("mintStore", () => {
 
   describe("positive", () => {
     test("setStep changes step", () => {
-      useMintStore.getState().setStep("review");
-      expect(useMintStore.getState().step).toBe("review");
+      useMintStore.getState().setStep("confirmation");
+      expect(useMintStore.getState().step).toBe("confirmation");
     });
 
     test("setChainId changes chain", () => {
@@ -28,7 +28,7 @@ describe("mintStore", () => {
     });
 
     test("reset restores initial state", () => {
-      useMintStore.getState().setStep("review");
+      useMintStore.getState().setStep("confirmation");
       useMintStore.getState().setAmount("500");
       useMintStore.getState().setChainId("polygon");
       useMintStore.getState().reset();
@@ -62,10 +62,10 @@ describe("mintStore", () => {
       const store = useMintStore.getState();
       store.setStep("form");
       expect(useMintStore.getState().step).toBe("form");
-      store.setStep("review");
-      expect(useMintStore.getState().step).toBe("review");
-      store.setStep("payment");
-      expect(useMintStore.getState().step).toBe("payment");
+      store.setStep("confirmation");
+      expect(useMintStore.getState().step).toBe("confirmation");
+      store.setStep("status");
+      expect(useMintStore.getState().step).toBe("status");
     });
   });
 });

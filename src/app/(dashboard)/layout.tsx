@@ -46,7 +46,7 @@ export default function DashboardLayout({
 
   if (!isAuthenticated) return null;
 
-  const name = user?.fullName ?? "Pranatha Widya";
+  const name = user?.name ?? user?.email ?? "Pranatha Widya";
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">

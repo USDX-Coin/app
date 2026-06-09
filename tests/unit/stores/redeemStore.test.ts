@@ -8,8 +8,8 @@ describe("redeemStore", () => {
 
   describe("positive", () => {
     test("setStep changes step", () => {
-      useRedeemStore.getState().setStep("review");
-      expect(useRedeemStore.getState().step).toBe("review");
+      useRedeemStore.getState().setStep("confirmation");
+      expect(useRedeemStore.getState().step).toBe("confirmation");
     });
 
     test("setBankAccountId changes bank account", () => {
@@ -18,7 +18,7 @@ describe("redeemStore", () => {
     });
 
     test("reset restores initial state", () => {
-      useRedeemStore.getState().setStep("success");
+      useRedeemStore.getState().setStep("status");
       useRedeemStore.getState().setAmount("1000");
       useRedeemStore.getState().setBankAccountId("bank_1");
       useRedeemStore.getState().reset();
@@ -43,12 +43,10 @@ describe("redeemStore", () => {
       const store = useRedeemStore.getState();
       store.setStep("form");
       expect(useRedeemStore.getState().step).toBe("form");
-      store.setStep("review");
-      expect(useRedeemStore.getState().step).toBe("review");
-      store.setStep("executing");
-      expect(useRedeemStore.getState().step).toBe("executing");
-      store.setStep("success");
-      expect(useRedeemStore.getState().step).toBe("success");
+      store.setStep("confirmation");
+      expect(useRedeemStore.getState().step).toBe("confirmation");
+      store.setStep("status");
+      expect(useRedeemStore.getState().step).toBe("status");
     });
 
     test("default chain is base", () => {

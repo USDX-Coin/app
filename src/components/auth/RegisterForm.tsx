@@ -11,28 +11,33 @@ import {
   validateEmail,
   validatePassword,
   validateConfirmPassword,
-  validateFullName,
+  validatePhone,
 } from "@/lib/validations";
+import { getErrorMessage } from "@/lib/api/errors";
 import { Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 
+// Self-signup (sot/phase-2/week1.md § Self-Signup). Fields: email, password,
+// confirmPassword, phone, entityType (INDIVIDUAL only in Week 1), agreeToS. Name +
+// address are collected later at KYC. On success the hook routes to /register/check-email.
 export function RegisterForm() {
   const { register, registerLoading } = useAuth();
-  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [agreeToS, setAgreeToS] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string | undefined>>({});
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const newErrors: Record<string, string | undefined> = {
-      fullName: validateFullName(fullName) ?? undefined,
       email: validateEmail(email) ?? undefined,
+      phone: validatePhone(phone) ?? undefined,
       password: validatePassword(password) ?? undefined,
-      confirmPassword:
-        validateConfirmPassword(password, confirmPassword) ?? undefined,
+      confirmPassword: validateConfirmPassword(password, confirmPassword) ?? undefined,
+      agreeToS: agreeToS ? undefined : "You must accept the Terms of Service",
     };
 
     const hasErrors = Object.values(newErrors).some(Boolean);
@@ -40,9 +45,16 @@ export function RegisterForm() {
     if (hasErrors) return;
 
     try {
-      await register({ fullName, email, password });
+      await register({
+        email,
+        password,
+        confirmPassword,
+        phone,
+        entityType: "INDIVIDUAL",
+        agreeToS,
+      });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Registration failed");
+      toast.error(getErrorMessage(err, "Registration failed"));
     }
   }
 
@@ -58,19 +70,6 @@ export function RegisterForm() {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <Label htmlFor="fullName">Full Name</Label>
-          <Input
-            id="fullName"
-            placeholder="Enter your full name"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            className="mt-1.5 bg-transparent dark:bg-transparent"
-            aria-invalid={!!errors.fullName}
-          />
-          <FieldError message={errors.fullName} />
-        </div>
-
-        <div>
           <Label htmlFor="email">Email Address</Label>
           <Input
             id="email"
@@ -82,6 +81,21 @@ export function RegisterForm() {
             aria-invalid={!!errors.email}
           />
           <FieldError message={errors.email} />
+        </div>
+
+        <div>
+          <Label htmlFor="phone">Phone Number</Label>
+          <Input
+            id="phone"
+            type="tel"
+            inputMode="tel"
+            placeholder="08xx or +62xx"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="mt-1.5 bg-transparent dark:bg-transparent"
+            aria-invalid={!!errors.phone}
+          />
+          <FieldError message={errors.phone} />
         </div>
 
         <div>
@@ -98,6 +112,7 @@ export function RegisterForm() {
             />
             <button
               type="button"
+              aria-label={showPassword ? "Hide password" : "Show password"}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               onClick={() => setShowPassword(!showPassword)}
             >
@@ -121,6 +136,7 @@ export function RegisterForm() {
             />
             <button
               type="button"
+              aria-label={showPassword ? "Hide password" : "Show password"}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               onClick={() => setShowPassword(!showPassword)}
             >
@@ -128,6 +144,26 @@ export function RegisterForm() {
             </button>
           </div>
           <FieldError message={errors.confirmPassword} />
+        </div>
+
+        <div>
+          <label htmlFor="agreeToS" className="flex items-start gap-2.5 text-sm text-muted-foreground">
+            <input
+              id="agreeToS"
+              type="checkbox"
+              checked={agreeToS}
+              onChange={(e) => setAgreeToS(e.target.checked)}
+              aria-invalid={!!errors.agreeToS}
+              className="mt-0.5 size-4 shrink-0 accent-primary"
+            />
+            <span>
+              I agree to the{" "}
+              <Link href="#" className="text-primary underline">
+                Terms of Service
+              </Link>
+            </span>
+          </label>
+          <FieldError message={errors.agreeToS} />
         </div>
 
         <Button

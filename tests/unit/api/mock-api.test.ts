@@ -47,15 +47,18 @@ describe("mockLogin", () => {
 
 describe("mockRegister", () => {
   describe("positive", () => {
-    test("creates new user and returns auth response", async () => {
+    test("registers a new account and returns the email (no session yet)", async () => {
+      const email = `test-${Date.now()}@test.com`;
       const result = await mockRegister({
-        fullName: "Test User",
-        email: `test-${Date.now()}@test.com`,
+        email,
         password: "TestPass1",
+        confirmPassword: "TestPass1",
+        phone: "081234567890",
+        entityType: "INDIVIDUAL",
+        agreeToS: true,
       });
-      expect(result.user).toBeDefined();
-      expect(result.user.fullName).toBe("Test User");
-      expect(result.token).toContain("mock-jwt-token");
+      // Register no longer auto-logs in — user must verify email first.
+      expect(result.email).toBe(email);
     });
   });
 
@@ -63,9 +66,12 @@ describe("mockRegister", () => {
     test("throws error for duplicate email", async () => {
       await expect(
         mockRegister({
-          fullName: "Dup",
           email: "demo@usdx.com",
           password: "Pass1234",
+          confirmPassword: "Pass1234",
+          phone: "081234567890",
+          entityType: "INDIVIDUAL",
+          agreeToS: true,
         })
       ).rejects.toThrow("Email already registered");
     });
@@ -141,14 +147,14 @@ describe("mockGetTransactions", () => {
     test("returns array of transactions", async () => {
       const txs = await mockGetTransactions();
       expect(Array.isArray(txs)).toBe(true);
-      expect(txs.length).toBe(10);
+      expect(txs.length).toBe(96);
     });
 
     test("each transaction has required fields", async () => {
       const txs = await mockGetTransactions();
       for (const tx of txs) {
         expect(tx.id).toBeTruthy();
-        expect(["mint", "redeem"]).toContain(tx.type);
+        expect(["mint", "redeem", "bridge", "send"]).toContain(tx.type);
         expect(tx.amount).toBeGreaterThan(0);
         expect(tx.chainId).toBeTruthy();
         expect(["completed", "pending", "failed"]).toContain(tx.status);

@@ -22,6 +22,28 @@ Open [http://localhost:3000](http://localhost:3000).
 
 **Demo credentials:** `demo@usdx.com` / `Demo1234`
 
+## Environment Variables
+
+Copy `.env.example` to `.env.local` and adjust per environment. All vars are
+`NEXT_PUBLIC_*` (inlined into the client bundle at build time).
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `NEXT_PUBLIC_API_BASE_URL` | Prod/Staging | _(empty)_ | Base URL of the backend API (consumer `/api/v2/*`), e.g. `https://usdx-api.up.railway.app`. Trailing slash is trimmed. When empty, the app runs against the in-memory mock layer. |
+| `NEXT_PUBLIC_USE_MOCK` | No | _(auto)_ | Force the mock API on (`true`) or off (`false`). When unset, the app mocks automatically if `NEXT_PUBLIC_API_BASE_URL` is empty — so local dev and tests work offline. Set to `false` in deployed environments to require the real backend. |
+
+**Deploy targets (Netlify):**
+
+| Branch | Environment | `NEXT_PUBLIC_API_BASE_URL` | `NEXT_PUBLIC_USE_MOCK` |
+|--------|-------------|----------------------------|------------------------|
+| `dev` | Development | dev backend URL | `false` |
+| `staging` | Staging | staging backend URL | `false` |
+| `main` | Production | production backend URL | `false` |
+
+Sessions use Bearer tokens (`Authorization: Bearer <token>`) auto-attached by the
+API client, matching the backoffice and the OpenAPI `bearerAuth` scheme — chosen over
+cross-site cookies because the FE (Netlify) and API (Railway) live on different origins.
+
 ## Tech Stack
 
 | Layer | Technology |

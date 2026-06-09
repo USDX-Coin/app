@@ -1,9 +1,29 @@
+// Consumer user — mirrors openapi `User` (users.yaml) returned by GET /api/v2/auth/me.
+export type KycStatus = "UNVERIFIED" | "PENDING" | "VERIFIED" | "REJECTED";
+export type EntityType = "INDIVIDUAL" | "LEGAL_ENTITY";
+
 export interface User {
   id: string;
-  fullName: string;
+  // Null until KYC submit (self-signup users don't provide a name at register).
+  name: string | null;
   email: string;
-  isVerified: boolean;
+  phone: string | null;
+  entityType: EntityType;
+  kycStatus: KycStatus;
+  suspended: boolean;
+  // Null = email not yet verified.
+  emailVerifiedAt: string | null;
   createdAt: string;
+  updatedAt: string;
+}
+
+// Own KYC status (consumer) — openapi KycMyStatus (kyc.yaml). No PII payload.
+export interface KycMyStatus {
+  status: KycStatus;
+  submissionCount: number | null;
+  submittedAt: string | null;
+  reviewedAt: string | null;
+  rejectionReason: string | null;
 }
 
 export interface Chain {
@@ -70,9 +90,16 @@ export interface BankAccount {
   accountHolder: string;
 }
 
+// Normalized session result used app-side. `token` is the Bearer credential
+// (openapi AuthTokenV2.accessToken, falling back to sessionId for cookie audiences).
 export interface AuthResponse {
   user: User;
   token: string;
+}
+
+// Result of POST /api/v2/auth/register — no session issued (user must verify email first).
+export interface RegisterResult {
+  email: string;
 }
 
 export type MintStep = "form" | "confirmation" | "status";

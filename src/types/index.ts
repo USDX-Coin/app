@@ -18,12 +18,14 @@ export interface User {
 }
 
 // Own KYC status (consumer) — openapi KycMyStatus (kyc.yaml). No PII payload.
+// Fields besides `status` are absent when the user has never submitted KYC —
+// the backend falls back to users.kyc_status only (kyc.yaml § myStatus, USDX-147).
 export interface KycMyStatus {
   status: KycStatus;
-  submissionCount: number | null;
-  submittedAt: string | null;
-  reviewedAt: string | null;
-  rejectionReason: string | null;
+  submissionCount?: number | null;
+  submittedAt?: string | null;
+  reviewedAt?: string | null;
+  rejectionReason?: string | null;
 }
 
 export interface Chain {

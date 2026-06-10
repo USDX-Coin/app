@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FieldError } from "@/components/ui/field-error";
 import { useAuth } from "@/hooks/useAuth";
+import { useCooldown, DEFAULT_COOLDOWN_SECONDS } from "@/hooks/useCooldown";
 import { validateEmail } from "@/lib/validations";
 import {
   getErrorMessage,
@@ -25,6 +26,7 @@ export function LoginForm() {
   // Set when the backend returns 403 EMAIL_NOT_VERIFIED — Phase 1 users migrate via
   // the "Forgot password" flow (sot/phase-2/week1.md § Migrasi User Phase 1).
   const [needsVerification, setNeedsVerification] = useState(false);
+  const cooldown = useCooldown();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -45,11 +47,8 @@ export function LoginForm() {
       }
       const retryAfter = getRateLimitSeconds(err);
       if (retryAfter !== null) {
-        toast.error(
-          retryAfter > 0
-            ? `Too many attempts. Try again in ${retryAfter}s.`
-            : "Too many attempts. Please try again later.",
-        );
+        cooldown.start(retryAfter > 0 ? retryAfter : DEFAULT_COOLDOWN_SECONDS);
+        toast.error("Too many attempts. Please wait before trying again.");
         return;
       }
       toast.error(getErrorMessage(err, "Login failed"));
@@ -130,10 +129,14 @@ export function LoginForm() {
 
         <Button
           type="submit"
-          disabled={loginLoading}
+          disabled={loginLoading || cooldown.active}
           className="brand-gradient h-11 w-full text-white hover:opacity-95"
         >
-          {loginLoading ? "Logging in..." : "Login"}
+          {cooldown.active
+            ? `Try again in ${cooldown.remaining}s`
+            : loginLoading
+              ? "Logging in..."
+              : "Login"}
         </Button>
       </form>
 

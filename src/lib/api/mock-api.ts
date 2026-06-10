@@ -145,7 +145,9 @@ export async function mockGetMyKycStatus(): Promise<KycMyStatus> {
   await delay(200);
   const user = currentAccount()?.user ?? DEMO_USER;
   if (user.kycStatus === "UNVERIFIED") {
-    return { status: "UNVERIFIED", submissionCount: null, submittedAt: null, reviewedAt: null, rejectionReason: null };
+    // Never submitted → status only, mirroring the backend fallback to
+    // users.kyc_status (kyc.yaml § myStatus, USDX-147).
+    return { status: "UNVERIFIED" };
   }
   return {
     status: user.kycStatus,

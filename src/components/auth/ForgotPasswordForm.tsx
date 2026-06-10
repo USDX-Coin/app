@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { validateEmail } from "@/lib/validations";
 import { FieldError } from "@/components/ui/field-error";
 import { useAuth } from "@/hooks/useAuth";
+import { useCooldown, DEFAULT_COOLDOWN_SECONDS } from "@/hooks/useCooldown";
 import { getErrorMessage, getRateLimitSeconds } from "@/lib/api/errors";
 import { toast } from "sonner";
 
@@ -16,6 +17,7 @@ export function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const cooldown = useCooldown();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -33,11 +35,8 @@ export function ForgotPasswordForm() {
     } catch (err) {
       const retryAfter = getRateLimitSeconds(err);
       if (retryAfter !== null) {
-        toast.error(
-          retryAfter > 0
-            ? `Please wait ${retryAfter}s before requesting another link.`
-            : "Too many requests. Please try again later.",
-        );
+        cooldown.start(retryAfter > 0 ? retryAfter : DEFAULT_COOLDOWN_SECONDS);
+        toast.error("Too many requests. Please wait before requesting another link.");
         return;
       }
       toast.error(getErrorMessage(err, "Could not send reset link"));
@@ -89,10 +88,14 @@ export function ForgotPasswordForm() {
 
         <Button
           type="submit"
-          disabled={forgotPasswordLoading}
+          disabled={forgotPasswordLoading || cooldown.active}
           className="w-full bg-linear-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary-700"
         >
-          {forgotPasswordLoading ? "Sending..." : "Send Reset Link"}
+          {cooldown.active
+            ? `Try again in ${cooldown.remaining}s`
+            : forgotPasswordLoading
+              ? "Sending..."
+              : "Send Reset Link"}
         </Button>
       </form>
 

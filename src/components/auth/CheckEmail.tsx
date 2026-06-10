@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import { useCooldown, DEFAULT_COOLDOWN_SECONDS } from "@/hooks/useCooldown";
 import { getErrorMessage, getRateLimitSeconds } from "@/lib/api/errors";
 import { toast } from "sonner";
 
@@ -15,6 +16,7 @@ export function CheckEmail() {
   const email = params.get("email") ?? "";
   const { resendVerification, resendVerificationLoading } = useAuth();
   const [sent, setSent] = useState(false);
+  const cooldown = useCooldown();
 
   async function handleResend() {
     if (!email) {
@@ -24,15 +26,13 @@ export function CheckEmail() {
     try {
       await resendVerification({ email });
       setSent(true);
+      cooldown.start(DEFAULT_COOLDOWN_SECONDS);
       toast.success("Verification email sent.");
     } catch (err) {
       const retryAfter = getRateLimitSeconds(err);
       if (retryAfter !== null) {
-        toast.error(
-          retryAfter > 0
-            ? `Please wait ${retryAfter}s before resending.`
-            : "Too many requests. Please try again later.",
-        );
+        cooldown.start(retryAfter > 0 ? retryAfter : DEFAULT_COOLDOWN_SECONDS);
+        toast.error("Too many requests. Please wait before resending.");
         return;
       }
       toast.error(getErrorMessage(err, "Could not resend email"));
@@ -58,9 +58,15 @@ export function CheckEmail() {
         variant="outline"
         className="w-full"
         onClick={handleResend}
-        disabled={resendVerificationLoading}
+        disabled={resendVerificationLoading || cooldown.active}
       >
-        {resendVerificationLoading ? "Sending..." : sent ? "Resend Again" : "Resend Verification"}
+        {cooldown.active
+          ? `Resend in ${cooldown.remaining}s`
+          : resendVerificationLoading
+            ? "Sending..."
+            : sent
+              ? "Resend Again"
+              : "Resend Verification"}
       </Button>
 
       <p className="mt-6 text-center text-sm text-muted-foreground">

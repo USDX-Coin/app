@@ -172,6 +172,11 @@ export async function mockResetPassword(req: ResetPasswordRequest): Promise<Auth
   return { user: account.user, token: tokenFor(account.user) };
 }
 
+export async function mockLogout(): Promise<void> {
+  await delay(150);
+  currentEmail = null;
+}
+
 export async function mockGetMe(): Promise<User> {
   await delay(200);
   const account = currentAccount();

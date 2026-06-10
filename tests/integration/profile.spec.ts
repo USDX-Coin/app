@@ -1,21 +1,25 @@
 import { test, expect } from "@playwright/test";
-import { loginViaStorage } from "../helpers/playwright-utils";
+import { loginViaStorage, forceEnglish } from "../helpers/playwright-utils";
 
 test.beforeEach(async ({ page }) => {
+  await forceEnglish(page);
   await loginViaStorage(page);
   await page.goto("/profile");
-  await page.waitForSelector("text=Profile", { timeout: 5000 });
+  await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible({
+    timeout: 15000,
+  });
 });
 
 test.describe("Profile Page", () => {
   test.describe("positive", () => {
     test("displays user info", async ({ page }) => {
-      await expect(page.getByText("Demo User")).toBeVisible();
+      // Name also appears in the sidebar account switcher — assert the first match.
+      await expect(page.getByText("Demo User").first()).toBeVisible();
       await expect(page.getByText("demo@usdx.com")).toBeVisible();
     });
 
     test("shows verification badge", async ({ page }) => {
-      await expect(page.getByText("Verified")).toBeVisible();
+      await expect(page.getByText("Verified", { exact: true })).toBeVisible();
     });
   });
 

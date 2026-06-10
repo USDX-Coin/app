@@ -61,7 +61,9 @@ describe("useAuth", () => {
         });
 
         await waitFor(() => {
-          expect(result.current.loginError).toBe("Invalid email or password");
+          expect(result.current.loginError?.message).toBe(
+            "Invalid email or password"
+          );
         });
       });
     });
@@ -69,20 +71,25 @@ describe("useAuth", () => {
 
   describe("register", () => {
     describe("positive", () => {
-      test("creates user and sets auth", async () => {
+      test("registers without issuing a session (must verify email first)", async () => {
         const { result } = renderHook(() => useAuth(), {
           wrapper: createWrapper(),
         });
 
         await act(async () => {
           await result.current.register({
-            fullName: "Hook Test",
             email: `hook-${Date.now()}@test.com`,
             password: "HookTest1",
+            confirmPassword: "HookTest1",
+            phone: "081234567890",
+            entityType: "INDIVIDUAL",
+            agreeToS: true,
           });
         });
 
-        expect(useAuthStore.getState().user?.fullName).toBe("Hook Test");
+        // No auto-login on register — user stays unauthenticated until verify-email.
+        expect(useAuthStore.getState().user).toBeNull();
+        expect(useAuthStore.getState().isAuthenticated).toBe(false);
       });
     });
   });

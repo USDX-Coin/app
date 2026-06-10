@@ -1,7 +1,12 @@
 import { test, expect } from "@playwright/test";
-import { loginViaStorage } from "../helpers/playwright-utils";
+import { loginViaStorage, forceEnglish } from "../helpers/playwright-utils";
 
+const VALID_ADDRESS = "0xabcdef1234567890abcdef1234567890abcdef12";
+
+// Mint flow (post-redesign): form -> confirmation -> status.
+// Amount input has placeholder "0"; destination input "Select destination address".
 test.beforeEach(async ({ page }) => {
+  await forceEnglish(page);
   await loginViaStorage(page);
   await page.goto("/mint");
   await expect(page.getByText("You will mint")).toBeVisible({ timeout: 15000 });
@@ -10,82 +15,87 @@ test.beforeEach(async ({ page }) => {
 test.describe("Mint Page", () => {
   test.describe("positive", () => {
     test("displays mint form with default chain", async ({ page }) => {
-      await expect(page.getByText("USDX on Base")).toBeVisible();
-      await expect(page.getByPlaceholder("Amount").first()).toBeVisible();
+      await expect(page.getByText("You will pay")).toBeVisible();
+      await expect(page.getByPlaceholder("0", { exact: true })).toBeVisible();
       await expect(
-        page.getByPlaceholder("Destination Address")
+        page.getByPlaceholder("Select destination address")
       ).toBeVisible();
+      // Default chain is Base — its badge icon shows on the token button.
+      await expect(page.locator('img[src="/icon/base.svg"]').first()).toBeVisible();
+      await expect(page.getByText("1 USDX ≈ 17,880 IDR")).toBeVisible();
     });
 
-    test("Review Mint enabled when form is valid", async ({ page }) => {
-      await page.getByPlaceholder("Amount").first().fill("100");
+    test("Mint button enabled when form is valid", async ({ page }) => {
+      await page.getByPlaceholder("0", { exact: true }).fill("100");
       await page
-        .getByPlaceholder("Destination Address")
-        .fill("0xabcdef1234567890abcdef1234567890abcdef12");
+        .getByPlaceholder("Select destination address")
+        .fill(VALID_ADDRESS);
       await expect(
-        page.getByRole("button", { name: "Review Mint" })
+        page.getByRole("button", { name: "Mint", exact: true })
       ).toBeEnabled();
     });
 
-    test("shows review panel with correct data", async ({ page }) => {
-      await page.getByPlaceholder("Amount").first().fill("500");
+    test("shows confirmation panel with correct data", async ({ page }) => {
+      await page.getByPlaceholder("0", { exact: true }).fill("500");
       await page
-        .getByPlaceholder("Destination Address")
-        .fill("0xabcdef1234567890abcdef1234567890abcdef12");
-      await page.getByRole("button", { name: "Review Mint" }).click();
-      await expect(page.getByText("Mint Detail")).toBeVisible();
-      await expect(page.getByText("500 USDX")).toBeVisible();
+        .getByPlaceholder("Select destination address")
+        .fill(VALID_ADDRESS);
+      await page.getByRole("button", { name: "Mint", exact: true }).click();
+      await expect(page.getByText("Mint Confirmation")).toBeVisible();
+      await expect(page.getByText("Transaction Summary")).toBeVisible();
+      await expect(page.getByText("500 USDX").first()).toBeVisible();
     });
   });
 
   test.describe("negative", () => {
-    test("Review Mint disabled when form is empty", async ({ page }) => {
+    test("Mint button disabled when form is empty", async ({ page }) => {
       await expect(
-        page.getByRole("button", { name: "Review Mint" })
+        page.getByRole("button", { name: "Mint", exact: true })
       ).toBeDisabled();
     });
 
     test("shows min amount error", async ({ page }) => {
-      await page.getByPlaceholder("Amount").first().fill("1");
+      await page.getByPlaceholder("0", { exact: true }).fill("1");
       await page
-        .getByPlaceholder("Destination Address")
-        .fill("0xabcdef1234567890abcdef1234567890abcdef12");
-      await expect(page.getByText(/Minimum/)).toBeVisible();
+        .getByPlaceholder("Select destination address")
+        .fill(VALID_ADDRESS);
+      await expect(page.getByText("Minimum amount is 10 USDX")).toBeVisible();
     });
 
     test("shows max amount error", async ({ page }) => {
-      await page.getByPlaceholder("Amount").first().fill("9999999");
+      await page.getByPlaceholder("0", { exact: true }).fill("9999999");
       await page
-        .getByPlaceholder("Destination Address")
-        .fill("0xabcdef1234567890abcdef1234567890abcdef12");
-      await expect(page.getByText(/Maximum/)).toBeVisible();
+        .getByPlaceholder("Select destination address")
+        .fill(VALID_ADDRESS);
+      await expect(
+        page.getByText("Maximum amount is 1,000,000 USDX")
+      ).toBeVisible();
     });
 
-    test("shows invalid address error", async ({ page }) => {
-      await page.getByPlaceholder("Amount").first().fill("100");
+    test("keeps Mint disabled for invalid address", async ({ page }) => {
+      // Address errors are no longer rendered inline — the form simply stays invalid.
+      await page.getByPlaceholder("0", { exact: true }).fill("100");
       await page
-        .getByPlaceholder("Destination Address")
+        .getByPlaceholder("Select destination address")
         .fill("notanaddress");
-      await expect(page.getByText(/Invalid|must start with 0x/)).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "Mint", exact: true })
+      ).toBeDisabled();
     });
   });
 
   test.describe("edge cases", () => {
-    test("auto-calculates payment amount", async ({ page }) => {
-      await page.getByPlaceholder("Amount").first().fill("1000");
-      await page
-        .getByPlaceholder("Destination Address")
-        .fill("0xabcdef1234567890abcdef1234567890abcdef12");
-      await page.getByRole("button", { name: "Review Mint" }).click();
-      // 0.7% fee of 1000 = $7
-      await expect(page.getByText("$7")).toBeVisible();
-      // Total payment section shows
-      await expect(page.getByText("Total payment")).toBeVisible();
+    test("auto-calculates IDR payment amount", async ({ page }) => {
+      await page.getByPlaceholder("0", { exact: true }).fill("1000");
+      // 1000 USDX * 17,880 IDR
+      await expect(page.getByText("17,880,000")).toBeVisible();
+      await expect(page.getByText("You will pay")).toBeVisible();
     });
 
-    test("chain selector dialog opens", async ({ page }) => {
-      await page.getByText("USDX on Base").click();
-      await expect(page.getByText("Select Network")).toBeVisible();
+    test("network/token modal opens", async ({ page }) => {
+      await page.getByRole("button", { name: "USDX", exact: true }).click();
+      await expect(page.getByText("Mint to")).toBeVisible();
+      await expect(page.getByText("Selected Network")).toBeVisible();
     });
   });
 });

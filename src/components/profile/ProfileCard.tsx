@@ -21,7 +21,7 @@ export function ProfileCard() {
             className="bg-primary/10 text-primary flex items-center gap-1"
           >
             <ShieldCheck className="h-3.5 w-3.5" />
-            {user?.isVerified ? "Verified" : "Pending"}
+            {user?.kycStatus === "VERIFIED" ? "Verified" : "Pending"}
           </Badge>
         </div>
 
@@ -30,7 +30,7 @@ export function ProfileCard() {
             <User className="h-4 w-4 text-muted-foreground mt-0.5" />
             <div>
               <p className="text-xs text-muted-foreground">Full Name</p>
-              <p className="text-sm font-medium">{user?.fullName ?? "-"}</p>
+              <p className="text-sm font-medium">{user?.name ?? "-"}</p>
             </div>
           </div>
 

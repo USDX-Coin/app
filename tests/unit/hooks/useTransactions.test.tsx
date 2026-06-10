@@ -15,7 +15,7 @@ describe("useTransactions", () => {
       });
 
       expect(result.current.data).toBeDefined();
-      expect(result.current.data?.length).toBe(10);
+      expect(result.current.data?.length).toBe(96);
     });
 
     test("starts in loading state", () => {

@@ -28,11 +28,20 @@ Amount validation accepts `"mint" | "redeem"` type parameter for different min/m
 
 Address validation auto-detects EVM (starts with `0x`, 42 chars) vs Solana (base58, 32-44 chars).
 
-## Mock API
+## API Layer (USDX-150)
 
-All functions are async with simulated delay (200-1200ms). Demo user: `demo@usdx.com` / `Demo1234`.
+Auth + KYC now route through real-or-mock dispatchers; mint/redeem/transactions are still mock-only (Week 2+).
 
-To replace with real API: swap function bodies in `mock-api.ts`, keep the same signatures. Types in `api/types.ts` define the contract.
+| File | Purpose |
+|------|---------|
+| `env.ts` | `NEXT_PUBLIC_API_BASE_URL` + `useMock` flag (mock when no base URL) |
+| `api/client.ts` | `apiFetch` — Bearer auth, SoT envelope unwrap, `ApiError`, 401 → `onUnauthorized` |
+| `api/errors.ts` | `ApiError` helpers (`isEmailNotVerified`, `getRateLimitSeconds`, …) |
+| `api/auth-api.ts` | `login/register/verifyEmail/resend/forgot/reset/getMe` → `/api/v2/auth/*` or mock |
+| `api/kyc-api.ts` | `getMyKycStatus/submitKyc/requestPresignedUpload` → `/api/v2/kyc`, `/api/v2/storage` or mock |
+| `api/mock-api.ts` | In-memory mock backend used when `env.useMock` is true. Demo user: `demo@usdx.com` / `Demo1234` |
+
+To wire a new real endpoint: add a function to the relevant `*-api.ts` that branches on `env.useMock`, calling `apiFetch` for the real path and a `mock*` fn otherwise.
 
 ## Constants
 

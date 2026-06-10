@@ -7,7 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FieldError } from "@/components/ui/field-error";
 import { useAuth } from "@/hooks/useAuth";
+import { useCooldown, DEFAULT_COOLDOWN_SECONDS } from "@/hooks/useCooldown";
 import { validateEmail } from "@/lib/validations";
+import {
+  getErrorMessage,
+  getRateLimitSeconds,
+  isEmailNotVerified,
+} from "@/lib/api/errors";
 import { Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 
@@ -17,6 +23,10 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  // Set when the backend returns 403 EMAIL_NOT_VERIFIED — Phase 1 users migrate via
+  // the "Forgot password" flow (sot/phase-2/week1.md § Migrasi User Phase 1).
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const cooldown = useCooldown();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -27,10 +37,21 @@ export function LoginForm() {
       return;
     }
     setErrors({});
+    setNeedsVerification(false);
     try {
       await login({ email, password });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Login failed");
+      if (isEmailNotVerified(err)) {
+        setNeedsVerification(true);
+        return;
+      }
+      const retryAfter = getRateLimitSeconds(err);
+      if (retryAfter !== null) {
+        cooldown.start(retryAfter > 0 ? retryAfter : DEFAULT_COOLDOWN_SECONDS);
+        toast.error("Too many attempts. Please wait before trying again.");
+        return;
+      }
+      toast.error(getErrorMessage(err, "Login failed"));
     }
   }
 
@@ -45,6 +66,19 @@ export function LoginForm() {
           </Link>
         </p>
       </div>
+
+      {needsVerification && (
+        <div
+          role="alert"
+          className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200"
+        >
+          Your account needs verification. Reset your password via{" "}
+          <Link href="/forgot-password" className="font-medium underline underline-offset-2">
+            Forgot password
+          </Link>{" "}
+          — a link will be sent to your email.
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
@@ -95,10 +129,14 @@ export function LoginForm() {
 
         <Button
           type="submit"
-          disabled={loginLoading}
+          disabled={loginLoading || cooldown.active}
           className="brand-gradient h-11 w-full text-white hover:opacity-95"
         >
-          {loginLoading ? "Logging in..." : "Login"}
+          {cooldown.active
+            ? `Try again in ${cooldown.remaining}s`
+            : loginLoading
+              ? "Logging in..."
+              : "Login"}
         </Button>
       </form>
 

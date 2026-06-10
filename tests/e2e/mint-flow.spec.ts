@@ -1,13 +1,18 @@
 import { test, expect } from "@playwright/test";
-import { clearAuth } from "../helpers/playwright-utils";
+import { clearAuth, forceEnglish } from "../helpers/playwright-utils";
+
+const VALID_ADDRESS = "0xabcdef1234567890abcdef1234567890abcdef12";
 
 async function login(page: import("@playwright/test").Page) {
+  await forceEnglish(page);
   await page.goto("/login");
   await clearAuth(page);
   await page.goto("/login");
-  await expect(page.getByText("Welcome Back")).toBeVisible({ timeout: 15000 });
-  await page.getByPlaceholder("Email").fill("demo@usdx.com");
-  await page.getByPlaceholder("Password").fill("Demo1234");
+  await expect(
+    page.getByRole("heading", { name: "Welcome back" })
+  ).toBeVisible({ timeout: 15000 });
+  await page.getByPlaceholder("you@email.com").fill("demo@usdx.com");
+  await page.getByPlaceholder("••••••••").fill("Demo1234");
   await page.getByRole("button", { name: "Login" }).click();
   await expect(page.getByText("You will mint")).toBeVisible({
     timeout: 30000,
@@ -16,37 +21,32 @@ async function login(page: import("@playwright/test").Page) {
 
 test.describe("Mint Flow", () => {
   test.describe("positive", () => {
-    test("complete mint flow: form -> review -> payment -> success", async ({
+    test("complete mint flow: form -> confirmation -> status", async ({
       page,
     }) => {
       await login(page);
 
       // Fill mint form
-      await page.getByPlaceholder("Amount").first().fill("250");
+      await page.getByPlaceholder("0", { exact: true }).fill("250");
       await page
-        .getByPlaceholder("Destination Address")
-        .fill("0xabcdef1234567890abcdef1234567890abcdef12");
-      await page.getByRole("button", { name: "Review Mint" }).click();
+        .getByPlaceholder("Select destination address")
+        .fill(VALID_ADDRESS);
+      await page.getByRole("button", { name: "Mint", exact: true }).click();
 
-      // Verify review panel
-      await expect(page.getByText("Mint Detail")).toBeVisible();
-      await expect(page.getByText("250 USDX")).toBeVisible();
+      // Verify confirmation step
+      await expect(page.getByText("Transaction Summary")).toBeVisible();
+      await expect(page.getByText("250 USDX").first()).toBeVisible();
       await expect(page.getByText("0xabcd...ef12")).toBeVisible();
 
-      // Proceed to payment
+      // Proceed payment -> creates the mint order and shows the status step
       await page.getByRole("button", { name: "Proceed Payment" }).click();
-      await expect(page.getByText("Payment Gateway")).toBeVisible({
+      await expect(page.getByText("Mint Request Submitted")).toBeVisible({
         timeout: 15000,
       });
-      await expect(page.getByText("$250", { exact: true }).first()).toBeVisible();
+      await expect(page.getByText("Request ID")).toBeVisible();
+      await expect(page.getByText("Pending", { exact: true })).toBeVisible();
 
-      // Pay
-      await page.getByRole("button", { name: /Pay/ }).click();
-      await expect(page.getByText("Payment Successful")).toBeVisible({
-        timeout: 15000,
-      });
-
-      // Go back to mint
+      // Go back to mint form
       await page.getByRole("button", { name: "Back to Mint" }).click();
       await expect(page.getByText("You will mint")).toBeVisible({
         timeout: 15000,
@@ -58,25 +58,25 @@ test.describe("Mint Flow", () => {
     test("cannot proceed with invalid form", async ({ page }) => {
       await login(page);
       await expect(
-        page.getByRole("button", { name: "Review Mint" })
+        page.getByRole("button", { name: "Mint", exact: true })
       ).toBeDisabled();
     });
   });
 
   test.describe("edge cases", () => {
-    test("can change amount after review", async ({ page }) => {
+    test("can cancel confirmation and change amount", async ({ page }) => {
       await login(page);
-      await page.getByPlaceholder("Amount").first().fill("100");
+      await page.getByPlaceholder("0", { exact: true }).fill("100");
       await page
-        .getByPlaceholder("Destination Address")
-        .fill("0xabcdef1234567890abcdef1234567890abcdef12");
-      await page.getByRole("button", { name: "Review Mint" }).click();
-      await expect(page.getByText("Mint Detail")).toBeVisible();
+        .getByPlaceholder("Select destination address")
+        .fill(VALID_ADDRESS);
+      await page.getByRole("button", { name: "Mint", exact: true }).click();
+      await expect(page.getByText("Transaction Summary")).toBeVisible();
 
-      // Click Change Amount
-      await page.getByRole("button", { name: "Change Amount" }).click();
-      // Review panel should disappear
-      await expect(page.getByText("Mint Detail")).not.toBeVisible();
+      // Cancel back to the form
+      await page.getByRole("button", { name: "Cancel" }).click();
+      await expect(page.getByText("Transaction Summary")).not.toBeVisible();
+      await expect(page.getByText("You will mint")).toBeVisible();
     });
   });
 });

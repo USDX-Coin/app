@@ -171,21 +171,21 @@ describe("useMint", () => {
         });
 
         act(() => {
-          result.current.goToReview();
+          result.current.goToConfirmation();
         });
 
-        expect(useMintStore.getState().step).toBe("review");
+        expect(useMintStore.getState().step).toBe("confirmation");
       });
 
       test("goBackToForm sets step to form", () => {
-        useMintStore.getState().setStep("review");
+        useMintStore.getState().setStep("confirmation");
 
         const { result } = renderHook(() => useMint(), {
           wrapper: createWrapper(),
         });
 
         act(() => {
-          result.current.goBackToForm();
+          result.current.backToForm();
         });
 
         expect(useMintStore.getState().step).toBe("form");
@@ -199,7 +199,7 @@ describe("useMint", () => {
         });
 
         act(() => {
-          result.current.goToReview();
+          result.current.goToConfirmation();
         });
 
         expect(useMintStore.getState().step).toBe("form");
@@ -214,14 +214,14 @@ describe("useMint", () => {
           .setDestinationAddress(
             "0x1234567890abcdef1234567890abcdef12345678"
           );
-        useMintStore.getState().setStep("review");
+        useMintStore.getState().setStep("confirmation");
 
         const { result } = renderHook(() => useMint(), {
           wrapper: createWrapper(),
         });
 
         act(() => {
-          result.current.goBackToForm();
+          result.current.backToForm();
         });
 
         expect(useMintStore.getState().amount).toBe("500");

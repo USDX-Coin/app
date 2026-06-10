@@ -4,10 +4,15 @@ import type { User } from "@/types";
 
 const mockUser: User = {
   id: "usr_1",
-  fullName: "Test User",
+  name: "Test User",
   email: "test@example.com",
-  isVerified: true,
+  phone: "+628123456789",
+  entityType: "INDIVIDUAL",
+  kycStatus: "VERIFIED",
+  suspended: false,
+  emailVerifiedAt: "2026-01-01T00:00:00Z",
   createdAt: "2026-01-01T00:00:00Z",
+  updatedAt: "2026-01-01T00:00:00Z",
 };
 
 describe("authStore", () => {
@@ -55,9 +60,9 @@ describe("authStore", () => {
 
     test("setAuth overwrites previous auth", () => {
       useAuthStore.getState().setAuth(mockUser, "token-1");
-      const newUser = { ...mockUser, id: "usr_2", fullName: "New User" };
+      const newUser = { ...mockUser, id: "usr_2", name: "New User" };
       useAuthStore.getState().setAuth(newUser, "token-2");
-      expect(useAuthStore.getState().user?.fullName).toBe("New User");
+      expect(useAuthStore.getState().user?.name).toBe("New User");
       expect(useAuthStore.getState().token).toBe("token-2");
     });
   });

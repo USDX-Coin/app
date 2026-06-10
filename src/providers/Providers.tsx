@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import { LanguageProvider } from "@/providers/LanguageProvider";
 import { Toaster } from "@/components/ui/sonner";
+import { ApiClientBridge } from "@/components/system/ApiClientBridge";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -28,6 +29,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     >
       <LanguageProvider>
         <QueryClientProvider client={queryClient}>
+          <ApiClientBridge />
           {children}
           <Toaster position="top-right" />
         </QueryClientProvider>

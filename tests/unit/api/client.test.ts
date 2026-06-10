@@ -73,7 +73,7 @@ describe("apiFetch", () => {
           error: { code: "EMAIL_NOT_VERIFIED", message: "Verify first", details: { resendUrl: "/x" } },
         }),
       );
-      const err = await apiFetch("/api/v2/kyc").catch((e) => e);
+      const err = (await apiFetch("/api/v2/kyc").catch((e) => e)) as ApiError;
       expect(err).toBeInstanceOf(ApiError);
       expect(err.status).toBe(403);
       expect(err.code).toBe("EMAIL_NOT_VERIFIED");
@@ -91,7 +91,7 @@ describe("apiFetch", () => {
           throw new Error("not json");
         },
       } as unknown as Response);
-      const err = await apiFetch("/api/v2/kyc").catch((e) => e);
+      const err = (await apiFetch("/api/v2/kyc").catch((e) => e)) as ApiError;
       expect(err).toBeInstanceOf(ApiError);
       expect(err.code).toBe("UNKNOWN");
       expect(err.message).toBe("Internal Server Error");
@@ -117,7 +117,7 @@ describe("apiFetch", () => {
           { "Retry-After": "37" },
         ),
       );
-      const err = await apiFetch("/api/v2/auth/login").catch((e) => e);
+      const err = (await apiFetch("/api/v2/auth/login").catch((e) => e)) as ApiError;
       expect(err.retryAfterSeconds).toBe(37);
     });
 
@@ -128,7 +128,7 @@ describe("apiFetch", () => {
           error: { code: "TOO_MANY_REQUESTS", message: "slow down", details: { retryAfterSeconds: 12 } },
         }),
       );
-      const err = await apiFetch("/api/v2/auth/resend-verification").catch((e) => e);
+      const err = (await apiFetch("/api/v2/auth/resend-verification").catch((e) => e)) as ApiError;
       expect(err.retryAfterSeconds).toBe(12);
     });
 
@@ -136,7 +136,7 @@ describe("apiFetch", () => {
       fetchMock.mockResolvedValue(
         jsonResponse(429, { status: "error", error: { code: "TOO_MANY_ATTEMPTS", message: "x" } }),
       );
-      const err = await apiFetch("/api/v2/auth/login").catch((e) => e);
+      const err = (await apiFetch("/api/v2/auth/login").catch((e) => e)) as ApiError;
       expect(err.retryAfterSeconds).toBeNull();
     });
 

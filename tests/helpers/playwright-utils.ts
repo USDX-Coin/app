@@ -27,6 +27,15 @@ export async function loginViaStorage(page: Page) {
   }, AUTH_STATE);
 }
 
+/**
+ * Dashboard UI defaults to Indonesian ("id"). Persist the English choice
+ * before any page script runs so specs can assert the English strings.
+ * Call before the first page.goto().
+ */
+export async function forceEnglish(page: Page) {
+  await page.addInitScript(() => localStorage.setItem("usdx-lang", "en"));
+}
+
 export async function clearAuth(page: Page) {
   await page.evaluate(() => localStorage.removeItem("usdx-auth"));
 }

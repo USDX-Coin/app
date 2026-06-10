@@ -1,37 +1,40 @@
 import { test, expect } from "@playwright/test";
-import { loginViaStorage, VIEWPORTS } from "../../helpers/playwright-utils";
+import { loginViaStorage, forceEnglish, VIEWPORTS } from "../../helpers/playwright-utils";
 
 test.use({ viewport: VIEWPORTS.desktop });
 
 test.describe("Desktop Responsive (1280x720)", () => {
   test("full sidebar visible", async ({ page }) => {
+    await forceEnglish(page);
     await loginViaStorage(page);
     await page.goto("/mint");
-    await expect(page.getByText("Mint").first()).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText("You will mint")).toBeVisible({ timeout: 15000 });
 
     const sidebar = page.locator("aside");
     await expect(sidebar).toBeVisible();
   });
 
-  test("header shows all elements", async ({ page }) => {
+  test("sidebar shows account, balance, and language elements", async ({ page }) => {
+    // The top Header was replaced by the sidebar account switcher + balance card.
+    await forceEnglish(page);
     await loginViaStorage(page);
     await page.goto("/mint");
-    await expect(page.getByText("Mint").first()).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText("You will mint")).toBeVisible({ timeout: 15000 });
 
-    // EN label visible on desktop
-    await expect(page.getByText("EN")).toBeVisible();
-    // Avatar dropdown visible
-    await expect(page.getByText("DU")).toBeVisible();
+    await expect(page.getByRole("button", { name: /Demo User/ })).toBeVisible();
+    await expect(page.getByText("Total Saldo")).toBeVisible();
+    await expect(page.getByText("Selected Language")).toBeVisible();
   });
 
   test("transactions show full table", async ({ page }) => {
+    await forceEnglish(page);
     await loginViaStorage(page);
     await page.goto("/transactions");
-    await expect(page.getByText("Transactions").first()).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText("Transaction History")).toBeVisible({ timeout: 15000 });
 
     const table = page.locator("table");
     await expect(table).toBeVisible();
-    await expect(page.getByText("Date").first()).toBeVisible();
-    await expect(page.getByText("Tx Hash").first()).toBeVisible();
+    await expect(page.getByText("Date Time").first()).toBeVisible();
+    await expect(page.getByText("Tx hash").first()).toBeVisible();
   });
 });

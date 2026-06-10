@@ -21,6 +21,7 @@ import {
   mockForgotPassword,
   mockResetPassword,
   mockGetMe,
+  mockLogout,
 } from "./mock-api";
 
 // openapi AuthTokenV2 — Better Auth issues a session via cookie or access token.
@@ -97,4 +98,13 @@ export async function resetPassword(req: ResetPasswordRequest): Promise<AuthResp
 export async function getMe(): Promise<User> {
   if (env.useMock) return mockGetMe();
   return apiFetch<User>("/api/v2/auth/me", { method: "GET" });
+}
+
+// Revoke the current Better Auth session (auth.yaml § logoutV2, USDX-166).
+// Current session only — other devices stay logged in. Callers fire-and-forget:
+// local logout (clear token + redirect) must never block on this call, and a
+// 401 here just means the session is already gone (double logout per contract).
+export async function logout(): Promise<void> {
+  if (env.useMock) return mockLogout();
+  await apiFetch<void>("/api/v2/auth/logout", { method: "POST" });
 }

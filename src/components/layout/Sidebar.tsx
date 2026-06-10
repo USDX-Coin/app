@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/authStore";
+import { logout as revokeSession } from "@/lib/api/auth-api";
 import { useLang } from "@/providers/LanguageProvider";
 import { LANGUAGES } from "@/lib/i18n/dictionaries";
 import { ThemeToggle } from "./ThemeToggle";
@@ -122,6 +123,10 @@ export function Sidebar({
   const currentLang = LANGUAGES.find((l) => l.value === lang) ?? LANGUAGES[0];
 
   function handleLogout() {
+    // Revoke the server session first — fire-and-forget so a network failure
+    // never traps the user; the token is read synchronously before the store
+    // clears (USDX-166). A 401 reply just means the session was already gone.
+    revokeSession().catch(() => {});
     logout();
     router.push("/login");
   }

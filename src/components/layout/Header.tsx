@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Logo } from "./Logo";
 import { useAuthStore } from "@/stores/authStore";
+import { logout as revokeSession } from "@/lib/api/auth-api";
 
 interface HeaderProps {
   userName?: string;
@@ -32,6 +33,8 @@ export function Header({ userName = "U" }: HeaderProps) {
   );
 
   function handleLogout() {
+    // Same fire-and-forget revoke as Sidebar.handleLogout (USDX-166).
+    revokeSession().catch(() => {});
     logout();
     router.push("/login");
   }

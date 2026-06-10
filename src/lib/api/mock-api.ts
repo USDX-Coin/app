@@ -178,20 +178,45 @@ export async function mockGetMe(): Promise<User> {
 }
 
 // ── Mock KYC backend ─────────────────────────────────────────────────────
+
+const MOCK_REJECT_REASON = "Foto KTP buram, mohon submit ulang.";
+
+// Test seam: the in-memory mock resets on every page load, so Playwright can't
+// reach PENDING/REJECTED states across navigations. The override persists the
+// simulated kyc_status in localStorage ("usdx-mock-kyc-status"); submit keeps it
+// in sync (→ PENDING). Mock-only — the real backend owns this state.
+const KYC_OVERRIDE_KEY = "usdx-mock-kyc-status";
+const KYC_STATUSES = ["UNVERIFIED", "PENDING", "VERIFIED", "REJECTED"] as const;
+
+function kycStatusOverride(): User["kycStatus"] | null {
+  if (typeof localStorage === "undefined") return null;
+  const value = localStorage.getItem(KYC_OVERRIDE_KEY);
+  return (KYC_STATUSES as readonly string[]).includes(value ?? "")
+    ? (value as User["kycStatus"])
+    : null;
+}
+
+function setKycStatusOverride(status: User["kycStatus"]) {
+  if (typeof localStorage === "undefined") return;
+  if (localStorage.getItem(KYC_OVERRIDE_KEY) === null) return; // seam not armed
+  localStorage.setItem(KYC_OVERRIDE_KEY, status);
+}
+
 export async function mockGetMyKycStatus(): Promise<KycMyStatus> {
   await delay(200);
   const user = currentAccount()?.user ?? DEMO_USER;
-  if (user.kycStatus === "UNVERIFIED") {
+  const status = kycStatusOverride() ?? user.kycStatus;
+  if (status === "UNVERIFIED") {
     // Never submitted → status only, mirroring the backend fallback to
     // users.kyc_status (kyc.yaml § myStatus, USDX-147).
     return { status: "UNVERIFIED" };
   }
   return {
-    status: user.kycStatus,
+    status,
     submissionCount: 1,
     submittedAt: user.updatedAt,
-    reviewedAt: user.kycStatus === "PENDING" ? null : user.updatedAt,
-    rejectionReason: user.kycStatus === "REJECTED" ? "Foto KTP buram, mohon submit ulang." : null,
+    reviewedAt: status === "PENDING" ? null : user.updatedAt,
+    rejectionReason: status === "REJECTED" ? MOCK_REJECT_REASON : null,
   };
 }
 
@@ -203,6 +228,7 @@ export async function mockSubmitKyc(req: SubmitKycRequest): Promise<KycMyStatus>
     account.user.name = account.user.name ?? `${req.firstName} ${req.lastName}`;
     account.user.updatedAt = new Date().toISOString();
   }
+  setKycStatusOverride("PENDING");
   return { status: "PENDING", submissionCount: 1, submittedAt: new Date().toISOString(), reviewedAt: null, rejectionReason: null };
 }
 

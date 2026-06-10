@@ -53,6 +53,7 @@ test.describe("Auth Flow", () => {
 
   test.describe("negative", () => {
     test("unauthenticated user is redirected to login", async ({ page }) => {
+      await forceEnglish(page);
       await page.goto("/login");
       await clearAuth(page);
       await page.goto("/mint");
@@ -64,6 +65,7 @@ test.describe("Auth Flow", () => {
 
   test.describe("edge cases", () => {
     test("forgot password shows success message", async ({ page }) => {
+      await forceEnglish(page);
       await page.goto("/forgot-password");
       await expect(
         page.getByRole("heading", { name: "Forgot Password" })

@@ -66,12 +66,29 @@ function currentAccount(): MockAccount | null {
   return currentEmail ? (accounts.get(currentEmail) ?? null) : null;
 }
 
+// Rate-limit simulation (week1.md § Login: 5 wrong attempts per 15 min per email).
+// Mirrors the real 429 TOO_MANY_ATTEMPTS so the FE cooldown countdown is testable
+// offline. State is per page load (module scope), like the rest of the mock.
+const LOGIN_MAX_ATTEMPTS = 5;
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const failedLogins = new Map<string, { count: number; firstAt: number }>();
+
 export async function mockLogin(req: LoginRequest): Promise<AuthResponse> {
   await delay();
+  const attempts = failedLogins.get(req.email);
+  if (attempts && Date.now() - attempts.firstAt > LOGIN_WINDOW_MS) {
+    failedLogins.delete(req.email);
+  }
+  if ((failedLogins.get(req.email)?.count ?? 0) >= LOGIN_MAX_ATTEMPTS) {
+    throw new ApiError(429, "TOO_MANY_ATTEMPTS", "Too many login attempts", undefined, 60);
+  }
   const account = accounts.get(req.email);
   if (!account || account.password !== req.password) {
+    const current = failedLogins.get(req.email) ?? { count: 0, firstAt: Date.now() };
+    failedLogins.set(req.email, { ...current, count: current.count + 1 });
     throw new ApiError(401, "INVALID_CREDENTIALS", "Invalid email or password");
   }
+  failedLogins.delete(req.email);
   if (!account.user.emailVerifiedAt) {
     throw new ApiError(403, "EMAIL_NOT_VERIFIED", "Please verify your email first", {
       resendUrl: "/api/v2/auth/resend-verification",
@@ -84,17 +101,27 @@ export async function mockLogin(req: LoginRequest): Promise<AuthResponse> {
   return { user: account.user, token: tokenFor(account.user) };
 }
 
+// Backend normalizes 08xxx → +62xxx before the phone_hash uniqueness check
+// (week1.md § Self-Signup); mirror that so duplicates match across formats.
+function normalizePhone(phone: string): string {
+  return phone.startsWith("08") ? "+62" + phone.slice(1) : phone;
+}
+
 export async function mockRegister(req: RegisterRequest): Promise<RegisterResult> {
   await delay();
   if (accounts.has(req.email)) {
     throw new ApiError(409, "EMAIL_ALREADY_REGISTERED", "Email already registered");
+  }
+  const phone = normalizePhone(req.phone);
+  if ([...accounts.values()].some((a) => a.user.phone === phone)) {
+    throw new ApiError(409, "PHONE_ALREADY_REGISTERED", "Phone number already registered");
   }
   const now = new Date().toISOString();
   const user: User = {
     id: "usr_" + Date.now(),
     name: null,
     email: req.email,
-    phone: req.phone,
+    phone,
     entityType: req.entityType,
     kycStatus: "UNVERIFIED",
     suspended: false,
@@ -106,10 +133,19 @@ export async function mockRegister(req: RegisterRequest): Promise<RegisterResult
   return { email: req.email };
 }
 
+// Tokens the mock treats as bad, so invalid/expired-link flows are testable
+// offline (real backend: 400 INVALID_TOKEN for unknown/expired/used tokens).
+function assertMockTokenValid(token: string) {
+  if (token === "expired-token" || token === "invalid-token") {
+    throw new ApiError(400, "INVALID_TOKEN", "This link is invalid or has expired");
+  }
+}
+
 // Mock verify-email: marks the most recently registered unverified account
 // verified and issues a session (auto-login), mirroring the real contract.
-export async function mockVerifyEmail(_req: VerifyEmailRequest): Promise<AuthResponse> {
+export async function mockVerifyEmail(req: VerifyEmailRequest): Promise<AuthResponse> {
   await delay();
+  assertMockTokenValid(req.token);
   const account =
     [...accounts.values()].reverse().find((a) => !a.user.emailVerifiedAt) ??
     accounts.get("demo@usdx.com")!;
@@ -127,8 +163,9 @@ export async function mockForgotPassword(): Promise<void> {
 }
 
 // Mock reset-password: verifies + auto-logs-in the most relevant account.
-export async function mockResetPassword(_req: ResetPasswordRequest): Promise<AuthResponse> {
+export async function mockResetPassword(req: ResetPasswordRequest): Promise<AuthResponse> {
   await delay();
+  assertMockTokenValid(req.token);
   const account = currentAccount() ?? accounts.get("demo@usdx.com")!;
   account.user.emailVerifiedAt = account.user.emailVerifiedAt ?? new Date().toISOString();
   currentEmail = account.user.email;

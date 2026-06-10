@@ -162,6 +162,7 @@ Test helpers in `tests/helpers/`:
 - WalletConnect SSR produces `indexedDB` warnings (harmless)
 - KYC verification is UI-only (always shows "Verified")
 - Solana removed — EVM chains only (7 chains)
+- Validation messages (`validations.ts`) are English-only — they appear untranslated in the ID locale (UI chrome is i18n'd EN+ID, validation strings are not)
 
 
 # Source of Truth

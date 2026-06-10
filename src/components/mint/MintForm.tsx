@@ -3,9 +3,11 @@
 import { useState } from "react";
 import { ArrowDown, BookText, ScanLine } from "lucide-react";
 import { useMint } from "@/hooks/useMint";
+import { useKycGate } from "@/hooks/useKycGate";
 import { formatAmount } from "@/lib/utils";
 import { TokenButton } from "@/components/shared/TokenButton";
 import { NetworkTokenModal } from "@/components/shared/NetworkTokenModal";
+import { KycGateDialog } from "@/components/kyc/KycGateDialog";
 import { useLang } from "@/providers/LanguageProvider";
 
 export function MintForm() {
@@ -25,6 +27,7 @@ export function MintForm() {
     selectedChain,
   } = useMint();
   const [modalOpen, setModalOpen] = useState(false);
+  const gate = useKycGate();
 
   return (
     <div className="flex w-full max-w-[500px] flex-col gap-6 rounded-xl border border-border bg-card p-5">
@@ -98,14 +101,23 @@ export function MintForm() {
         </div>
       </div>
 
+      {/* Non-VERIFIED stays clickable so the KYC gate dialog can explain why
+          the action is locked (USDX-153); form validation only gates VERIFIED. */}
       <button
         type="button"
-        disabled={!isFormValid}
-        onClick={goToConfirmation}
+        disabled={gate.verified && !isFormValid}
+        onClick={() => gate.guard(goToConfirmation)}
         className="brand-gradient flex h-[42px] items-center justify-center rounded-lg text-sm font-medium text-white transition-opacity disabled:opacity-50"
       >
         {t("btn.mint")}
       </button>
+
+      <KycGateDialog
+        open={gate.open}
+        onOpenChange={gate.setOpen}
+        status={gate.status}
+        rejectionReason={gate.rejectionReason}
+      />
 
       <NetworkTokenModal
         open={modalOpen}

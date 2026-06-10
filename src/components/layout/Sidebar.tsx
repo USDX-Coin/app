@@ -11,7 +11,6 @@ import {
   CircleHelp,
   Headset,
   Settings,
-  ShieldCheck,
   ChevronsUpDown,
   ChevronDown,
   PanelLeft,
@@ -45,8 +44,9 @@ const transactionItems: NavItem[] = [
   { href: "/send", labelKey: "nav.send", icon: ArrowUp },
 ];
 
+// /kyc is intentionally not a nav item (USDX-153): users reach it via the status
+// banner on /mint or the action-gate dialog, keeping the funnel KYC-driven.
 const moreItems: NavItem[] = [
-  { href: "/kyc", labelKey: "nav.kyc", icon: ShieldCheck },
   { href: "/transactions", labelKey: "nav.transaction", icon: History },
   { href: "/help", labelKey: "nav.help", icon: CircleHelp },
   { href: "/support", labelKey: "nav.support", icon: Headset },
@@ -117,7 +117,8 @@ export function Sidebar({
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const { t, lang, setLang } = useLang();
-  const name = user?.name ?? user?.email ?? "Pranatha Widya";
+  // users.name is null until KYC submit auto-sets it — fall back to email (USDX-153).
+  const name = user?.name ?? user?.email ?? "";
   const currentLang = LANGUAGES.find((l) => l.value === lang) ?? LANGUAGES[0];
 
   function handleLogout() {

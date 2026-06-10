@@ -8,6 +8,8 @@ import { TokenButton } from "@/components/shared/TokenButton";
 import { NetworkTokenModal } from "@/components/shared/NetworkTokenModal";
 import { ConfirmationCard } from "@/components/shared/ConfirmationCard";
 import { StatusCard } from "@/components/shared/StatusCard";
+import { KycGateDialog } from "@/components/kyc/KycGateDialog";
+import { useKycGate } from "@/hooks/useKycGate";
 import { getChainById } from "@/lib/chains";
 import { validateAddress } from "@/lib/validations";
 import { formatAmount, truncateAddress } from "@/lib/utils";
@@ -25,6 +27,7 @@ export function SendContent() {
   const [address, setAddress] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [result, setResult] = useState<{ id: string; createdAt: string } | null>(null);
+  const gate = useKycGate();
 
   const chain = getChainById(chainId);
   const addressError = address ? validateAddress(address) : null;
@@ -115,9 +118,10 @@ export function SendContent() {
                 {addressError && <p className="text-sm text-destructive">{addressError}</p>}
               </div>
             </div>
-            <button type="button" disabled={!isValid} onClick={() => setStep("confirmation")} className="brand-gradient flex h-[42px] items-center justify-center rounded-lg text-sm font-medium text-white transition-opacity disabled:opacity-50">
+            <button type="button" disabled={gate.verified && !isValid} onClick={() => gate.guard(() => setStep("confirmation"))} className="brand-gradient flex h-[42px] items-center justify-center rounded-lg text-sm font-medium text-white transition-opacity disabled:opacity-50">
               {t("btn.send")}
             </button>
+            <KycGateDialog open={gate.open} onOpenChange={gate.setOpen} status={gate.status} rejectionReason={gate.rejectionReason} />
             <NetworkTokenModal open={modalOpen} onOpenChange={setModalOpen} title={t("modal.sendFrom")} selectedChainId={chainId} onSelectChain={setChainId} />
           </div>
         )}

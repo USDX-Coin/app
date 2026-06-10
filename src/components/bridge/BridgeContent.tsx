@@ -8,6 +8,8 @@ import { TokenButton } from "@/components/shared/TokenButton";
 import { NetworkTokenModal } from "@/components/shared/NetworkTokenModal";
 import { ConfirmationCard } from "@/components/shared/ConfirmationCard";
 import { StatusCard } from "@/components/shared/StatusCard";
+import { KycGateDialog } from "@/components/kyc/KycGateDialog";
+import { useKycGate } from "@/hooks/useKycGate";
 import { getChainById } from "@/lib/chains";
 import { validateAddress } from "@/lib/validations";
 import { formatAmount, truncateAddress } from "@/lib/utils";
@@ -26,6 +28,7 @@ export function BridgeContent() {
   const [address, setAddress] = useState("");
   const [modal, setModal] = useState<null | "from" | "to">(null);
   const [result, setResult] = useState<{ id: string; createdAt: string } | null>(null);
+  const gate = useKycGate();
 
   const from = getChainById(fromChain);
   const to = getChainById(toChain);
@@ -134,9 +137,10 @@ export function BridgeContent() {
                 {addressError && <p className="text-sm text-destructive">{addressError}</p>}
               </div>
             </div>
-            <button type="button" disabled={!isValid} onClick={() => setStep("confirmation")} className="brand-gradient flex h-[42px] items-center justify-center rounded-lg text-sm font-medium text-white transition-opacity disabled:opacity-50">
+            <button type="button" disabled={gate.verified && !isValid} onClick={() => gate.guard(() => setStep("confirmation"))} className="brand-gradient flex h-[42px] items-center justify-center rounded-lg text-sm font-medium text-white transition-opacity disabled:opacity-50">
               {t("btn.bridge")}
             </button>
+            <KycGateDialog open={gate.open} onOpenChange={gate.setOpen} status={gate.status} rejectionReason={gate.rejectionReason} />
             <NetworkTokenModal open={modal === "from"} onOpenChange={(o) => setModal(o ? "from" : null)} title={t("modal.bridgeFrom")} selectedChainId={fromChain} onSelectChain={setFromChain} />
             <NetworkTokenModal open={modal === "to"} onOpenChange={(o) => setModal(o ? "to" : null)} title={t("modal.bridgeTo")} selectedChainId={toChain} onSelectChain={setToChain} />
           </div>

@@ -10,7 +10,8 @@ import {
 } from "@/lib/api/kyc-api";
 import type { SubmitKycRequest, PresignedDocKind } from "@/lib/api/types";
 
-const KYC_STATUS_KEY = ["kyc", "me"] as const;
+// Shared with useKycGate so the gate and the /kyc page read the same cache entry.
+export const KYC_STATUS_KEY = ["kyc", "me"] as const;
 
 // Client-side mirror of conventions.md § File Constraints — the backend re-verifies
 // after upload; these checks just save the user a wasted round-trip.

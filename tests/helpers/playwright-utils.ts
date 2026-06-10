@@ -20,11 +20,25 @@ const AUTH_STATE = {
   version: 0,
 };
 
-export async function loginViaStorage(page: Page) {
+export async function loginViaStorage(
+  page: Page,
+  userOverrides?: Partial<Omit<(typeof AUTH_STATE)["state"]["user"], "name">> & {
+    name?: string | null;
+  },
+) {
+  const auth = userOverrides
+    ? {
+        ...AUTH_STATE,
+        state: {
+          ...AUTH_STATE.state,
+          user: { ...AUTH_STATE.state.user, ...userOverrides },
+        },
+      }
+    : AUTH_STATE;
   await page.goto("/login");
-  await page.evaluate((auth) => {
-    localStorage.setItem("usdx-auth", JSON.stringify(auth));
-  }, AUTH_STATE);
+  await page.evaluate((a) => {
+    localStorage.setItem("usdx-auth", JSON.stringify(a));
+  }, auth);
 }
 
 /**

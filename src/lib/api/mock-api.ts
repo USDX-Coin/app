@@ -174,7 +174,24 @@ export async function mockResetPassword(req: ResetPasswordRequest): Promise<Auth
 
 export async function mockGetMe(): Promise<User> {
   await delay(200);
-  return currentAccount()?.user ?? DEMO_USER;
+  const account = currentAccount();
+  if (account) return account.user;
+  // Storage-seeded session (Playwright loginViaStorage): the in-memory mock has
+  // no logged-in account, so mirror the persisted user instead of falling back
+  // to DEMO_USER — otherwise the /v2/auth/me refresh (useSession) would
+  // overwrite seeded state like `name: null` (USDX-153 header fallback tests).
+  return persistedUser() ?? DEMO_USER;
+}
+
+function persistedUser(): User | null {
+  if (typeof localStorage === "undefined") return null;
+  try {
+    const raw = localStorage.getItem("usdx-auth");
+    if (!raw) return null;
+    return (JSON.parse(raw)?.state?.user as User) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 // ── Mock KYC backend ─────────────────────────────────────────────────────

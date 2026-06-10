@@ -46,7 +46,8 @@ export default function DashboardLayout({
 
   if (!isAuthenticated) return null;
 
-  const name = user?.name ?? user?.email ?? "Pranatha Widya";
+  // users.name is null until KYC submit auto-sets it — fall back to email (USDX-153).
+  const name = user?.name ?? user?.email ?? "";
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">

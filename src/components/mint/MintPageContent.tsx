@@ -2,6 +2,7 @@
 
 import { useMintStore } from "@/stores/mintStore";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { KycStatusSection } from "@/components/kyc/KycStatusSection";
 import { MintForm } from "@/components/mint/MintForm";
 import { MintConfirmation } from "@/components/mint/MintConfirmation";
 import { MintStatus } from "@/components/mint/MintStatus";
@@ -19,6 +20,7 @@ export function MintPageContent() {
   return (
     <div className="flex h-full flex-col gap-2">
       <PageHeader crumbs={[...header.crumbs]} title={header.title} />
+      {step === "form" && <KycStatusSection />}
       <div className="flex flex-1 justify-center pt-8">
         {step === "form" && <MintForm />}
         {step === "confirmation" && <MintConfirmation />}

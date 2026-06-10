@@ -254,6 +254,20 @@ const en: Dict = {
   "kyc.banner.rejectedTitle": "Verification rejected",
   "kyc.banner.rejectedBody": "Please review your details and submit again.",
   "kyc.banner.resubmit": "Submit Again",
+  "kyc.section.unverifiedTitle": "Verify your identity",
+  "kyc.section.unverifiedBody":
+    "Complete identity verification (KYC) to start minting, redeeming, bridging, and sending USDX.",
+  "kyc.lock.unverifiedTitle": "Complete KYC first",
+  "kyc.lock.unverifiedBody":
+    "You need to verify your identity before you can transact. It only takes a few minutes.",
+  "kyc.lock.pendingTitle": "Verification in review",
+  "kyc.lock.pendingBody":
+    "Your documents are being reviewed. You can transact once your identity is verified — usually within 1–2 business days.",
+  "kyc.lock.rejectedTitle": "Verification rejected",
+  "kyc.lock.rejectedBody": "Please review your details and submit again.",
+  "kyc.lock.completeKyc": "Complete KYC",
+  "kyc.lock.resubmit": "Submit Again",
+  "kyc.lock.dismiss": "Got it",
   "kyc.firstName": "First Name",
   "kyc.lastName": "Last Name",
   "kyc.dob": "Date of Birth",
@@ -527,6 +541,20 @@ const id: Dict = {
   "kyc.banner.rejectedTitle": "Verifikasi ditolak",
   "kyc.banner.rejectedBody": "Silakan periksa kembali data Anda dan submit ulang.",
   "kyc.banner.resubmit": "Submit Ulang",
+  "kyc.section.unverifiedTitle": "Verifikasi identitas Anda",
+  "kyc.section.unverifiedBody":
+    "Selesaikan verifikasi identitas (KYC) untuk mulai mint, redeem, bridge, dan kirim USDX.",
+  "kyc.lock.unverifiedTitle": "Selesaikan KYC dulu",
+  "kyc.lock.unverifiedBody":
+    "Anda perlu verifikasi identitas sebelum bisa bertransaksi. Hanya butuh beberapa menit.",
+  "kyc.lock.pendingTitle": "Verifikasi sedang ditinjau",
+  "kyc.lock.pendingBody":
+    "Dokumen Anda sedang ditinjau. Anda bisa bertransaksi setelah identitas terverifikasi — biasanya 1–2 hari kerja.",
+  "kyc.lock.rejectedTitle": "Verifikasi ditolak",
+  "kyc.lock.rejectedBody": "Silakan periksa kembali data Anda dan submit ulang.",
+  "kyc.lock.completeKyc": "Lengkapi KYC",
+  "kyc.lock.resubmit": "Submit Ulang",
+  "kyc.lock.dismiss": "Mengerti",
   "kyc.firstName": "Nama Depan",
   "kyc.lastName": "Nama Belakang",
   "kyc.dob": "Tanggal Lahir",

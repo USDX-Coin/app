@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { ArrowDown, Wallet } from "lucide-react";
 import { useRedeem } from "@/hooks/useRedeem";
+import { useKycGate } from "@/hooks/useKycGate";
 import { formatAmount } from "@/lib/utils";
 import { useLang } from "@/providers/LanguageProvider";
 import { TokenButton } from "@/components/shared/TokenButton";
 import { NetworkTokenModal } from "@/components/shared/NetworkTokenModal";
+import { KycGateDialog } from "@/components/kyc/KycGateDialog";
 import { BankAccountSelector } from "./BankAccountSelector";
 import { AddRecipientDialog } from "./AddRecipientDialog";
 
@@ -31,6 +33,7 @@ export function RedeemForm() {
   } = useRedeem();
   const [networkOpen, setNetworkOpen] = useState(false);
   const [recipientOpen, setRecipientOpen] = useState(false);
+  const gate = useKycGate();
 
   return (
     <div className="flex w-full max-w-[500px] flex-col gap-6 rounded-xl border border-border bg-card p-5">
@@ -111,12 +114,19 @@ export function RedeemForm() {
 
       <button
         type="button"
-        disabled={!isFormValid}
-        onClick={goToConfirmation}
+        disabled={gate.verified && !isFormValid}
+        onClick={() => gate.guard(goToConfirmation)}
         className="brand-gradient flex h-[42px] items-center justify-center rounded-lg text-sm font-medium text-white transition-opacity disabled:opacity-50"
       >
         {t("btn.redeem")}
       </button>
+
+      <KycGateDialog
+        open={gate.open}
+        onOpenChange={gate.setOpen}
+        status={gate.status}
+        rejectionReason={gate.rejectionReason}
+      />
 
       <NetworkTokenModal
         open={networkOpen}

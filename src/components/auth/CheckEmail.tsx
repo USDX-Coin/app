@@ -6,36 +6,41 @@ import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useCooldown, DEFAULT_COOLDOWN_SECONDS } from "@/hooks/useCooldown";
+import { useLang } from "@/providers/LanguageProvider";
 import { getErrorMessage, getRateLimitSeconds } from "@/lib/api/errors";
 import { toast } from "sonner";
 
-// Landing after register (sot/phase-2/phase2.md § Pages #2). Prompts the user to
+// Landing after register (sot/phase-2/phase2.md § Pages, row 2). Prompts the user to
 // check their inbox for the activation link, with a resend option (cooldown 60s).
 export function CheckEmail() {
   const params = useSearchParams();
   const email = params.get("email") ?? "";
+  const { t } = useLang();
   const { resendVerification, resendVerificationLoading } = useAuth();
   const [sent, setSent] = useState(false);
   const cooldown = useCooldown();
 
+  // {email} slot lets each language place the address naturally in the sentence.
+  const [bodyBefore, bodyAfter] = t("auth.check.body").split("{email}");
+
   async function handleResend() {
     if (!email) {
-      toast.error("Missing email address — please register again.");
+      toast.error(t("auth.check.missingEmail"));
       return;
     }
     try {
       await resendVerification({ email });
       setSent(true);
       cooldown.start(DEFAULT_COOLDOWN_SECONDS);
-      toast.success("Verification email sent.");
+      toast.success(t("auth.check.sent"));
     } catch (err) {
       const retryAfter = getRateLimitSeconds(err);
       if (retryAfter !== null) {
         cooldown.start(retryAfter > 0 ? retryAfter : DEFAULT_COOLDOWN_SECONDS);
-        toast.error("Too many requests. Please wait before resending.");
+        toast.error(t("auth.check.tooMany"));
         return;
       }
-      toast.error(getErrorMessage(err, "Could not resend email"));
+      toast.error(getErrorMessage(err, t("auth.check.failed")));
     }
   }
 
@@ -46,11 +51,17 @@ export function CheckEmail() {
           <span className="text-3xl">✉</span>
         </div>
       </div>
-      <h1 className="text-2xl font-bold text-primary mb-2">Verify Your Email</h1>
+      <h1 className="text-2xl font-bold text-primary mb-2">{t("auth.check.title")}</h1>
       <p className="text-sm text-muted-foreground mb-6">
-        We&apos;ve sent a verification link to{" "}
-        {email ? <strong>{email}</strong> : "your email"}. Click the link to activate
-        your account.
+        {email ? (
+          <>
+            {bodyBefore}
+            <strong>{email}</strong>
+            {bodyAfter}
+          </>
+        ) : (
+          t("auth.check.bodyNoEmail")
+        )}
       </p>
 
       <Button
@@ -61,17 +72,17 @@ export function CheckEmail() {
         disabled={resendVerificationLoading || cooldown.active}
       >
         {cooldown.active
-          ? `Resend in ${cooldown.remaining}s`
+          ? t("auth.check.resendIn", { s: String(cooldown.remaining) })
           : resendVerificationLoading
-            ? "Sending..."
+            ? t("auth.check.sending")
             : sent
-              ? "Resend Again"
-              : "Resend Verification"}
+              ? t("auth.check.resendAgain")
+              : t("auth.check.resend")}
       </Button>
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
         <Link href="/login" className="text-primary underline">
-          Back to Login
+          {t("auth.backToLogin")}
         </Link>
       </p>
     </div>

@@ -9,15 +9,20 @@ import { validateEmail } from "@/lib/validations";
 import { FieldError } from "@/components/ui/field-error";
 import { useAuth } from "@/hooks/useAuth";
 import { useCooldown, DEFAULT_COOLDOWN_SECONDS } from "@/hooks/useCooldown";
+import { useLang } from "@/providers/LanguageProvider";
 import { getErrorMessage, getRateLimitSeconds } from "@/lib/api/errors";
 import { toast } from "sonner";
 
 export function ForgotPasswordForm() {
+  const { t } = useLang();
   const { forgotPassword, forgotPasswordLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const cooldown = useCooldown();
+
+  // {email} slot lets each language place the address naturally in the sentence.
+  const [checkBefore, checkAfter] = t("auth.forgot.checkBody").split("{email}");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -36,10 +41,10 @@ export function ForgotPasswordForm() {
       const retryAfter = getRateLimitSeconds(err);
       if (retryAfter !== null) {
         cooldown.start(retryAfter > 0 ? retryAfter : DEFAULT_COOLDOWN_SECONDS);
-        toast.error("Too many requests. Please wait before requesting another link.");
+        toast.error(t("auth.forgot.tooMany"));
         return;
       }
-      toast.error(getErrorMessage(err, "Could not send reset link"));
+      toast.error(getErrorMessage(err, t("auth.forgot.failed")));
     }
   }
 
@@ -51,13 +56,15 @@ export function ForgotPasswordForm() {
             <span className="text-3xl">✉</span>
           </div>
         </div>
-        <h1 className="text-2xl font-bold text-primary mb-2">Check Your Email</h1>
+        <h1 className="text-2xl font-bold text-primary mb-2">{t("auth.forgot.checkTitle")}</h1>
         <p className="text-sm text-muted-foreground mb-6">
-          We&apos;ve sent a password reset link to <strong>{email}</strong>
+          {checkBefore}
+          <strong>{email}</strong>
+          {checkAfter}
         </p>
         <Link href="/login">
           <Button variant="outline" className="w-full">
-            Back to Login
+            {t("auth.backToLogin")}
           </Button>
         </Link>
       </div>
@@ -66,18 +73,16 @@ export function ForgotPasswordForm() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-primary mb-1">Forgot Password</h1>
-      <p className="text-sm text-muted-foreground mb-8">
-        Enter your email and we&apos;ll send you a reset link.
-      </p>
+      <h1 className="text-2xl font-bold text-primary mb-1">{t("auth.forgot.title")}</h1>
+      <p className="text-sm text-muted-foreground mb-8">{t("auth.forgot.subtitle")}</p>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <Label htmlFor="email">Email Address</Label>
+          <Label htmlFor="email">{t("auth.email")}</Label>
           <Input
             id="email"
             type="email"
-            placeholder="Enter your email"
+            placeholder={t("auth.forgot.emailPh")}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="mt-1.5 bg-transparent dark:bg-transparent"
@@ -92,17 +97,17 @@ export function ForgotPasswordForm() {
           className="w-full bg-linear-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary-700"
         >
           {cooldown.active
-            ? `Try again in ${cooldown.remaining}s`
+            ? t("auth.tryAgainIn", { s: String(cooldown.remaining) })
             : forgotPasswordLoading
-              ? "Sending..."
-              : "Send Reset Link"}
+              ? t("auth.forgot.sending")
+              : t("auth.forgot.submit")}
         </Button>
       </form>
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
-        Remember your password?{" "}
+        {t("auth.forgot.remember")}{" "}
         <Link href="/login" className="text-primary underline">
-          Login
+          {t("auth.forgot.loginLink")}
         </Link>
       </p>
     </div>

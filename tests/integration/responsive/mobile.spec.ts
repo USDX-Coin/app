@@ -5,6 +5,7 @@ test.use({ viewport: VIEWPORTS.mobile });
 
 test.describe("Mobile Responsive (375x667)", () => {
   test("login page renders correctly on mobile", async ({ page }) => {
+    await forceEnglish(page);
     await page.goto("/login");
     await expect(
       page.getByRole("heading", { name: "Welcome back" })

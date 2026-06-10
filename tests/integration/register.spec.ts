@@ -28,6 +28,15 @@ test.describe("Register Page", () => {
       await expect(page.getByRole("checkbox")).toBeVisible();
     });
 
+    test("shows account type with Legal Entity disabled as coming soon", async ({
+      page,
+    }) => {
+      await expect(page.getByRole("button", { name: "Individual" })).toBeVisible();
+      const legalEntity = page.getByRole("button", { name: /Legal Entity/ });
+      await expect(legalEntity).toBeDisabled();
+      await expect(legalEntity).toContainText("Coming soon");
+    });
+
     test("registers with valid data and lands on check-email", async ({
       page,
     }) => {
@@ -70,6 +79,40 @@ test.describe("Register Page", () => {
       await page.getByRole("checkbox").check();
       await page.getByRole("button", { name: "Create Account" }).click();
       await expect(page.getByText("Passwords do not match")).toBeVisible();
+    });
+
+    test("duplicate email shows inline 409 error on the email field", async ({
+      page,
+    }) => {
+      await page.getByPlaceholder("Enter your email").fill("demo@usdx.com");
+      await page.getByPlaceholder("08xx or +62xx").fill("089876543210");
+      await page.getByPlaceholder("Create a password").fill("TestPass1");
+      await page.getByPlaceholder("Confirm your password").fill("TestPass1");
+      await page.getByRole("checkbox").check();
+      await page.getByRole("button", { name: "Create Account" }).click();
+      await expect(page.getByText("This email is already registered")).toBeVisible({
+        timeout: 10000,
+      });
+      // Still on the register page — inline error, not a redirect.
+      await expect(page).toHaveURL(/\/register$/);
+    });
+
+    test("duplicate phone shows inline 409 error on the phone field", async ({
+      page,
+    }) => {
+      await page
+        .getByPlaceholder("Enter your email")
+        .fill(`unique-${Date.now()}@example.com`);
+      // 08123456789 normalizes to +628123456789 — the demo account's phone.
+      await page.getByPlaceholder("08xx or +62xx").fill("08123456789");
+      await page.getByPlaceholder("Create a password").fill("TestPass1");
+      await page.getByPlaceholder("Confirm your password").fill("TestPass1");
+      await page.getByRole("checkbox").check();
+      await page.getByRole("button", { name: "Create Account" }).click();
+      await expect(
+        page.getByText("This phone number is already registered")
+      ).toBeVisible({ timeout: 10000 });
+      await expect(page).toHaveURL(/\/register$/);
     });
 
     test("shows error for weak password", async ({ page }) => {

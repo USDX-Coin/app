@@ -162,3 +162,39 @@ Test helpers in `tests/helpers/`:
 - WalletConnect SSR produces `indexedDB` warnings (harmless)
 - KYC verification is UI-only (always shows "Verified")
 - Solana removed — EVM chains only (7 chains)
+
+
+# Source of Truth
+
+Folder `sot/` contains the project spec. Read before coding. Never edit `sot/`.
+
+**If spec is unclear — ask the PM, don't assume.**
+
+## Key files for this repo:
+
+- `sot/phase-2/week1.md` — **AKTIF (Week 1)**: auth flow (register/verify/login/forgot password), KYC INDIVIDUAL flow, FE deliverables, error codes per endpoint
+- `sot/phase-2/phase2.md` — Phase 2 overview: pages roadmap, mint/redeem/bridge flows (W2+)
+- `sot/conventions.md` — API response format, naming conventions, status enums
+- `sot/api/openapi.yaml` — API contract entry point (consumer endpoints `/api/v2/*`: `auth.yaml`, `kyc.yaml`, `storage.yaml`)
+
+## Critical rules:
+
+- **App SUDAH ADA — jangan scaffold ulang.** Next.js App Router + Tailwind v4 + shadcn/ui, UI mock sudah sesuai Figma. Scope Week 1 = ganti mock dengan real API + tambah halaman yang belum ada (lihat `sot/phase-2/week1.md` § Deliverables Week 1)
+- Ganti `src/lib/api/mock-api.ts` **bertahap** dengan real API client (`NEXT_PUBLIC_API_BASE_URL` → `/api/v2/*`) — jangan rewrite sekaligus
+- API responses follow `{ status, metadata, data, error }` format — see `sot/conventions.md`
+- Auth: Better Auth client **consumer audience** (session 30 hari sliding) — bukan audience backoffice
+- Error handling konsisten: 401 → clear session + redirect `/login`; 403 `EMAIL_NOT_VERIFIED` → banner verifikasi + tombol resend; 403 `KYC_NOT_VERIFIED` → lock CTA + arahkan ke `/kyc`; 429 → cooldown countdown
+- KYC upload via presigned URL: `POST /v2/storage/presigned-upload` → PUT file langsung ke bucket → `POST /v2/kyc` dengan objectKeys (lihat `sot/phase-2/week1.md` § Consumer App Flow)
+- KYC status enums: `UNVERIFIED | PENDING | VERIFIED | REJECTED` — CTA mint/redeem/bridge terkunci kalau bukan `VERIFIED`
+- SOT is authoritative — if your implementation differs from SOT, your code adjusts (not SOT)
+
+## PR Description
+
+Saat buat PR, generate description mengikuti format di `sot/templates/pr-template.md`. Ini wajib — PM review berdasarkan structure ini.
+
+Key points:
+- Selalu include "PM Action Items" section (bisa "None")
+- Selalu include "SoT Alignment" table — cross-check setiap field/endpoint vs SOT
+- Jika implement sesuatu yang TIDAK ada di SOT → masukkan ke "Known Drift > Needs PM Action" dengan category ❓ Decision
+- Jika ada AC yang belum bisa dicapai → mark ⏳ Deferred dengan reason
+- Jika ada action yang harus dilakukan SETELAH merge → masukkan "Post-Merge Actions"

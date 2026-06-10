@@ -40,6 +40,31 @@ export async function clearAuth(page: Page) {
   await page.evaluate(() => localStorage.removeItem("usdx-auth"));
 }
 
+/**
+ * Arm the mock's KYC status seam (mock-api KYC_OVERRIDE_KEY). The in-memory
+ * mock resets per page load, so PENDING/REJECTED states are otherwise
+ * unreachable across navigations. Call before the first page.goto().
+ */
+export async function seedKycStatus(
+  page: Page,
+  status: "UNVERIFIED" | "PENDING" | "VERIFIED" | "REJECTED",
+) {
+  await page.addInitScript(
+    (s) => localStorage.setItem("usdx-mock-kyc-status", s),
+    status,
+  );
+}
+
+/** Tiny valid PNG for upload tests (file-type/size validation is client-side). */
+export const TEST_PNG = {
+  name: "photo.png",
+  mimeType: "image/png",
+  buffer: Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "base64",
+  ),
+} as const;
+
 export const VIEWPORTS = {
   smallMobile: { width: 320, height: 568 },
   mobile: { width: 375, height: 667 },

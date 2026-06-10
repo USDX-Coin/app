@@ -3,6 +3,7 @@ import { renderHook, act } from "@testing-library/react";
 import { createWrapper } from "../../helpers/test-utils";
 import { useRedeem } from "@/hooks/useRedeem";
 import { useRedeemStore } from "@/stores/redeemStore";
+import { USD_TO_IDR_RATE } from "@/lib/constants";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -75,7 +76,7 @@ describe("useRedeem", () => {
 
         expect(result.current.fee).toBeCloseTo(7, 2);
         // Redeem now surfaces the gross IDR payout (amount × USD_TO_IDR_RATE).
-        expect(result.current.receiveAmountIdr).toBeCloseTo(1000 * 17_880, 0);
+        expect(result.current.receiveAmountIdr).toBeCloseTo(1000 * USD_TO_IDR_RATE, 0);
       });
     });
 

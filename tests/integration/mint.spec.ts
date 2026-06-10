@@ -22,7 +22,7 @@ test.describe("Mint Page", () => {
       ).toBeVisible();
       // Default chain is Base — its badge icon shows on the token button.
       await expect(page.locator('img[src="/icon/base.svg"]').first()).toBeVisible();
-      await expect(page.getByText("1 USDX ≈ 17,880 IDR")).toBeVisible();
+      await expect(page.getByText("1 USDX ≈ 17,010 IDR")).toBeVisible();
     });
 
     test("Mint button enabled when form is valid", async ({ page }) => {
@@ -87,8 +87,8 @@ test.describe("Mint Page", () => {
   test.describe("edge cases", () => {
     test("auto-calculates IDR payment amount", async ({ page }) => {
       await page.getByPlaceholder("0", { exact: true }).fill("1000");
-      // 1000 USDX * 17,880 IDR
-      await expect(page.getByText("17,880,000")).toBeVisible();
+      // 1000 USDX * 17,010 IDR
+      await expect(page.getByText("17,010,000")).toBeVisible();
       await expect(page.getByText("You will pay")).toBeVisible();
     });
 

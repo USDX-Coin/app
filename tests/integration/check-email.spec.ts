@@ -25,6 +25,27 @@ test.describe("Check Email Page", () => {
       await expect(cooldownButton).toBeVisible({ timeout: 10000 });
       await expect(cooldownButton).toBeDisabled();
     });
+
+    test("short cooldown keeps ticking once per second (USDX-167, ID locale)", async ({
+      page,
+    }) => {
+      // Default locale is Indonesian — no forceEnglish.
+      await page.goto("/register/check-email?email=someone%40example.com");
+      await clearAuth(page);
+      await page.goto("/register/check-email?email=someone%40example.com");
+      await page.getByRole("button", { name: "Kirim Ulang", exact: true }).click();
+      // Starts at 60 (one tick of slack for slow CI), then proves the
+      // per-second tick by waiting for a strictly lower remaining count.
+      await expect(
+        page.getByRole("button", { name: /Kirim ulang dalam (60|59) detik/ })
+      ).toBeVisible({ timeout: 10000 });
+      await expect(
+        page.getByRole("button", { name: /Kirim ulang dalam 5[5-8] detik/ })
+      ).toBeVisible({ timeout: 6000 });
+      await expect(
+        page.getByRole("button", { name: /Kirim ulang dalam \d+ detik/ })
+      ).toBeDisabled();
+    });
   });
 
   test.describe("edge cases", () => {

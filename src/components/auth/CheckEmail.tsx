@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useCooldown, DEFAULT_COOLDOWN_SECONDS } from "@/hooks/useCooldown";
 import { useLang } from "@/providers/LanguageProvider";
 import { getErrorMessage, getRateLimitSeconds } from "@/lib/api/errors";
+import { formatDuration } from "@/lib/utils";
 import { toast } from "sonner";
 
 // Landing after register (sot/phase-2/phase2.md § Pages, row 2). Prompts the user to
@@ -15,7 +16,7 @@ import { toast } from "sonner";
 export function CheckEmail() {
   const params = useSearchParams();
   const email = params.get("email") ?? "";
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const { resendVerification, resendVerificationLoading } = useAuth();
   const [sent, setSent] = useState(false);
   const cooldown = useCooldown();
@@ -72,7 +73,7 @@ export function CheckEmail() {
         disabled={resendVerificationLoading || cooldown.active}
       >
         {cooldown.active
-          ? t("auth.check.resendIn", { s: String(cooldown.remaining) })
+          ? t("auth.check.resendIn", { duration: formatDuration(cooldown.remaining, lang) })
           : resendVerificationLoading
             ? t("auth.check.sending")
             : sent

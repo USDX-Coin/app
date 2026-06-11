@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { clearAuth, forceEnglish } from "../helpers/playwright-utils";
+import { clearAuth, forceEnglish, seedRetryAfter } from "../helpers/playwright-utils";
 
 async function gotoLogin(page: import("@playwright/test").Page) {
   await forceEnglish(page);
@@ -143,6 +143,23 @@ test.describe("Login Page", () => {
       const cooldownButton = page.getByRole("button", { name: /Try again in \d+s/ });
       await expect(cooldownButton).toBeVisible({ timeout: 10000 });
       await expect(cooldownButton).toBeDisabled();
+    });
+
+    test("rate-limit wait renders human-readable hours, not raw seconds (USDX-167)", async ({
+      page,
+    }) => {
+      await gotoLogin(page);
+      await seedRetryAfter(page, 76451); // daily-limit-scale 429 TOO_MANY_ATTEMPTS
+      await page.reload();
+      await page.getByPlaceholder("you@email.com").fill("demo@usdx.com");
+      await page.getByPlaceholder("••••••••").fill("Demo1234");
+      await page.getByRole("button", { name: "Login" }).click();
+      const cooldownButton = page.getByRole("button", {
+        name: "Try again in about 22 hours",
+      });
+      await expect(cooldownButton).toBeVisible({ timeout: 10000 });
+      await expect(cooldownButton).toBeDisabled();
+      await expect(page.getByText("76451")).not.toBeVisible();
     });
 
     test("Google and Web3 buttons are disabled", async ({ page }) => {

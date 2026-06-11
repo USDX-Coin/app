@@ -69,6 +69,20 @@ export async function seedKycStatus(
   );
 }
 
+/**
+ * Arm the mock's rate-limit seam (mock-api RETRY_AFTER_OVERRIDE_KEY): every
+ * login/forgot-password/resend call throws 429 with this Retry-After value, so
+ * specs can assert the human-readable cooldown formatting (USDX-167). Daily
+ * limits (~22h) are unreachable in the per-page-load in-memory mock otherwise.
+ * Call before the first page.goto(). Pass 0 to simulate a missing Retry-After.
+ */
+export async function seedRetryAfter(page: Page, seconds: number) {
+  await page.addInitScript(
+    (s) => localStorage.setItem("usdx-mock-retry-after", s),
+    String(seconds),
+  );
+}
+
 /** Tiny valid PNG for upload tests (file-type/size validation is client-side). */
 export const TEST_PNG = {
   name: "photo.png",

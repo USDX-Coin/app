@@ -34,6 +34,40 @@ describe("useCooldown", () => {
     });
   });
 
+  describe("positive — long cooldowns (USDX-167)", () => {
+    test("hour-scale cooldown steps to the previous hour boundary, not per second", () => {
+      const { result } = renderHook(() => useCooldown());
+      act(() => result.current.start(76451)); // 21h14m — forgot-password daily limit
+
+      // One second in, nothing has changed: the timer sleeps until the next
+      // display change (75600 = 21h exact), not a 1s tick.
+      act(() => vi.advanceTimersByTime(1000));
+      expect(result.current.remaining).toBe(76451);
+
+      act(() => vi.advanceTimersByTime(850 * 1000));
+      expect(result.current.remaining).toBe(75600);
+
+      act(() => vi.advanceTimersByTime(3600 * 1000));
+      expect(result.current.remaining).toBe(72000);
+    });
+
+    test("minute-scale cooldown steps to minute boundaries, then per second under 60", () => {
+      const { result } = renderHook(() => useCooldown());
+      act(() => result.current.start(300));
+
+      act(() => vi.advanceTimersByTime(60 * 1000));
+      expect(result.current.remaining).toBe(240);
+
+      act(() => vi.advanceTimersByTime(60 * 1000));
+      act(() => vi.advanceTimersByTime(60 * 1000));
+      act(() => vi.advanceTimersByTime(60 * 1000));
+      expect(result.current.remaining).toBe(60);
+
+      act(() => vi.advanceTimersByTime(1000));
+      expect(result.current.remaining).toBe(59);
+    });
+  });
+
   describe("edge cases", () => {
     test("restarting mid-count resets the remaining time", () => {
       const { result } = renderHook(() => useCooldown());

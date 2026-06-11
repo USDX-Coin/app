@@ -66,6 +66,27 @@ function currentAccount(): MockAccount | null {
   return currentEmail ? (accounts.get(currentEmail) ?? null) : null;
 }
 
+// Test seam (mirrors KYC_OVERRIDE_KEY): arm a 429 with an arbitrary Retry-After
+// via localStorage ("usdx-mock-retry-after") so Playwright can exercise the
+// human-readable duration formatting (USDX-167) — the real daily limits
+// (forgot password 3x/hari → ~22h) are unreachable in an in-memory mock that
+// resets per page load. Mock-only.
+const RETRY_AFTER_OVERRIDE_KEY = "usdx-mock-retry-after";
+
+function maybeThrowRateLimitOverride(code: "TOO_MANY_ATTEMPTS" | "TOO_MANY_REQUESTS"): void {
+  if (typeof localStorage === "undefined") return;
+  const raw = localStorage.getItem(RETRY_AFTER_OVERRIDE_KEY);
+  if (raw === null) return;
+  const seconds = Number(raw);
+  throw new ApiError(
+    429,
+    code,
+    "Too many requests",
+    undefined,
+    Number.isFinite(seconds) && seconds > 0 ? seconds : null,
+  );
+}
+
 // Rate-limit simulation (week1.md § Login: 5 wrong attempts per 15 min per email).
 // Mirrors the real 429 TOO_MANY_ATTEMPTS so the FE cooldown countdown is testable
 // offline. State is per page load (module scope), like the rest of the mock.
@@ -75,6 +96,7 @@ const failedLogins = new Map<string, { count: number; firstAt: number }>();
 
 export async function mockLogin(req: LoginRequest): Promise<AuthResponse> {
   await delay();
+  maybeThrowRateLimitOverride("TOO_MANY_ATTEMPTS");
   const attempts = failedLogins.get(req.email);
   if (attempts && Date.now() - attempts.firstAt > LOGIN_WINDOW_MS) {
     failedLogins.delete(req.email);
@@ -156,10 +178,12 @@ export async function mockVerifyEmail(req: VerifyEmailRequest): Promise<AuthResp
 
 export async function mockResendVerification(): Promise<void> {
   await delay(300);
+  maybeThrowRateLimitOverride("TOO_MANY_REQUESTS");
 }
 
 export async function mockForgotPassword(): Promise<void> {
   await delay(300);
+  maybeThrowRateLimitOverride("TOO_MANY_REQUESTS");
 }
 
 // Mock reset-password: verifies + auto-logs-in the most relevant account.

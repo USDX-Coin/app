@@ -11,10 +11,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { useCooldown, DEFAULT_COOLDOWN_SECONDS } from "@/hooks/useCooldown";
 import { useLang } from "@/providers/LanguageProvider";
 import { getErrorMessage, getRateLimitSeconds } from "@/lib/api/errors";
+import { formatDuration } from "@/lib/utils";
 import { toast } from "sonner";
 
 export function ForgotPasswordForm() {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const { forgotPassword, forgotPasswordLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
@@ -97,7 +98,7 @@ export function ForgotPasswordForm() {
           className="w-full bg-linear-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary-700"
         >
           {cooldown.active
-            ? t("auth.tryAgainIn", { s: String(cooldown.remaining) })
+            ? t("auth.tryAgainIn", { duration: formatDuration(cooldown.remaining, lang) })
             : forgotPasswordLoading
               ? t("auth.forgot.sending")
               : t("auth.forgot.submit")}

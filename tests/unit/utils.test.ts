@@ -1,5 +1,11 @@
 import { describe, test, expect } from "vitest";
-import { formatAmount, formatUSD, truncateAddress, parseAmount } from "@/lib/utils";
+import {
+  formatAmount,
+  formatDuration,
+  formatUSD,
+  truncateAddress,
+  parseAmount,
+} from "@/lib/utils";
 
 describe("formatAmount", () => {
   describe("positive", () => {
@@ -102,6 +108,50 @@ describe("parseAmount", () => {
   describe("edge cases", () => {
     test("parses zero", () => {
       expect(parseAmount("0")).toBe(0);
+    });
+  });
+});
+
+describe("formatDuration", () => {
+  describe("positive", () => {
+    test("renders seconds up to 60 as exact seconds", () => {
+      expect(formatDuration(60, "id")).toBe("60 detik");
+      expect(formatDuration(59, "id")).toBe("59 detik");
+      expect(formatDuration(60, "en")).toBe("60s");
+      expect(formatDuration(1, "en")).toBe("1s");
+    });
+
+    test("renders minutes between a minute and an hour", () => {
+      expect(formatDuration(300, "id")).toBe("5 menit");
+      expect(formatDuration(300, "en")).toBe("5 minutes");
+    });
+
+    test("renders hours with an 'about' qualifier when rounded", () => {
+      // 76451s = 21h14m — forgot-password daily limit (sot/conventions.md
+      // § Rate Limiting, 3x/hari). Rounds UP: never promise a shorter wait.
+      expect(formatDuration(76451, "id")).toBe("sekitar 22 jam");
+      expect(formatDuration(76451, "en")).toBe("about 22 hours");
+    });
+  });
+
+  describe("negative", () => {
+    test("rounds partial minutes up, not down", () => {
+      expect(formatDuration(61, "id")).toBe("2 menit");
+      expect(formatDuration(3599, "id")).toBe("60 menit");
+    });
+  });
+
+  describe("edge cases", () => {
+    test("exact hours drop the qualifier and stay in hours", () => {
+      expect(formatDuration(3600, "id")).toBe("1 jam");
+      expect(formatDuration(3600, "en")).toBe("1 hour");
+      expect(formatDuration(7200, "id")).toBe("2 jam");
+      expect(formatDuration(7200, "en")).toBe("2 hours");
+    });
+
+    test("clamps zero and negatives to 0 seconds", () => {
+      expect(formatDuration(0, "id")).toBe("0 detik");
+      expect(formatDuration(-5, "en")).toBe("0s");
     });
   });
 });

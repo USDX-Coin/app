@@ -16,11 +16,12 @@ import {
   isAccountSuspended,
   isEmailNotVerified,
 } from "@/lib/api/errors";
+import { formatDuration } from "@/lib/utils";
 import { Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 
 export function LoginForm() {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const { login, loginLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -158,7 +159,7 @@ export function LoginForm() {
           className="brand-gradient h-11 w-full text-white hover:opacity-95"
         >
           {cooldown.active
-            ? t("auth.tryAgainIn", { s: String(cooldown.remaining) })
+            ? t("auth.tryAgainIn", { duration: formatDuration(cooldown.remaining, lang) })
             : loginLoading
               ? t("auth.login.submitting")
               : t("auth.login.submit")}

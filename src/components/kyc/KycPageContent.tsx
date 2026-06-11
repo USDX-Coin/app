@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, Loader2 } from "lucide-react";
+import { CheckCircle2, ImagePlus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import { FieldError } from "@/components/ui/field-error";
 import { KycStatusBanner } from "./KycStatusBanner";
 import { useSession } from "@/hooks/useSession";
@@ -334,15 +335,49 @@ function DocField({
           ? t("kyc.err.uploadFailed")
           : undefined;
 
+  const showPreview = !!doc.previewUrl && !doc.error;
+
   return (
     <div>
       <Label htmlFor={`${kind}File`}>{label}</Label>
-      <Input
+      {/* One dropzone card per document: placeholder while empty, the photo once
+          chosen. Clicking the card (re)opens the file picker — no separate
+          input + preview rows. The real input stays in the DOM (sr-only) so
+          tests and assistive tech keep targeting #ktpFile / #selfieFile. */}
+      <label
+        htmlFor={`${kind}File`}
+        className={cn(
+          "mt-1.5 flex h-48 w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-border bg-muted/40 transition-colors hover:border-primary/70 hover:bg-muted",
+          showPreview && "border-solid border-border",
+          (docError ?? requiredError) && "border-destructive",
+        )}
+      >
+        {showPreview ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={doc.previewUrl ?? undefined}
+            alt={label}
+            className="size-full object-cover"
+            onError={(e) => {
+              // HEIC previews aren't renderable in most browsers — hide gracefully;
+              // the status row below still confirms the upload state.
+              (e.target as HTMLImageElement).style.display = "none";
+            }}
+          />
+        ) : (
+          <span className="flex flex-col items-center gap-2 px-4 text-center text-sm text-muted-foreground">
+            <ImagePlus className="size-8 opacity-70" />
+            <span className="font-medium">{t("kyc.uploadPlaceholder")}</span>
+            <span className="text-xs opacity-75">{t("kyc.uploadHint")}</span>
+          </span>
+        )}
+      </label>
+      <input
         id={`${kind}File`}
         type="file"
         accept="image/jpeg,image/png,image/heic"
         onChange={(e) => onSelect(kind, e.target.files?.[0] ?? null)}
-        className="mt-1.5"
+        className="sr-only"
         aria-invalid={!!(docError ?? requiredError)}
       />
       {doc.uploading && (
@@ -353,19 +388,8 @@ function DocField({
       {doc.objectKey && !doc.uploading && (
         <p className="mt-1.5 flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
           <CheckCircle2 className="size-3.5" /> {t("kyc.uploaded")}
+          <span className="text-muted-foreground">· {t("kyc.changePhoto")}</span>
         </p>
-      )}
-      {doc.previewUrl && !doc.error && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={doc.previewUrl}
-          alt=""
-          className="mt-2 h-24 w-full rounded-md border border-border object-cover"
-          onError={(e) => {
-            // HEIC previews aren't renderable in most browsers — hide gracefully.
-            (e.target as HTMLImageElement).style.display = "none";
-          }}
-        />
       )}
       <FieldError message={docError ?? requiredError} />
     </div>

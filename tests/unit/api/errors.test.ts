@@ -6,6 +6,8 @@ import {
   isEmailNotVerified,
   isAccountSuspended,
   getRateLimitSeconds,
+  isInvalidCredentials,
+  hasErrorCode,
 } from "@/lib/api/errors";
 
 describe("errors helpers", () => {
@@ -28,6 +30,18 @@ describe("errors helpers", () => {
 
     test("getRateLimitSeconds returns seconds from a 429 ApiError", () => {
       expect(getRateLimitSeconds(new ApiError(429, "TOO_MANY_ATTEMPTS", "x", undefined, 42))).toBe(42);
+    });
+
+    test("isInvalidCredentials matches 401 INVALID_CREDENTIALS only", () => {
+      expect(isInvalidCredentials(new ApiError(401, "INVALID_CREDENTIALS", "x"))).toBe(true);
+      expect(isInvalidCredentials(new ApiError(401, "UNAUTHORIZED", "x"))).toBe(false);
+      expect(isInvalidCredentials(new ApiError(400, "INVALID_CREDENTIALS", "x"))).toBe(false);
+    });
+
+    test("hasErrorCode matches the code regardless of status", () => {
+      expect(hasErrorCode(new ApiError(400, "PASSWORD_MISMATCH", "x"), "PASSWORD_MISMATCH")).toBe(true);
+      expect(hasErrorCode(new ApiError(400, "WEAK_PASSWORD", "x"), "PASSWORD_MISMATCH")).toBe(false);
+      expect(hasErrorCode(new Error("x"), "WEAK_PASSWORD")).toBe(false);
     });
   });
 

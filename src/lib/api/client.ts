@@ -63,6 +63,11 @@ export interface ApiFetchOptions extends Omit<RequestInit, "body"> {
   body?: unknown;
   // Send without an Authorization header (e.g. login / register / verify-email).
   skipAuth?: boolean;
+  // Suppress the global 401 → logout+redirect handler for this call. Use when a
+  // 401 is an expected in-form outcome rather than an expired session — e.g.
+  // change-password's 401 INVALID_CREDENTIALS (wrong current password, auth.yaml
+  // changePasswordV2): the user stays logged in and we surface an inline error.
+  skipUnauthorizedHandler?: boolean;
 }
 
 function parseRetryAfter(header: string | null, details: unknown): number | null {
@@ -79,7 +84,7 @@ function parseRetryAfter(header: string | null, details: unknown): number | null
 }
 
 export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
-  const { body, headers, skipAuth, ...rest } = options;
+  const { body, headers, skipAuth, skipUnauthorizedHandler, ...rest } = options;
   const finalHeaders = new Headers(headers);
   if (body !== undefined && !finalHeaders.has("Content-Type")) {
     finalHeaders.set("Content-Type", "application/json");
@@ -95,7 +100,7 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 
-  if (response.status === 401) {
+  if (response.status === 401 && !skipUnauthorizedHandler) {
     bindings.onUnauthorized();
   }
 

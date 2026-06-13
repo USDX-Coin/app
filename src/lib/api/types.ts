@@ -33,6 +33,15 @@ export interface ResetPasswordRequest {
   confirmNewPassword: string;
 }
 
+// changePasswordV2 (auth.yaml, USDX-172) — in-app password change for a logged-in
+// user. bearerAuth, unlike the public reset-password flow. Field naming mirrors
+// ResetPasswordRequest so validators/error mapping stay shared.
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+  confirmNewPassword: string;
+}
+
 // ── KYC (openapi kyc.yaml — consumer) ──────────────────────────────────────
 export type IdentityType = "KTP" | "DRIVER_LICENSE";
 

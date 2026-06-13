@@ -12,6 +12,7 @@ import type {
   ResendVerificationRequest,
   ForgotPasswordRequest,
   ResetPasswordRequest,
+  ChangePasswordRequest,
 } from "./types";
 import {
   mockLogin,
@@ -20,6 +21,7 @@ import {
   mockResendVerification,
   mockForgotPassword,
   mockResetPassword,
+  mockChangePassword,
   mockGetMe,
   mockLogout,
 } from "./mock-api";
@@ -98,6 +100,20 @@ export async function resetPassword(req: ResetPasswordRequest): Promise<AuthResp
 export async function getMe(): Promise<User> {
   if (env.useMock) return mockGetMe();
   return apiFetch<User>("/api/v2/auth/me", { method: "GET" });
+}
+
+// In-app password change for a logged-in user (auth.yaml § changePasswordV2,
+// USDX-172). bearerAuth. On success the backend revokes other sessions but keeps
+// the current one — no re-login. `skipUnauthorizedHandler` keeps a 401
+// INVALID_CREDENTIALS (wrong current password) an inline error instead of a
+// global logout (the session is still valid).
+export async function changePassword(req: ChangePasswordRequest): Promise<void> {
+  if (env.useMock) return mockChangePassword(req);
+  await apiFetch<void>("/api/v2/auth/change-password", {
+    method: "POST",
+    body: req,
+    skipUnauthorizedHandler: true,
+  });
 }
 
 // Revoke the current Better Auth session (auth.yaml § logoutV2, USDX-166).

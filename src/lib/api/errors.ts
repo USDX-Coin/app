@@ -31,3 +31,16 @@ export function getRateLimitSeconds(error: unknown): number | null {
   if (isApiError(error) && error.status === 429) return error.retryAfterSeconds ?? 0;
   return null;
 }
+
+// 401 INVALID_CREDENTIALS — generic "wrong password" (auth.yaml login /
+// changePasswordV2). For change-password this is the wrong *current* password,
+// surfaced inline rather than treated as an expired session.
+export function isInvalidCredentials(error: unknown): boolean {
+  return isApiError(error) && error.status === 401 && error.code === "INVALID_CREDENTIALS";
+}
+
+// Narrow to a specific SoT error code (e.g. PASSWORD_MISMATCH, WEAK_PASSWORD)
+// regardless of status, so call sites can route 400s to the right field.
+export function hasErrorCode(error: unknown, code: string): boolean {
+  return isApiError(error) && error.code === code;
+}

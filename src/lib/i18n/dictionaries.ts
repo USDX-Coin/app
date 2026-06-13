@@ -301,6 +301,23 @@ const en: Dict = {
   "kyc.submitting": "Submitting...",
   "kyc.submitted": "KYC submitted — we'll review your documents shortly.",
   "kyc.failed": "Could not submit KYC",
+  // profile — security (USDX-173)
+  "profile.security.title": "Security",
+  "profile.security.password": "Password",
+  "profile.security.passwordDesc": "Keep your account secure with a strong password.",
+  "profile.security.changePassword": "Change Password",
+  // profile — change password modal
+  "profile.changePassword.title": "Change Password",
+  "profile.changePassword.description": "Enter your current password and choose a new one.",
+  "profile.changePassword.current": "Current password",
+  "profile.changePassword.new": "New password",
+  "profile.changePassword.confirm": "Confirm new password",
+  "profile.changePassword.currentRequired": "Current password is required",
+  "profile.changePassword.currentWrong": "Current password is incorrect",
+  "profile.changePassword.submit": "Update Password",
+  "profile.changePassword.submitting": "Updating...",
+  "profile.changePassword.success": "Password updated successfully",
+  "profile.changePassword.failed": "Could not change password",
 };
 
 const id: Dict = {
@@ -591,6 +608,23 @@ const id: Dict = {
   "kyc.submitting": "Mengirim...",
   "kyc.submitted": "KYC terkirim — dokumen Anda akan segera kami tinjau.",
   "kyc.failed": "Gagal mengirim KYC",
+  // profile — security (USDX-173)
+  "profile.security.title": "Keamanan",
+  "profile.security.password": "Password",
+  "profile.security.passwordDesc": "Jaga keamanan akun Anda dengan password yang kuat.",
+  "profile.security.changePassword": "Ganti Password",
+  // profile — change password modal
+  "profile.changePassword.title": "Ganti Password",
+  "profile.changePassword.description": "Masukkan password lama Anda dan pilih password baru.",
+  "profile.changePassword.current": "Password lama",
+  "profile.changePassword.new": "Password baru",
+  "profile.changePassword.confirm": "Konfirmasi password baru",
+  "profile.changePassword.currentRequired": "Password lama wajib diisi",
+  "profile.changePassword.currentWrong": "Password lama salah",
+  "profile.changePassword.submit": "Ubah Password",
+  "profile.changePassword.submitting": "Mengubah...",
+  "profile.changePassword.success": "Password berhasil diubah",
+  "profile.changePassword.failed": "Gagal mengubah password",
 };
 
 export const dictionaries: Record<Lang, Dict> = { id, en };

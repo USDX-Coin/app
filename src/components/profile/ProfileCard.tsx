@@ -1,12 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import { useAuthStore } from "@/stores/authStore";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ChangePasswordModal } from "@/components/profile/ChangePasswordModal";
+import { useLang } from "@/providers/LanguageProvider";
 import { formatDate } from "@/lib/utils";
 import { ShieldCheck, Mail, User, Calendar, Wallet, Bell, Lock } from "lucide-react";
 
 export function ProfileCard() {
   const user = useAuthStore((s) => s.user);
+  const { t } = useLang();
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
@@ -62,31 +68,35 @@ export function ProfileCard() {
         </div>
       </div>
 
-      {/* Security */}
+      {/* Security — only real, implemented controls (USDX-173). 2FA / Last Login /
+          Login Notifications were hardcoded mock claims with no backing feature and
+          were removed; they can return when they ship in the SoT roadmap. */}
       <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
         <h2 className="text-base font-semibold mb-4 flex items-center gap-2">
           <Lock className="h-4 w-4" />
-          Security
+          {t("profile.security.title")}
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="flex items-center justify-between gap-4">
           <div>
-            <p className="text-xs text-muted-foreground">Two-Factor Authentication</p>
-            <p className="text-sm font-medium text-green-600">Enabled (Authenticator App)</p>
+            <p className="text-sm font-medium">{t("profile.security.password")}</p>
+            <p className="text-xs text-muted-foreground">
+              {t("profile.security.passwordDesc")}
+            </p>
           </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Last Login</p>
-            <p className="text-sm font-medium">Today at 10:30 AM</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Password</p>
-            <p className="text-sm font-medium">Last changed 30 days ago</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Login Notifications</p>
-            <p className="text-sm font-medium">Email alerts enabled</p>
-          </div>
+          <Button
+            variant="outline"
+            className="shrink-0"
+            onClick={() => setChangePasswordOpen(true)}
+          >
+            {t("profile.security.changePassword")}
+          </Button>
         </div>
       </div>
+
+      <ChangePasswordModal
+        open={changePasswordOpen}
+        onOpenChange={setChangePasswordOpen}
+      />
 
       {/* Preferences */}
       <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">

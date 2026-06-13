@@ -6,6 +6,8 @@ import { useQuery } from "@tanstack/react-query";
 import { getMyKycStatus } from "@/lib/api/kyc-api";
 import { KYC_STATUS_KEY } from "@/hooks/useKyc";
 import { useSession } from "@/hooks/useSession";
+import { useVerifiedBannerVisibility } from "@/hooks/useVerifiedBannerVisibility";
+import { useAuthStore } from "@/stores/authStore";
 import { useLang } from "@/providers/LanguageProvider";
 import { cn } from "@/lib/utils";
 import type { KycStatus } from "@/types";
@@ -17,6 +19,7 @@ import type { KycStatus } from "@/types";
 export function KycStatusSection() {
   const { t } = useLang();
   useSession();
+  const userId = useAuthStore((s) => s.user?.id) ?? null;
 
   const statusQuery = useQuery({
     queryKey: KYC_STATUS_KEY,
@@ -25,8 +28,16 @@ export function KycStatusSection() {
     retry: false,
   });
 
+  // VERIFIED banner is transient + once-per-user (USDX-175); the other states
+  // stay permanent. Hook is called unconditionally, gated by `enabled`.
+  const verifiedVisible = useVerifiedBannerVisibility(
+    statusQuery.data?.status === "VERIFIED",
+    userId,
+  );
+
   if (!statusQuery.data) return null;
   const status: KycStatus = statusQuery.data.status;
+  if (status === "VERIFIED" && !verifiedVisible) return null;
 
   const styles: Record<KycStatus, string> = {
     UNVERIFIED:

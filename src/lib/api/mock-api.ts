@@ -3,6 +3,7 @@ import type {
   RegisterRequest,
   VerifyEmailRequest,
   ResetPasswordRequest,
+  ChangePasswordRequest,
   SubmitKycRequest,
   PresignedUploadRequest,
   PresignedUploadResult,
@@ -22,6 +23,7 @@ import type {
   User,
 } from "@/types";
 import { ApiError } from "./client";
+import { validatePassword } from "@/lib/validations";
 
 // Simulated delay
 function delay(ms = 500): Promise<void> {
@@ -194,6 +196,28 @@ export async function mockResetPassword(req: ResetPasswordRequest): Promise<Auth
   account.user.emailVerifiedAt = account.user.emailVerifiedAt ?? new Date().toISOString();
   currentEmail = account.user.email;
   return { user: account.user, token: tokenFor(account.user) };
+}
+
+// Mock change-password (auth.yaml § changePasswordV2, USDX-172). Verifies the
+// current password against the account's stored secret, then mutates it so a
+// follow-up login with the new password works offline. Storage-seeded sessions
+// (Playwright loginViaStorage) have no in-memory `currentEmail`, so we fall back
+// to the demo account — its password (Demo1234) is what the AC tests against.
+export async function mockChangePassword(req: ChangePasswordRequest): Promise<void> {
+  await delay();
+  maybeThrowRateLimitOverride("TOO_MANY_ATTEMPTS");
+  const account = currentAccount() ?? accounts.get("demo@usdx.com")!;
+  if (account.password !== req.currentPassword) {
+    throw new ApiError(401, "INVALID_CREDENTIALS", "Current password is incorrect");
+  }
+  // Client validates first; these mirror the backend so the fallback path is real.
+  if (validatePassword(req.newPassword) !== null) {
+    throw new ApiError(400, "WEAK_PASSWORD", "Password does not meet the policy");
+  }
+  if (req.newPassword !== req.confirmNewPassword) {
+    throw new ApiError(400, "PASSWORD_MISMATCH", "Passwords do not match");
+  }
+  account.password = req.newPassword;
 }
 
 export async function mockLogout(): Promise<void> {

@@ -10,6 +10,7 @@ import type {
   ForgotPasswordRequest,
   ResendVerificationRequest,
   ResetPasswordRequest,
+  ChangePasswordRequest,
   VerifyEmailRequest,
 } from "@/lib/api/types";
 
@@ -60,6 +61,13 @@ export function useAuth() {
     },
   });
 
+  // In-app password change (USDX-173). No navigation/re-login on success — the
+  // current session stays valid (BE keeps it, revoking other devices). The modal
+  // owns the success toast + inline error mapping, so this is a bare mutation.
+  const changePasswordMutation = useMutation({
+    mutationFn: (req: ChangePasswordRequest) => authApi.changePassword(req),
+  });
+
   function logout() {
     storeLogout();
     router.push("/login");
@@ -74,6 +82,7 @@ export function useAuth() {
     resendVerification: resendVerificationMutation.mutateAsync,
     forgotPassword: forgotPasswordMutation.mutateAsync,
     resetPassword: resetPasswordMutation.mutateAsync,
+    changePassword: changePasswordMutation.mutateAsync,
     logout,
     loginLoading: loginMutation.isPending,
     registerLoading: registerMutation.isPending,
@@ -81,6 +90,7 @@ export function useAuth() {
     resendVerificationLoading: resendVerificationMutation.isPending,
     forgotPasswordLoading: forgotPasswordMutation.isPending,
     resetPasswordLoading: resetPasswordMutation.isPending,
+    changePasswordLoading: changePasswordMutation.isPending,
     loginError: loginMutation.error,
     registerError: registerMutation.error,
     verifyEmailError: verifyEmailMutation.error,

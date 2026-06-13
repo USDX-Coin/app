@@ -5,7 +5,7 @@ vi.mock("@/lib/env", () => ({
   env: { apiBaseUrl: "", useMock: false },
 }));
 
-import { logout } from "@/lib/api/auth-api";
+import { logout, changePassword } from "@/lib/api/auth-api";
 import { configureApiClient } from "@/lib/api/client";
 
 function jsonResponse(status: number, payload: unknown): Response {
@@ -68,6 +68,46 @@ describe("logout", () => {
       fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
 
       await expect(logout().catch(() => "swallowed")).resolves.toBe("swallowed");
+    });
+  });
+});
+
+describe("changePassword", () => {
+  const body = {
+    currentPassword: "Demo1234",
+    newPassword: "NewPass1",
+    confirmNewPassword: "NewPass1",
+  };
+
+  describe("positive", () => {
+    test("POSTs /api/v2/auth/change-password with the bearer token + body", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse(200, { status: "success" }));
+
+      await expect(changePassword(body)).resolves.toBeUndefined();
+
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe("/api/v2/auth/change-password");
+      expect(init.method).toBe("POST");
+      expect((init.headers as Headers).get("Authorization")).toBe("Bearer session-token");
+      expect(JSON.parse(init.body)).toEqual(body);
+    });
+  });
+
+  describe("negative", () => {
+    test("401 INVALID_CREDENTIALS rejects WITHOUT firing the global logout handler", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(401, {
+          status: "error",
+          error: { code: "INVALID_CREDENTIALS", message: "Current password is incorrect" },
+        }),
+      );
+
+      await expect(changePassword(body)).rejects.toMatchObject({
+        status: 401,
+        code: "INVALID_CREDENTIALS",
+      });
+      // skipUnauthorizedHandler — the session is still valid, so no logout/redirect.
+      expect(onUnauthorized).not.toHaveBeenCalled();
     });
   });
 });

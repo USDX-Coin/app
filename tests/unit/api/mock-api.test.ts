@@ -2,6 +2,7 @@ import { describe, test, expect } from "vitest";
 import {
   mockLogin,
   mockRegister,
+  mockChangePassword,
   mockGetTransactions,
   mockCreateMint,
   mockCreateRedeem,
@@ -182,6 +183,79 @@ describe("mockGetWalletBalance", () => {
     test("returns consistent balance", async () => {
       const balance = await mockGetWalletBalance();
       expect(balance).toBe(5000);
+    });
+  });
+});
+
+describe("mockChangePassword", () => {
+  describe("positive", () => {
+    test("changes the password when current is correct; new password then logs in", async () => {
+      await expect(
+        mockChangePassword({
+          currentPassword: "Demo1234",
+          newPassword: "NewPass1",
+          confirmNewPassword: "NewPass1",
+        }),
+      ).resolves.toBeUndefined();
+
+      const result = await mockLogin({ email: "demo@usdx.com", password: "NewPass1" });
+      expect(result.user.email).toBe("demo@usdx.com");
+
+      // Restore the demo secret so other suites keep working (module-scope state).
+      await mockChangePassword({
+        currentPassword: "NewPass1",
+        newPassword: "Demo1234",
+        confirmNewPassword: "Demo1234",
+      });
+    });
+  });
+
+  describe("negative", () => {
+    test("throws 401 INVALID_CREDENTIALS for a wrong current password", async () => {
+      await expect(
+        mockChangePassword({
+          currentPassword: "WrongPass1",
+          newPassword: "NewPass1",
+          confirmNewPassword: "NewPass1",
+        }),
+      ).rejects.toMatchObject({ status: 401, code: "INVALID_CREDENTIALS" });
+    });
+
+    test("throws 400 WEAK_PASSWORD for a new password below policy", async () => {
+      await expect(
+        mockChangePassword({
+          currentPassword: "Demo1234",
+          newPassword: "weak",
+          confirmNewPassword: "weak",
+        }),
+      ).rejects.toMatchObject({ status: 400, code: "WEAK_PASSWORD" });
+    });
+
+    test("throws 400 PASSWORD_MISMATCH when confirmation differs", async () => {
+      await expect(
+        mockChangePassword({
+          currentPassword: "Demo1234",
+          newPassword: "NewPass1",
+          confirmNewPassword: "NewPass2",
+        }),
+      ).rejects.toMatchObject({ status: 400, code: "PASSWORD_MISMATCH" });
+    });
+  });
+
+  describe("edge cases", () => {
+    test("honors the usdx-mock-retry-after 429 seam (USDX-167)", async () => {
+      localStorage.setItem("usdx-mock-retry-after", "300");
+      try {
+        await expect(
+          mockChangePassword({
+            currentPassword: "Demo1234",
+            newPassword: "NewPass1",
+            confirmNewPassword: "NewPass1",
+          }),
+        ).rejects.toMatchObject({ status: 429, retryAfterSeconds: 300 });
+      } finally {
+        localStorage.removeItem("usdx-mock-retry-after");
+      }
     });
   });
 });

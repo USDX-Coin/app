@@ -7,27 +7,29 @@ import { Button } from "@/components/ui/button";
 import { ChangePasswordModal } from "@/components/profile/ChangePasswordModal";
 import { useLang } from "@/providers/LanguageProvider";
 import { formatDate } from "@/lib/utils";
-import { ShieldCheck, Mail, User, Calendar, Wallet, Bell, Lock } from "lucide-react";
+import { ShieldCheck, Mail, User, Calendar, BadgeCheck, Bell, Lock } from "lucide-react";
 
 export function ProfileCard() {
   const user = useAuthStore((s) => s.user);
   const { t } = useLang();
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
+  const kycLabel = t(`profile.kyc.${user?.kycStatus ?? "UNVERIFIED"}`);
+
   return (
     <div className="max-w-3xl mx-auto space-y-4">
-      <h1 className="text-2xl font-bold text-primary">Profile</h1>
+      <h1 className="text-2xl font-bold text-primary">{t("profile.title")}</h1>
 
       {/* Personal Information */}
       <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold">Personal Information</h2>
+          <h2 className="text-base font-semibold">{t("profile.personalInfo")}</h2>
           <Badge
             variant="secondary"
             className="bg-primary/10 text-primary flex items-center gap-1"
           >
             <ShieldCheck className="h-3.5 w-3.5" />
-            {user?.kycStatus === "VERIFIED" ? "Verified" : "Pending"}
+            {kycLabel}
           </Badge>
         </div>
 
@@ -35,7 +37,7 @@ export function ProfileCard() {
           <div className="flex items-start gap-3">
             <User className="h-4 w-4 text-muted-foreground mt-0.5" />
             <div>
-              <p className="text-xs text-muted-foreground">Full Name</p>
+              <p className="text-xs text-muted-foreground">{t("profile.fullName")}</p>
               <p className="text-sm font-medium">{user?.name ?? "-"}</p>
             </div>
           </div>
@@ -43,7 +45,7 @@ export function ProfileCard() {
           <div className="flex items-start gap-3">
             <Mail className="h-4 w-4 text-muted-foreground mt-0.5" />
             <div>
-              <p className="text-xs text-muted-foreground">Email</p>
+              <p className="text-xs text-muted-foreground">{t("profile.email")}</p>
               <p className="text-sm font-medium">{user?.email ?? "-"}</p>
             </div>
           </div>
@@ -51,7 +53,7 @@ export function ProfileCard() {
           <div className="flex items-start gap-3">
             <Calendar className="h-4 w-4 text-muted-foreground mt-0.5" />
             <div>
-              <p className="text-xs text-muted-foreground">Member Since</p>
+              <p className="text-xs text-muted-foreground">{t("profile.memberSince")}</p>
               <p className="text-sm font-medium">
                 {user?.createdAt ? formatDate(user.createdAt) : "-"}
               </p>
@@ -59,10 +61,10 @@ export function ProfileCard() {
           </div>
 
           <div className="flex items-start gap-3">
-            <Wallet className="h-4 w-4 text-muted-foreground mt-0.5" />
+            <BadgeCheck className="h-4 w-4 text-muted-foreground mt-0.5" />
             <div>
-              <p className="text-xs text-muted-foreground">KYC Level</p>
-              <p className="text-sm font-medium">Level 2 — Enhanced</p>
+              <p className="text-xs text-muted-foreground">{t("profile.kycLevel")}</p>
+              <p className="text-sm font-medium">{kycLabel}</p>
             </div>
           </div>
         </div>

@@ -50,6 +50,14 @@ export async function forceEnglish(page: Page) {
   await page.addInitScript(() => localStorage.setItem("usdx-lang", "en"));
 }
 
+/**
+ * Force the Indonesian locale before any page script runs, so specs can assert
+ * the translated strings. Call before the first page.goto().
+ */
+export async function forceIndonesian(page: Page) {
+  await page.addInitScript(() => localStorage.setItem("usdx-lang", "id"));
+}
+
 export async function clearAuth(page: Page) {
   await page.evaluate(() => localStorage.removeItem("usdx-auth"));
 }

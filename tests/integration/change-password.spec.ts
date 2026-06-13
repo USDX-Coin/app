@@ -6,10 +6,10 @@ import {
   VIEWPORTS,
 } from "../helpers/playwright-utils";
 
-async function gotoProfile(page: Page) {
+async function gotoProfile(page: Page, heading = "Profile") {
   await loginViaStorage(page);
   await page.goto("/profile");
-  await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible({
+  await expect(page.getByRole("heading", { name: heading })).toBeVisible({
     timeout: 15000,
   });
 }
@@ -134,7 +134,7 @@ test.describe("Change Password (English)", () => {
 test.describe("Change Password (Indonesian)", () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem("usdx-lang", "id"));
-    await gotoProfile(page);
+    await gotoProfile(page, "Profil");
   });
 
   test("renders Indonesian strings for the trigger and modal", async ({ page }) => {

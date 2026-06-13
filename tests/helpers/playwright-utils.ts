@@ -83,6 +83,18 @@ export async function seedRetryAfter(page: Page, seconds: number) {
   );
 }
 
+/**
+ * Shorten the transient VERIFIED banner TTL (USDX-175 seam
+ * usdx-mock-banner-ttl) so specs can assert auto-hide without waiting the full
+ * 5s. Call before the first page.goto().
+ */
+export async function seedBannerTtl(page: Page, ms: number) {
+  await page.addInitScript(
+    (v) => localStorage.setItem("usdx-mock-banner-ttl", v),
+    String(ms),
+  );
+}
+
 /** Tiny valid PNG for upload tests (file-type/size validation is client-side). */
 export const TEST_PNG = {
   name: "photo.png",

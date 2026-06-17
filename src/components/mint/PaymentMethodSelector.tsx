@@ -4,17 +4,27 @@
 // per-method "Biaya layanan" (pgFeeIdr) and a grand total. VA requires a bank
 // before paying. On confirm → POST /v2/mint/{id}/pay. pgFee may be "—" when the
 // fee is unknown (refresh without channels[] from GET — see useCheckout).
+// Each channel/bank is rendered as a branded chip (icon + brand colour) instead
+// of a plain box so the picker is easier to scan.
 
 import { useState } from "react";
+import { Landmark, QrCode } from "lucide-react";
 import type { MintChannelOption, PaymentChannel, VaBank } from "@/types";
-import { formatIDR } from "@/lib/utils";
-import { cn } from "@/lib/utils";
+import { BANK_BRAND, QRIS_RED } from "@/lib/constants";
+import { formatIDR, cn } from "@/lib/utils";
 import { useLang } from "@/providers/LanguageProvider";
 
 function feeLabel(pgFeeIdr: string): string {
   if (!pgFeeIdr) return "—";
   const n = Number(pgFeeIdr);
   return Number.isFinite(n) ? formatIDR(n) : "—";
+}
+
+// Brand badge + subtitle for each channel header.
+function channelMeta(channel: PaymentChannel) {
+  return channel === "QRIS"
+    ? { Icon: QrCode, badgeBg: QRIS_RED, subtitleKey: "checkout.qrisSubtitle" as const }
+    : { Icon: Landmark, badgeBg: "#1f2a44", subtitleKey: "checkout.vaSubtitle" as const };
 }
 
 interface PaymentMethodSelectorProps {
@@ -51,13 +61,17 @@ export function PaymentMethodSelector({
     <div className="flex flex-col gap-3">
       <p className="text-sm font-medium text-foreground">{t("checkout.choosePayment")}</p>
 
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2.5">
         {channels.map((opt) => {
           const active = channel === opt.channel;
+          const { Icon, badgeBg, subtitleKey } = channelMeta(opt.channel);
           return (
             <div
               key={opt.channel}
-              className={cn("rounded-lg border", active ? "border-primary" : "border-border")}
+              className={cn(
+                "overflow-hidden rounded-xl border transition-colors",
+                active ? "border-primary bg-primary/[0.03]" : "border-border",
+              )}
             >
               <button
                 type="button"
@@ -65,32 +79,77 @@ export function PaymentMethodSelector({
                   setChannel(opt.channel);
                   setBank(null);
                 }}
-                className="flex w-full items-center justify-between gap-2 p-3 text-left"
+                className="flex w-full items-center gap-3 p-3 text-left"
               >
-                <span className="text-sm font-medium text-foreground">
-                  {opt.channel === "VA" ? t("checkout.va") : t("checkout.qris")}
+                <span
+                  className="flex size-10 shrink-0 items-center justify-center rounded-lg"
+                  style={{ backgroundColor: badgeBg }}
+                >
+                  <Icon className="size-5 text-white" />
                 </span>
-                <span className="text-xs text-muted-foreground">
-                  {t("checkout.serviceFee")} {feeLabel(opt.pgFeeIdr)}
+                <span className="flex min-w-0 flex-col">
+                  <span className="text-sm font-semibold text-foreground">
+                    {opt.channel === "VA" ? t("checkout.va") : t("checkout.qris")}
+                  </span>
+                  <span className="truncate text-xs text-muted-foreground">{t(subtitleKey)}</span>
+                </span>
+                <span className="ml-auto shrink-0 text-right">
+                  <span className="block text-[11px] text-muted-foreground">
+                    {t("checkout.serviceFee")}
+                  </span>
+                  <span className="block text-xs font-medium text-foreground">
+                    {feeLabel(opt.pgFeeIdr)}
+                  </span>
                 </span>
               </button>
+
               {active && opt.channel === "VA" && opt.banks && (
-                <div className="grid grid-cols-3 gap-1.5 border-t border-border p-3">
-                  {opt.banks.map((b) => (
-                    <button
-                      key={b}
-                      type="button"
-                      onClick={() => setBank(b)}
-                      className={cn(
-                        "rounded-md border px-2 py-1.5 text-xs font-medium transition-colors",
-                        bank === b
-                          ? "border-primary bg-primary/5 text-foreground"
-                          : "border-border text-muted-foreground hover:text-foreground",
-                      )}
-                    >
-                      {b}
-                    </button>
-                  ))}
+                <div className="grid grid-cols-3 gap-2 border-t border-border bg-muted/40 p-3">
+                  {opt.banks.map((b) => {
+                    const brand = BANK_BRAND[b];
+                    const isSel = bank === b;
+                    return (
+                      <button
+                        key={b}
+                        type="button"
+                        onClick={() => setBank(b)}
+                        aria-pressed={isSel}
+                        aria-label={b}
+                        className={cn(
+                          "flex h-16 flex-col items-center justify-center gap-1.5 rounded-lg border bg-card p-2.5 transition-colors",
+                          isSel
+                            ? "border-primary ring-1 ring-primary"
+                            : "border-border hover:border-primary/40",
+                        )}
+                      >
+                        {brand.logo ? (
+                          // With a real logo: show the logo only (no label, no inner
+                          // border) so the tile reads as just the bank mark.
+                          <span className="flex h-9 w-full items-center justify-center rounded-md bg-white px-2">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={brand.logo}
+                              alt={b}
+                              className="max-h-6 w-auto max-w-full object-contain"
+                            />
+                          </span>
+                        ) : (
+                          // Fallback (no logo asset, e.g. INA): wordmark badge + name.
+                          <>
+                            <span className="flex h-9 w-full items-center justify-center rounded-md border border-border bg-white px-2">
+                              <span
+                                className="text-[11px] font-extrabold tracking-tight"
+                                style={{ color: brand.bg }}
+                              >
+                                {brand.mark}
+                              </span>
+                            </span>
+                            <span className="text-[11px] font-medium text-foreground">{b}</span>
+                          </>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>

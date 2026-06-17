@@ -8,7 +8,7 @@
 
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useMint } from "@/hooks/useMint";
-import { formatAmount, truncateAddress } from "@/lib/utils";
+import { formatAmount, formatIDR, truncateAddress } from "@/lib/utils";
 import { useLang } from "@/providers/LanguageProvider";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -31,6 +31,7 @@ export function MintReview({ open, onOpenChange }: MintReviewProps) {
     selectedChain,
     destinationAddress,
     amountUsdx,
+    subtotalIdr,
     effectiveBuyRate,
     submitMint,
     isCreating,
@@ -49,8 +50,9 @@ export function MintReview({ open, onOpenChange }: MintReviewProps) {
         <DialogTitle className="text-base font-medium text-foreground">{t("sum.title")}</DialogTitle>
 
         <div className="mt-2 flex flex-col gap-3">
-          <Row label={t("sum.youWillMint")}>
-            <img src="/image/usdx-logo.png" alt="" className="size-5 rounded-full" /> USDX
+          <Row label={t("sum.mintAmount")}>
+            <img src="/image/usdx-logo.png" alt="" className="size-5 rounded-full" />
+            {formatAmount(amountUsdx)} USDX
           </Row>
           <Row label={t("sum.network")}>
             {selectedChain && <img src={selectedChain.icon} alt="" className="size-4 rounded-sm" />}
@@ -60,12 +62,14 @@ export function MintReview({ open, onOpenChange }: MintReviewProps) {
           <Row label={t("sum.exchangeRate")}>
             1 USDX ≈ {effectiveBuyRate ? formatAmount(effectiveBuyRate) : "—"} IDR
           </Row>
-          <Row label={t("sum.amount")}>{formatAmount(amountUsdx)} USDX</Row>
         </div>
 
-        <div className="mt-1 flex items-center justify-between border-t border-border pt-3">
-          <span className="text-sm font-medium text-foreground">{t("sum.receiveAmount")}</span>
-          <span className="text-sm font-semibold text-foreground">{formatAmount(amountUsdx)} USDX</span>
+        <div className="mt-1 flex flex-col gap-1 border-t border-border pt-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-foreground">{t("checkout.totalPayment")}</span>
+            <span className="text-sm font-semibold text-foreground">≈ {formatIDR(subtotalIdr)}</span>
+          </div>
+          <p className="text-xs text-muted-foreground">{t("sum.feeNote")}</p>
         </div>
 
         <div className="mt-2 rounded-lg bg-[#eef4fb] p-3 text-sm text-foreground dark:bg-[#13243d]">

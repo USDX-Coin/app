@@ -7,13 +7,13 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { Copy, Loader2 } from "lucide-react";
+import { Copy, Loader2, QrCode } from "lucide-react";
 import { toast } from "sonner";
 import { useCheckout } from "@/hooks/useCheckout";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PaymentMethodSelector } from "@/components/mint/PaymentMethodSelector";
 import { MintStatusTracker } from "@/components/mint/MintStatusTracker";
-import { VA_BANKS } from "@/lib/constants";
+import { BANK_BRAND, QRIS_RED, VA_BANKS } from "@/lib/constants";
 import { formatIDR, truncateAddress } from "@/lib/utils";
 import { useLang } from "@/providers/LanguageProvider";
 import type { MintChannelOption, MintOrderDetail, VaBank } from "@/types";
@@ -71,12 +71,34 @@ function PaymentInstructions({
   onCopy: (text: string) => void;
 }) {
   const { t } = useLang();
+  const bankBrand = order.paymentBank ? BANK_BRAND[order.paymentBank] : null;
   return (
     <div className="flex flex-col gap-2">
       <p className="text-sm font-medium text-foreground">{t("checkout.payInstruction")}</p>
       {order.paymentChannel === "VA" ? (
         <>
-          {order.paymentBank && <Row label={t("checkout.va")}>{order.paymentBank}</Row>}
+          {order.paymentBank && bankBrand && (
+            <Row label={t("checkout.va")}>
+              {bankBrand.logo ? (
+                <span className="flex h-6 items-center justify-center rounded bg-white px-1.5">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={bankBrand.logo}
+                    alt={order.paymentBank}
+                    className="max-h-4 w-auto object-contain"
+                  />
+                </span>
+              ) : (
+                <span
+                  className="flex h-6 w-9 items-center justify-center rounded text-[10px] font-extrabold tracking-tight"
+                  style={{ backgroundColor: bankBrand.bg, color: bankBrand.fg }}
+                >
+                  {bankBrand.mark}
+                </span>
+              )}
+              {order.paymentBank}
+            </Row>
+          )}
           <div className="flex items-center justify-between gap-2 rounded-lg bg-muted p-3">
             <span className="font-mono text-base font-semibold text-foreground">
               {order.virtualAccountNo}
@@ -92,16 +114,31 @@ function PaymentInstructions({
           </div>
         </>
       ) : (
-        <div className="flex flex-col items-center gap-2 rounded-lg bg-muted p-4 text-center">
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-card p-5 text-center">
+          <div className="flex items-center gap-2">
+            <span
+              className="flex size-7 items-center justify-center rounded-md"
+              style={{ backgroundColor: QRIS_RED }}
+            >
+              <QrCode className="size-4 text-white" />
+            </span>
+            <span className="text-sm font-extrabold tracking-tight text-foreground">QRIS</span>
+          </div>
+          <div className="grid size-44 place-items-center rounded-lg border border-border bg-white p-3">
+            <QrCode className="size-full text-[#0f172a]" strokeWidth={1} />
+          </div>
           <span className="text-xs text-muted-foreground">{t("checkout.qrisScan")}</span>
-          <span className="break-all font-mono text-xs text-foreground">{order.paymentUrl}</span>
-          <button
-            type="button"
-            onClick={() => order.paymentUrl && onCopy(order.paymentUrl)}
-            className="text-xs font-medium text-gold underline-offset-2 hover:underline"
-          >
-            {t("checkout.copy")}
-          </button>
+          <div className="flex w-full items-center justify-between gap-2 rounded-lg bg-muted p-2.5">
+            <span className="truncate font-mono text-xs text-foreground">{order.paymentUrl}</span>
+            <button
+              type="button"
+              onClick={() => order.paymentUrl && onCopy(order.paymentUrl)}
+              aria-label={t("checkout.copy")}
+              className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <Copy className="size-4" />
+            </button>
+          </div>
         </div>
       )}
     </div>

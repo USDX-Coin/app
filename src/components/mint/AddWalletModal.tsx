@@ -15,6 +15,7 @@ import { useState } from "react";
 import { ScanLine } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { AddressScannerDialog } from "@/components/mint/AddressScannerDialog";
 import { useAddAddressBook } from "@/hooks/useAddressBook";
 import { validateAddress } from "@/lib/validations";
 import { hasErrorCode } from "@/lib/api/errors";
@@ -33,6 +34,7 @@ export function AddWalletModal({ open, onOpenChange, onAdded }: AddWalletModalPr
   const { t } = useLang();
   const [address, setAddress] = useState("");
   const [label, setLabel] = useState("");
+  const [scanOpen, setScanOpen] = useState(false);
   const addMutation = useAddAddressBook();
 
   // Inline validity (errors only shown once the field has input, like MintForm).
@@ -94,10 +96,14 @@ export function AddWalletModal({ open, onOpenChange, onAdded }: AddWalletModalPr
                 spellCheck={false}
                 className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
               />
-              <ScanLine
-                className="size-4 shrink-0 text-muted-foreground/50"
-                aria-label={t("addrbook.scanSoon")}
-              />
+              <button
+                type="button"
+                onClick={() => setScanOpen(true)}
+                aria-label={t("scan.open")}
+                className="text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <ScanLine className="size-4 shrink-0" />
+              </button>
             </div>
             {addressError && <p className="text-sm text-destructive">{addressError}</p>}
           </div>
@@ -144,6 +150,15 @@ export function AddWalletModal({ open, onOpenChange, onAdded }: AddWalletModalPr
             </button>
           </div>
         </div>
+
+        <AddressScannerDialog
+          open={scanOpen}
+          onOpenChange={setScanOpen}
+          onScanned={(addr) => {
+            setAddress(addr);
+            addMutation.reset();
+          }}
+        />
       </DialogContent>
     </Dialog>
   );

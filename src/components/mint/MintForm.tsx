@@ -8,6 +8,7 @@ import { formatAmount } from "@/lib/utils";
 import { KycGateDialog } from "@/components/kyc/KycGateDialog";
 import { MintReview } from "@/components/mint/MintReview";
 import { AddressBookPicker } from "@/components/mint/AddressBookPicker";
+import { AddressScannerDialog } from "@/components/mint/AddressScannerDialog";
 import { useLang } from "@/providers/LanguageProvider";
 
 const AMOUNT_INPUT_CLASS =
@@ -35,6 +36,7 @@ export function MintForm() {
 
   const [reviewOpen, setReviewOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
   const gate = useKycGate();
 
   const onAmountChange = (value: string) => setAmount(value.replace(/[^0-9.]/g, ""));
@@ -162,11 +164,14 @@ export function MintForm() {
             >
               <BookText className="size-4 shrink-0" />
             </button>
-            {/* QR scan lands with the Add Wallet modal in USDX-203 */}
-            <ScanLine
-              className="size-4 shrink-0 text-muted-foreground/50"
-              aria-label={t("addrbook.scanSoon")}
-            />
+            <button
+              type="button"
+              onClick={() => setScanOpen(true)}
+              aria-label={t("scan.open")}
+              className="text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ScanLine className="size-4 shrink-0" />
+            </button>
           </div>
           {addressError && <p className="text-sm text-destructive">{addressError}</p>}
         </div>
@@ -196,6 +201,12 @@ export function MintForm() {
         open={pickerOpen}
         onOpenChange={setPickerOpen}
         onSelect={setDestinationAddress}
+      />
+
+      <AddressScannerDialog
+        open={scanOpen}
+        onOpenChange={setScanOpen}
+        onScanned={setDestinationAddress}
       />
     </div>
   );

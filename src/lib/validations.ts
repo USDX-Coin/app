@@ -59,6 +59,17 @@ export function validateAddress(address: string): string | null {
   return null;
 }
 
+// Extract a wallet address from a scanned QR payload (USDX-217). Accepts a bare
+// EVM address or an EIP-681 payment URI ("ethereum:0x…[@chainId][/path]?…").
+// Returns a valid checksum-insensitive EVM address, or null if the payload isn't one.
+export function parseScannedAddress(raw: string): string | null {
+  if (!raw) return null;
+  const text = raw.trim();
+  const match = text.match(/^(?:ethereum:)?(?:pay-)?(0x[0-9a-fA-F]{40})\b/);
+  const candidate = match ? match[1] : text;
+  return EVM_ADDRESS_REGEX.test(candidate) ? candidate : null;
+}
+
 export function validateConfirmPassword(
   password: string,
   confirmPassword: string

@@ -6,6 +6,7 @@ import {
   validateAddress,
   validateConfirmPassword,
   validateFullName,
+  parseScannedAddress,
 } from "@/lib/validations";
 
 describe("validateEmail", () => {
@@ -234,6 +235,38 @@ describe("validateFullName", () => {
     });
     test("accepts exactly 2 characters", () => {
       expect(validateFullName("Jo")).toBeNull();
+    });
+  });
+});
+
+describe("parseScannedAddress", () => {
+  const ADDR = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed";
+
+  describe("positive", () => {
+    test("returns a bare EVM address as-is (checksum-insensitive)", () => {
+      expect(parseScannedAddress(ADDR)).toBe(ADDR);
+      expect(parseScannedAddress(ADDR.toLowerCase())).toBe(ADDR.toLowerCase());
+    });
+    test("trims surrounding whitespace", () => {
+      expect(parseScannedAddress(`  ${ADDR}  `)).toBe(ADDR);
+    });
+    test("extracts the address from an EIP-681 ethereum: URI", () => {
+      expect(parseScannedAddress(`ethereum:${ADDR}`)).toBe(ADDR);
+      expect(parseScannedAddress(`ethereum:${ADDR}@1`)).toBe(ADDR);
+      expect(parseScannedAddress(`ethereum:${ADDR}@137/transfer?value=1`)).toBe(ADDR);
+    });
+  });
+
+  describe("negative", () => {
+    test("returns null for empty / non-address payloads", () => {
+      expect(parseScannedAddress("")).toBeNull();
+      expect(parseScannedAddress("https://example.com")).toBeNull();
+      expect(parseScannedAddress("not an address")).toBeNull();
+    });
+    test("returns null for a malformed EVM address", () => {
+      expect(parseScannedAddress("0x123")).toBeNull(); // too short
+      expect(parseScannedAddress(ADDR + "ab")).toBeNull(); // too long
+      expect(parseScannedAddress("0xZZZ" + ADDR.slice(5))).toBeNull(); // non-hex
     });
   });
 });

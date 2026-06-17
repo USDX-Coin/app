@@ -413,6 +413,12 @@ const MOCK_SPREAD_SELL_PCT = 2.0;
 const MOCK_MINT_FEE_PCT = 1; // % of subtotal
 const MOCK_PG_FEE_VA = 4000; // flat IDR
 const MOCK_PG_FEE_QRIS_PCT = 0.7; // % of subtotal
+// Test seam: the real backend pre-checks `isBlackListed(userAddress)` on create
+// and returns 422 RECIPIENT_BLACKLISTED (USDX-192, week2.md § Endpoints Mint).
+// The mock mirrors that for this sentinel so the FE inline-error path (USDX-201)
+// is exercisable offline.
+export const MOCK_BLACKLISTED_ADDRESS = "0x000000000000000000000000000000000000dead";
+const MOCK_MIN_TOTAL_PAY_IDR = 10_000; // Asasta floor (week2.md § Min amount)
 const MOCK_VA_BANKS: VaBank[] = [
   "BCA", "BNI", "BRI", "CIMB", "DANAMON", "INA", "MANDIRI", "PERMATA", "MAYBANK",
 ];
@@ -434,9 +440,28 @@ export async function mockGetConsumerRate(): Promise<ConsumerRate> {
 // In-memory address book (per page load, like the rest of the mock).
 const addressBook = new Map<string, AddressBookEntry>();
 
+// A couple of deterministic saved wallets so the mint "To" picker (USDX-201)
+// isn't empty in mock dev before the user adds any (add flow = USDX-203).
+const SEEDED_ADDRESS_BOOK: AddressBookEntry[] = [
+  {
+    id: "seed_addr_1",
+    address: "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed",
+    label: "Demo Wallet",
+    createdAt: "2026-06-10T08:00:00.000Z",
+  },
+  {
+    id: "seed_addr_2",
+    address: "0xAb5801a7D398351b8bE11C439e05C5B3259aeC9B",
+    label: "Cold Storage",
+    createdAt: "2026-06-09T08:00:00.000Z",
+  },
+];
+
 export async function mockListAddressBook(): Promise<AddressBookEntry[]> {
   await delay(150);
-  return [...addressBook.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return [...addressBook.values(), ...SEEDED_ADDRESS_BOOK].sort((a, b) =>
+    b.createdAt.localeCompare(a.createdAt),
+  );
 }
 
 export async function mockAddAddressBook(req: CreateAddressBookRequest): Promise<AddressBookEntry> {
@@ -482,6 +507,15 @@ export async function mockCreateMintOrder(req: CreateMintOrderRequest): Promise<
   const amountUsdx = req.amountCurrency === "USD" ? Number(req.amount) : Number(req.amount) / rate;
   const subtotalIdr = req.amountCurrency === "IDR" ? Number(req.amount) : amountUsdx * rate;
   const mintFeeIdr = subtotalIdr * (MOCK_MINT_FEE_PCT / 100);
+  // Pre-checks mirroring the real backend (USDX-192): blacklist pre-check +
+  // min total (cheapest channel) floor → 422 before any payment.
+  if (req.userAddress.toLowerCase() === MOCK_BLACKLISTED_ADDRESS) {
+    throw new ApiError(422, "RECIPIENT_BLACKLISTED", "Address tujuan tidak bisa menerima USDX");
+  }
+  const cheapestPgFee = Math.min(MOCK_PG_FEE_VA, subtotalIdr * (MOCK_PG_FEE_QRIS_PCT / 100));
+  if (Math.floor(subtotalIdr + mintFeeIdr + cheapestPgFee) < MOCK_MIN_TOTAL_PAY_IDR) {
+    throw new ApiError(422, "VALIDATION_ERROR", "Total pembayaran minimal Rp10.000");
+  }
   const id = "mint_" + Date.now();
   const nowIso = new Date().toISOString();
   const channels: MintChannelOption[] = [

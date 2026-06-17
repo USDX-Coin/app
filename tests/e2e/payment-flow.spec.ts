@@ -17,11 +17,12 @@ async function login(page: import("@playwright/test").Page) {
   await expect(page.getByText("You will mint")).toBeVisible({ timeout: 30000 });
 }
 
-// The redesign replaced the standalone /payment gateway hop with the in-page
-// confirmation -> status steps ("Proceed Payment" submits the mint order).
+// USDX-201 replaced the in-page confirmation -> status steps with a Ringkasan
+// modal and an own-hosted checkout redirect (/mint/checkout/{id}). "Proceed
+// Payment" creates the order (POST /v2/mint) and lands on checkout.
 test.describe("Payment Flow", () => {
   test.describe("positive", () => {
-    test("mint -> confirmation -> proceed payment -> status -> view history", async ({
+    test("mint -> Ringkasan modal -> proceed payment -> checkout shows the order", async ({
       page,
     }) => {
       await login(page);
@@ -35,18 +36,10 @@ test.describe("Payment Flow", () => {
       await expect(page.getByText("Transaction Summary")).toBeVisible();
       await expect(page.getByText("500 USDX").first()).toBeVisible();
 
-      // Proceed payment -> order submitted
+      // Proceed payment -> order created -> redirected to the checkout page
       await page.getByRole("button", { name: "Proceed Payment" }).click();
-      await expect(page.getByText("Mint Request Submitted")).toBeVisible({
-        timeout: 15000,
-      });
-      await expect(page.getByText(/#MINT_/)).toBeVisible();
-
-      // Jump to transaction history
-      await page.getByRole("button", { name: "View History" }).click();
-      await expect(page.getByText("Transaction History")).toBeVisible({
-        timeout: 15000,
-      });
+      await page.waitForURL(/\/mint\/checkout\//, { timeout: 15000 });
+      await expect(page.getByText(/#USDX-/)).toBeVisible();
     });
   });
 

@@ -8,6 +8,7 @@ import {
   mockPayMintOrder,
   mockGetMintOrder,
   mockListConsumerTransactions,
+  MOCK_BLACKLISTED_ADDRESS,
 } from "@/lib/api/mock-api";
 
 // Mock W2 layer (USDX-205). State is module-scoped, so tests use distinct
@@ -105,6 +106,17 @@ describe("mock mint v2 lifecycle", () => {
 
     test("get of an unknown order throws 404", async () => {
       await expect(mockGetMintOrder("mint_nope")).rejects.toMatchObject({ status: 404 });
+    });
+
+    test("create rejects a blacklisted recipient with 422 RECIPIENT_BLACKLISTED", async () => {
+      await expect(
+        mockCreateMintOrder({
+          userAddress: MOCK_BLACKLISTED_ADDRESS,
+          amount: "100",
+          amountCurrency: "USD",
+          chain: "polygon",
+        }),
+      ).rejects.toMatchObject({ status: 422, code: "RECIPIENT_BLACKLISTED" });
     });
   });
 });

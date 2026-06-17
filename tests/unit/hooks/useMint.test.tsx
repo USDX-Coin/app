@@ -1,35 +1,34 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, waitFor } from "@testing-library/react";
 import { createWrapper } from "../../helpers/test-utils";
 import { useMint } from "@/hooks/useMint";
 import { useMintStore } from "@/stores/mintStore";
 
+const { pushMock } = vi.hoisted(() => ({ pushMock: vi.fn() }));
+
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({
-    push: vi.fn(),
-    replace: vi.fn(),
-  }),
+  useRouter: () => ({ push: pushMock, replace: vi.fn() }),
 }));
+
+const VALID_ADDRESS = "0x1234567890abcdef1234567890abcdef12345678";
+// mock rate: baseRate 16000 × (1 + 2.5%) = 16400
+const EFFECTIVE_RATE = 16400;
 
 beforeEach(() => {
   useMintStore.getState().reset();
+  pushMock.mockReset();
 });
 
 describe("useMint", () => {
   describe("validation", () => {
     describe("positive", () => {
-      test("no errors when form is valid", () => {
+      test("no errors and form valid once the rate has loaded", async () => {
         useMintStore.getState().setAmount("100");
-        useMintStore
-          .getState()
-          .setDestinationAddress(
-            "0x1234567890abcdef1234567890abcdef12345678"
-          );
+        useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
 
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
-        });
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
 
+        await waitFor(() => expect(result.current.effectiveBuyRate).toBe(EFFECTIVE_RATE));
         expect(result.current.amountError).toBeNull();
         expect(result.current.addressError).toBeNull();
         expect(result.current.isFormValid).toBe(true);
@@ -37,198 +36,102 @@ describe("useMint", () => {
     });
 
     describe("negative", () => {
-      test("amountError for amount below minimum", () => {
+      test("amountError for USD amount below minimum (rate-independent)", () => {
         useMintStore.getState().setAmount("5");
-
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
-        });
-
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
         expect(result.current.amountError).toContain("Minimum");
       });
 
-      test("amountError for amount above maximum", () => {
+      test("amountError for USD amount above maximum", () => {
         useMintStore.getState().setAmount("2000000");
-
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
-        });
-
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
         expect(result.current.amountError).toContain("Maximum");
       });
 
       test("addressError for invalid EVM address", () => {
         useMintStore.getState().setDestinationAddress("0xinvalid");
-
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
-        });
-
-        expect(result.current.addressError).toBeTruthy();
-      });
-
-      test("addressError for invalid address", () => {
-        useMintStore.getState().setDestinationAddress("notanaddress");
-
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
-        });
-
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
         expect(result.current.addressError).toBeTruthy();
       });
     });
 
     describe("edge cases", () => {
-      test("no validation when fields are empty (lazy validation)", () => {
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
-        });
-
+      test("no validation when fields are empty (lazy)", () => {
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
         expect(result.current.amountError).toBeNull();
         expect(result.current.addressError).toBeNull();
         expect(result.current.isFormValid).toBe(false);
       });
 
-      test("validates exact boundary amount (10)", () => {
-        useMintStore.getState().setAmount("10");
-
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
-        });
-
-        expect(result.current.amountError).toBeNull();
+      test("form invalid until the rate is available", () => {
+        useMintStore.getState().setAmount("100");
+        useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+        // Synchronously (before the rate query resolves) the form can't be valid.
+        expect(result.current.effectiveBuyRate).toBeNull();
+        expect(result.current.isFormValid).toBe(false);
       });
     });
   });
 
   describe("calculations", () => {
     describe("positive", () => {
-      test("parsedAmount correctly parses string to number", () => {
-        useMintStore.getState().setAmount("1000");
-
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
-        });
-
-        expect(result.current.parsedAmount).toBe(1000);
+      test("USD input: amountUsdx = entered, subtotalIdr = entered × rate", async () => {
+        useMintStore.getState().setAmount("100");
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+        await waitFor(() => expect(result.current.effectiveBuyRate).toBe(EFFECTIVE_RATE));
+        expect(result.current.amountUsdx).toBe(100);
+        expect(result.current.subtotalIdr).toBe(100 * EFFECTIVE_RATE);
       });
 
-      test("fee is 0.7% of parsedAmount", () => {
-        useMintStore.getState().setAmount("1000");
-
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
-        });
-
-        expect(result.current.fee).toBeCloseTo(7, 2);
+      test("IDR input: amountUsdx = entered / rate, subtotalIdr = entered", async () => {
+        useMintStore.getState().setAmountCurrency("IDR");
+        useMintStore.getState().setAmount(String(100 * EFFECTIVE_RATE));
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+        await waitFor(() => expect(result.current.effectiveBuyRate).toBe(EFFECTIVE_RATE));
+        expect(result.current.amountUsdx).toBe(100);
+        expect(result.current.subtotalIdr).toBe(100 * EFFECTIVE_RATE);
       });
 
-      test("selectedChain matches chainId", () => {
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
-        });
-
-        expect(result.current.selectedChain?.id).toBe("base");
+      test("selectedChain is locked to Polygon", () => {
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+        expect(result.current.selectedChain?.id).toBe("polygon");
       });
     });
 
     describe("edge cases", () => {
-      test("calculations handle zero amount", () => {
+      test("zero amount yields zero derived amounts", async () => {
         useMintStore.getState().setAmount("0");
-
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
-        });
-
-        expect(result.current.parsedAmount).toBe(0);
-        expect(result.current.fee).toBe(0);
-      });
-
-      test("selectedChain undefined for invalid chainId", () => {
-        useMintStore.getState().setChainId("nonexistent");
-
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
-        });
-
-        expect(result.current.selectedChain).toBeUndefined();
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+        await waitFor(() => expect(result.current.effectiveBuyRate).toBe(EFFECTIVE_RATE));
+        expect(result.current.amountUsdx).toBe(0);
+        expect(result.current.subtotalIdr).toBe(0);
       });
     });
   });
 
-  describe("step machine", () => {
-    describe("positive", () => {
-      test("goToReview sets step to review when form valid", () => {
-        useMintStore.getState().setAmount("100");
-        useMintStore
-          .getState()
-          .setDestinationAddress(
-            "0x1234567890abcdef1234567890abcdef12345678"
-          );
-
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
-        });
-
-        act(() => {
-          result.current.goToConfirmation();
-        });
-
-        expect(useMintStore.getState().step).toBe("confirmation");
-      });
-
-      test("goBackToForm sets step to form", () => {
-        useMintStore.getState().setStep("confirmation");
-
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
-        });
-
-        act(() => {
-          result.current.backToForm();
-        });
-
-        expect(useMintStore.getState().step).toBe("form");
-      });
+  describe("currency toggle", () => {
+    test("toggleCurrency switches USD <-> IDR", () => {
+      const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+      expect(result.current.amountCurrency).toBe("USD");
+      act(() => result.current.toggleCurrency());
+      expect(useMintStore.getState().amountCurrency).toBe("IDR");
     });
+  });
 
-    describe("negative", () => {
-      test("goToReview does nothing when form invalid", () => {
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
-        });
+  describe("submit", () => {
+    test("submitMint creates the order and redirects to /mint/checkout/{id}", async () => {
+      useMintStore.getState().setAmount("100");
+      useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
+      const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
 
-        act(() => {
-          result.current.goToConfirmation();
-        });
-
-        expect(useMintStore.getState().step).toBe("form");
+      await waitFor(() => expect(result.current.isFormValid).toBe(true));
+      await act(async () => {
+        await result.current.submitMint();
       });
-    });
 
-    describe("edge cases", () => {
-      test("form data preserved after goBackToForm", () => {
-        useMintStore.getState().setAmount("500");
-        useMintStore
-          .getState()
-          .setDestinationAddress(
-            "0x1234567890abcdef1234567890abcdef12345678"
-          );
-        useMintStore.getState().setStep("confirmation");
-
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
-        });
-
-        act(() => {
-          result.current.backToForm();
-        });
-
-        expect(useMintStore.getState().amount).toBe("500");
-        expect(useMintStore.getState().destinationAddress).toBe(
-          "0x1234567890abcdef1234567890abcdef12345678"
-        );
-      });
+      expect(pushMock).toHaveBeenCalledTimes(1);
+      expect(pushMock.mock.calls[0][0]).toMatch(/^\/mint\/checkout\//);
     });
   });
 });

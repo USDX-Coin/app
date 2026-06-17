@@ -33,10 +33,11 @@ test.describe("Mint Flow", () => {
       // Proceed -> creates the order and redirects to the own-hosted checkout
       await page.getByRole("button", { name: "Proceed Payment" }).click();
       await page.waitForURL(/\/mint\/checkout\//, { timeout: 15000 });
-      await expect(page.getByRole("link", { name: "Back to mint" })).toBeVisible();
+      await expect(page.getByText("Choose payment method")).toBeVisible();
+      await expect(page.getByText(/#USDX-/)).toBeVisible();
 
-      // Back to the mint form
-      await page.getByRole("link", { name: "Back to mint" }).click();
+      // Cancel (before choosing a method) returns to the mint form
+      await page.getByRole("button", { name: "Cancel" }).click();
       await expect(page.getByText("You will mint")).toBeVisible({ timeout: 15000 });
     });
   });

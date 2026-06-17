@@ -217,6 +217,12 @@ export interface MintOrderDetail {
   safeTxHash: string | null;
   onChainTxHash: string | null;
   createdAt: string;
+  // Payment channel options + per-channel pg fee, needed by the checkout method
+  // selector while REQUESTED. The CREATE response (MintOrderCreated) always
+  // carries this; GET currently does NOT per OpenAPI — optional here so the
+  // checkout falls back to a static VA/QRIS list on refresh. Backend gap flagged
+  // to add `channels[]` to GET /v2/mint/{id} while paymentStatus=REQUESTED.
+  channels?: MintChannelOption[];
   updatedAt: string;
 }
 

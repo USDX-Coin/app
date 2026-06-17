@@ -150,7 +150,7 @@ Test helpers in `tests/helpers/`:
 | `/forgot-password` | No | SC | Password reset |
 | `/mint` | Yes | SC | Mint USDX (default dashboard) |
 | `/redeem` | Yes | SC | Redeem USDX to bank |
-| `/transactions` | Yes | SC | Transaction history |
+| `/history` | Yes | SC | Transaction history (mint-only W2) |
 | `/profile` | Yes | SC | User info + verification badge |
 | `/payment` | No* | CC | Mock payment gateway (*redirects to /mint without data) |
 

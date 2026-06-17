@@ -61,7 +61,7 @@ export function RedeemStatus() {
       primaryLabel={t("btn.backToRedeem")}
       onPrimary={reset}
       secondaryLabel={t("btn.viewHistory")}
-      onSecondary={() => router.push("/transactions")}
+      onSecondary={() => router.push("/history")}
     />
   );
 }

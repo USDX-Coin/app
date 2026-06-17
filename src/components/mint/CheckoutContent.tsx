@@ -213,7 +213,7 @@ export function CheckoutContent() {
                     <MintStatusTracker order={order} />
                     {order.status === "COMPLETED" && (
                       <Link
-                        href="/transactions"
+                        href="/history"
                         className="flex h-[42px] items-center justify-center rounded-lg border border-border text-sm font-medium text-foreground transition-colors hover:bg-accent"
                       >
                         {t("checkout.viewHistory")}

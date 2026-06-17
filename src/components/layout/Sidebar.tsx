@@ -48,7 +48,7 @@ const transactionItems: NavItem[] = [
 // /kyc is intentionally not a nav item (USDX-153): users reach it via the status
 // banner on /mint or the action-gate dialog, keeping the funnel KYC-driven.
 const moreItems: NavItem[] = [
-  { href: "/transactions", labelKey: "nav.transaction", icon: History },
+  { href: "/history", labelKey: "nav.history", icon: History },
   { href: "/help", labelKey: "nav.help", icon: CircleHelp },
   { href: "/support", labelKey: "nav.support", icon: Headset },
   { href: "/settings", labelKey: "nav.settings", icon: Settings },

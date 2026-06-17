@@ -26,10 +26,10 @@ test.describe("Desktop Responsive (1280x720)", () => {
     await expect(page.getByText("Selected Language")).toBeVisible();
   });
 
-  test("transactions show full table", async ({ page }) => {
+  test("history shows full table", async ({ page }) => {
     await forceEnglish(page);
     await loginViaStorage(page);
-    await page.goto("/transactions");
+    await page.goto("/history");
     await expect(page.getByText("Transaction History")).toBeVisible({ timeout: 15000 });
 
     const table = page.locator("table");

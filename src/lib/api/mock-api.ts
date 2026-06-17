@@ -405,7 +405,8 @@ export async function mockGetWalletBalance(): Promise<number> {
 // address-book.yaml, mint.yaml, transactions.yaml). They power the real-shaped
 // client modules (rate-api/address-book-api/mint-api/transactions-api) when no
 // backend is configured. The legacy `mockCreateMint`/`mockGetTransactions` above
-// stay until USDX-201/204 migrate the pages that still consume them.
+// are no longer used by any page (mint → USDX-201, history → USDX-204) but stay
+// for their unit tests until those legacy mocks are retired.
 
 const MOCK_BASE_RATE = 16000;
 const MOCK_SPREAD_BUY_PCT = 2.5;

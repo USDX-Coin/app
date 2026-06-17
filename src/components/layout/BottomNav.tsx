@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { href: "/mint", label: "Mint", icon: Coins },
   { href: "/redeem", label: "Redeem", icon: ArrowDownToLine },
-  { href: "/transactions", label: "Transactions", icon: History },
+  { href: "/history", label: "History", icon: History },
 ];
 
 export function BottomNav() {

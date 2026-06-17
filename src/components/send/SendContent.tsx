@@ -83,7 +83,7 @@ export function SendContent() {
             primaryLabel={t("btn.backToSend")}
             onPrimary={restart}
             secondaryLabel={t("btn.viewHistory")}
-            onSecondary={() => router.push("/transactions")}
+            onSecondary={() => router.push("/history")}
           />
         )}
 

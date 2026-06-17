@@ -90,7 +90,7 @@ export function BridgeContent() {
             primaryLabel={t("btn.backToBridge")}
             onPrimary={restart}
             secondaryLabel={t("btn.viewHistory")}
-            onSecondary={() => router.push("/transactions")}
+            onSecondary={() => router.push("/history")}
           />
         )}
 

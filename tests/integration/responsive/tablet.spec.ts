@@ -26,10 +26,10 @@ test.describe("Tablet Responsive (768x1024)", () => {
     await expect(formCard).toBeVisible();
   });
 
-  test("transactions show table view", async ({ page }) => {
+  test("history shows table view", async ({ page }) => {
     await forceEnglish(page);
     await loginViaStorage(page);
-    await page.goto("/transactions");
+    await page.goto("/history");
     await expect(page.getByText("Transaction History")).toBeVisible({ timeout: 15000 });
 
     // Table should be visible on tablet

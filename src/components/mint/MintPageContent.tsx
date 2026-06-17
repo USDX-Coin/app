@@ -1,30 +1,20 @@
 "use client";
 
-import { useMintStore } from "@/stores/mintStore";
+// /mint page (USDX-201). Single form view — the review is a modal and the
+// post-create flow redirects to /mint/checkout/{id} (USDX-202), so there's no
+// in-page confirmation/status step anymore.
+
 import { PageHeader } from "@/components/shared/PageHeader";
 import { KycStatusSection } from "@/components/kyc/KycStatusSection";
 import { MintForm } from "@/components/mint/MintForm";
-import { MintConfirmation } from "@/components/mint/MintConfirmation";
-import { MintStatus } from "@/components/mint/MintStatus";
-
-const HEADERS = {
-  form: { crumbs: ["crumb.transaction", "nav.mint"], title: "title.mint" },
-  confirmation: { crumbs: ["crumb.transaction", "nav.mint", "crumb.confirmation"], title: "title.mintConfirmation" },
-  status: { crumbs: ["crumb.transaction", "nav.mint", "crumb.status"], title: "title.mintStatus" },
-} as const;
 
 export function MintPageContent() {
-  const step = useMintStore((s) => s.step);
-  const header = HEADERS[step];
-
   return (
     <div className="flex h-full flex-col gap-2">
-      <PageHeader crumbs={[...header.crumbs]} title={header.title} />
-      {step === "form" && <KycStatusSection />}
+      <PageHeader crumbs={["crumb.transaction", "nav.mint"]} title="title.mint" />
+      <KycStatusSection />
       <div className="flex flex-1 justify-center pt-8">
-        {step === "form" && <MintForm />}
-        {step === "confirmation" && <MintConfirmation />}
-        {step === "status" && <MintStatus />}
+        <MintForm />
       </div>
     </div>
   );

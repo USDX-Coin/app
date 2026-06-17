@@ -40,8 +40,9 @@ test.describe("KYC Status Tracker (/mint)", () => {
         .getByPlaceholder("Select destination address")
         .fill(VALID_ADDRESS);
       await page.getByRole("button", { name: "Mint", exact: true }).click();
-      await expect(page.getByText("Mint Confirmation")).toBeVisible();
-      await expect(dialog(page)).toHaveCount(0);
+      // VERIFIED proceeds without the KYC gate — the Ringkasan review modal opens.
+      await expect(page.getByText("Transaction Summary")).toBeVisible();
+      await expect(page.getByText("Complete KYC")).toHaveCount(0);
     });
   });
 

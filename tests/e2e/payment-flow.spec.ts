@@ -17,12 +17,13 @@ async function login(page: import("@playwright/test").Page) {
   await expect(page.getByText("You will mint")).toBeVisible({ timeout: 30000 });
 }
 
-// USDX-201 replaced the in-page confirmation -> status steps with a Ringkasan
-// modal and an own-hosted checkout redirect (/mint/checkout/{id}). "Proceed
-// Payment" creates the order (POST /v2/mint) and lands on checkout.
+// USDX-202: full own-hosted checkout. After the Ringkasan modal creates the
+// order (POST /v2/mint) and redirects to /mint/checkout/{id}, the user picks a
+// payment method (VA needs a bank), pays (POST /pay), sees inline instructions,
+// and the status tracker advances to COMPLETED (mock auto-advances).
 test.describe("Payment Flow", () => {
   test.describe("positive", () => {
-    test("mint -> Ringkasan modal -> proceed payment -> checkout shows the order", async ({
+    test("mint -> checkout -> pick VA + bank -> pay -> instructions + tracker completes", async ({
       page,
     }) => {
       await login(page);
@@ -40,6 +41,18 @@ test.describe("Payment Flow", () => {
       await page.getByRole("button", { name: "Proceed Payment" }).click();
       await page.waitForURL(/\/mint\/checkout\//, { timeout: 15000 });
       await expect(page.getByText(/#USDX-/)).toBeVisible();
+
+      // Choose VA — "Pay" stays disabled until a bank is selected
+      await page.getByText("Virtual Account").click();
+      await expect(page.getByRole("button", { name: "Pay", exact: true })).toBeDisabled();
+      await page.getByRole("button", { name: "BCA", exact: true }).click();
+      await page.getByRole("button", { name: "Pay", exact: true }).click();
+
+      // Inline VA instructions + status tracker advancing to COMPLETED (mock)
+      await expect(page.getByText("Payment instructions")).toBeVisible({ timeout: 15000 });
+      await expect(page.getByRole("link", { name: "View history" })).toBeVisible({
+        timeout: 30000,
+      });
     });
   });
 

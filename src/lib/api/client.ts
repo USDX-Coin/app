@@ -1,17 +1,25 @@
-// Thin fetch wrapper for the real backend (USDX-150). Mirrors the back-office
-// `apiFetch` so both consumer + backoffice share one mental model:
+// Thin fetch wrapper for the real backend (USDX-150, extended W2/USDX-205).
+// Mirrors the back-office `apiFetch` so both consumer + backoffice share one
+// mental model:
 // - Prepends `env.apiBaseUrl` so requests hit the configured backend, not the FE origin.
 // - Attaches `Authorization: Bearer <token>` (openapi global `security: [bearerAuth]`).
-// - Unwraps the SoT `{ status, metadata, data }` envelope and returns `data`.
+// - Unwraps the SoT `{ status, metadata, data }` envelope and returns `data`
+//   (`apiFetch`), or keeps `metadata` for paginated lists (`apiFetchPaginated`).
 // - Throws `ApiError` (SoT `ErrorResponse` shape) for non-2xx, parsing `Retry-After`.
-// - Fires a registered `onUnauthorized` callback on 401 so the session can clear
-//   without this module taking a React/store dependency (avoids import cycles).
+// - Fires registered callbacks on 401 (`onUnauthorized`) and authenticated 403s
+//   (`onForbidden`) so the session/account state can react without this module
+//   taking a React/store dependency (avoids import cycles).
 
 import { env } from "@/lib/env";
 
 interface AuthBindings {
   getToken: () => string | null;
   onUnauthorized: () => void;
+  // Fired before throwing on an *authenticated* 403, with the SoT error `code`.
+  // Lets the host (ApiClientBridge) react to cross-cutting gating like
+  // ACCOUNT_SUSPENDED that can surface on any consumer call. Optional so the
+  // existing two-field `configureApiClient` call sites keep compiling.
+  onForbidden?: (code: string) => void;
 }
 
 let bindings: AuthBindings = {
@@ -59,9 +67,23 @@ interface SoTErrorEnvelope {
   error?: { code?: string; message?: string; details?: unknown };
 }
 
+// SoT PaginatedResponse `metadata` (common.yaml#/schemas/PaginatedResponse).
+export interface PaginationMeta {
+  page: number;
+  limit: number;
+  total: number;
+}
+
+export interface Paginated<T> {
+  data: T[];
+  metadata: PaginationMeta;
+}
+
 export interface ApiFetchOptions extends Omit<RequestInit, "body"> {
   body?: unknown;
   // Send without an Authorization header (e.g. login / register / verify-email).
+  // Also suppresses the `onForbidden` side-effect: public auth calls keep their
+  // inline 403 handling (e.g. login's ACCOUNT_SUSPENDED banner).
   skipAuth?: boolean;
   // Suppress the global 401 → logout+redirect handler for this call. Use when a
   // 401 is an expected in-form outcome rather than an expired session — e.g.
@@ -83,7 +105,11 @@ function parseRetryAfter(header: string | null, details: unknown): number | null
   return null;
 }
 
-export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
+// Core request: builds headers, fetches, runs the 401/403 side-effects, parses
+// JSON, and throws `ApiError` on non-2xx. Returns the parsed payload (or
+// `undefined` for 204). Both `apiFetch` and `apiFetchPaginated` build on this so
+// envelope unwrapping is the only thing that differs between them.
+async function request(path: string, options: ApiFetchOptions = {}): Promise<unknown> {
   const { body, headers, skipAuth, skipUnauthorizedHandler, ...rest } = options;
   const finalHeaders = new Headers(headers);
   if (body !== undefined && !finalHeaders.has("Content-Type")) {
@@ -105,7 +131,7 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   }
 
   if (response.status === 204) {
-    return undefined as T;
+    return undefined;
   }
 
   let payload: unknown;
@@ -119,6 +145,12 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
     const err = (payload ?? {}) as SoTErrorEnvelope;
     const code = err.error?.code ?? "UNKNOWN";
     const message = err.error?.message ?? response.statusText ?? "Request failed";
+    // Authenticated 403s may carry cross-cutting gating (ACCOUNT_SUSPENDED). Let
+    // the host react before we throw. `skipAuth` calls (login/register/reset)
+    // keep their inline handling and fire no global side-effect.
+    if (response.status === 403 && !skipAuth) {
+      bindings.onForbidden?.(code);
+    }
     throw new ApiError(
       response.status,
       code,
@@ -128,9 +160,41 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
     );
   }
 
+  return payload;
+}
+
+export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
+  const payload = await request(path, options);
+  if (payload === undefined) {
+    return undefined as T;
+  }
   // Tolerate handlers that haven't migrated to the SoT envelope yet.
   if (payload && typeof payload === "object" && "status" in (payload as object)) {
     return (payload as SoTSuccessEnvelope<T>).data;
   }
   return payload as T;
+}
+
+// Like `apiFetch` but preserves the SoT PaginatedResponse `metadata`
+// (page/limit/total) alongside the `data` array — `apiFetch` unwraps to `data`
+// and would drop it. Used by list endpoints that need a total for pagination
+// (transactions.yaml, USDX-204). Falls back to sensible defaults when a handler
+// omits metadata so callers never see undefined counts.
+export async function apiFetchPaginated<T>(
+  path: string,
+  options: ApiFetchOptions = {},
+): Promise<Paginated<T>> {
+  const payload = (await request(path, options)) as
+    | { data?: T[]; metadata?: Partial<PaginationMeta> }
+    | undefined;
+  const data = payload?.data ?? [];
+  const meta = payload?.metadata ?? {};
+  return {
+    data,
+    metadata: {
+      page: meta.page ?? 1,
+      limit: meta.limit ?? data.length,
+      total: meta.total ?? data.length,
+    },
+  };
 }

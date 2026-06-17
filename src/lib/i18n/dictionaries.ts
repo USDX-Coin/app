@@ -174,6 +174,10 @@ const en: Dict = {
   "auth.login.forgotLinkText": "Forgot password",
   "auth.login.suspended": "Your account is suspended. Please contact support.",
   "auth.login.orContinue": "Or continue with",
+  // suspended screen (USDX-205) — shown when an authenticated call returns 403 ACCOUNT_SUSPENDED
+  "suspended.title": "Account Suspended",
+  "suspended.description": "Your account has been suspended. Please contact support for assistance.",
+  "suspended.backToLogin": "Back to login",
   "auth.login.passwordRequired": "Password is required",
   // auth — register
   "auth.register.title": "Create Account",
@@ -481,6 +485,10 @@ const id: Dict = {
   "auth.login.forgotLinkText": "Lupa Password",
   "auth.login.suspended": "Akun Anda ditangguhkan. Silakan hubungi support.",
   "auth.login.orContinue": "Atau lanjutkan dengan",
+  // suspended screen (USDX-205) — tampil saat call ter-autentikasi balikin 403 ACCOUNT_SUSPENDED
+  "suspended.title": "Akun Ditangguhkan",
+  "suspended.description": "Akun Anda telah ditangguhkan. Silakan hubungi support untuk bantuan.",
+  "suspended.backToLogin": "Kembali ke login",
   "auth.login.passwordRequired": "Password wajib diisi",
   // auth — register
   "auth.register.title": "Buat Akun",

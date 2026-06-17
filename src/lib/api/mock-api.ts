@@ -9,6 +9,10 @@ import type {
   PresignedUploadResult,
   CreateMintRequest,
   CreateRedeemRequest,
+  CreateMintOrderRequest,
+  PayMintOrderRequest,
+  CreateAddressBookRequest,
+  ListTransactionsParams,
 } from "./types";
 import type {
   AuthResponse,
@@ -21,8 +25,15 @@ import type {
   TransactionStatus,
   BankAccount,
   User,
+  ConsumerRate,
+  AddressBookEntry,
+  MintChannelOption,
+  MintOrderCreated,
+  MintOrderDetail,
+  ConsumerTransaction,
+  VaBank,
 } from "@/types";
-import { ApiError } from "./client";
+import { ApiError, type Paginated } from "./client";
 import { validatePassword } from "@/lib/validations";
 
 // Simulated delay
@@ -387,4 +398,259 @@ export async function mockGetBankAccounts(): Promise<BankAccount[]> {
 export async function mockGetWalletBalance(): Promise<number> {
   await delay(300);
   return 5000;
+}
+
+// ── Mock W2 consumer: rate / address book / mint v2 / history (USDX-205) ────
+// New-shape mocks matching the Week-2 OpenAPI contract (rate.yaml,
+// address-book.yaml, mint.yaml, transactions.yaml). They power the real-shaped
+// client modules (rate-api/address-book-api/mint-api/transactions-api) when no
+// backend is configured. The legacy `mockCreateMint`/`mockGetTransactions` above
+// stay until USDX-201/204 migrate the pages that still consume them.
+
+const MOCK_BASE_RATE = 16000;
+const MOCK_SPREAD_BUY_PCT = 2.5;
+const MOCK_SPREAD_SELL_PCT = 2.0;
+const MOCK_MINT_FEE_PCT = 1; // % of subtotal
+const MOCK_PG_FEE_VA = 4000; // flat IDR
+const MOCK_PG_FEE_QRIS_PCT = 0.7; // % of subtotal
+const MOCK_VA_BANKS: VaBank[] = [
+  "BCA", "BNI", "BRI", "CIMB", "DANAMON", "INA", "MANDIRI", "PERMATA", "MAYBANK",
+];
+
+const mockEffectiveBuyRate = () => MOCK_BASE_RATE * (1 + MOCK_SPREAD_BUY_PCT / 100);
+const idr = (n: number) => n.toFixed(2);
+
+export async function mockGetConsumerRate(): Promise<ConsumerRate> {
+  await delay(150);
+  return {
+    baseRate: idr(MOCK_BASE_RATE),
+    spreadBuyPct: String(MOCK_SPREAD_BUY_PCT),
+    spreadSellPct: String(MOCK_SPREAD_SELL_PCT),
+    effectiveBuyRate: idr(mockEffectiveBuyRate()),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+// In-memory address book (per page load, like the rest of the mock).
+const addressBook = new Map<string, AddressBookEntry>();
+
+export async function mockListAddressBook(): Promise<AddressBookEntry[]> {
+  await delay(150);
+  return [...addressBook.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function mockAddAddressBook(req: CreateAddressBookRequest): Promise<AddressBookEntry> {
+  await delay(200);
+  const duplicate = [...addressBook.values()].some(
+    (e) => e.address.toLowerCase() === req.address.toLowerCase(),
+  );
+  if (duplicate) {
+    throw new ApiError(409, "ADDRESS_ALREADY_EXISTS", "Address sudah ada di buku alamat Anda");
+  }
+  const entry: AddressBookEntry = {
+    id: "addr_" + Date.now(),
+    address: req.address,
+    label: req.label,
+    createdAt: new Date().toISOString(),
+  };
+  addressBook.set(entry.id, entry);
+  return entry;
+}
+
+export async function mockDeleteAddressBook(id: string): Promise<{ id: string }> {
+  await delay(150);
+  if (!addressBook.has(id)) throw new ApiError(404, "NOT_FOUND", "Entry tidak ditemukan");
+  addressBook.delete(id);
+  return { id };
+}
+
+// In-memory mint orders + a coarse lifecycle so the checkout status tracker
+// (USDX-202) has something to poll: after /pay the order auto-advances
+// WAITING_FOR_PAYMENT → PAID (after MOCK_PAID_AFTER_MS) → COMPLETED (after
+// MOCK_DONE_AFTER_MS). This approximates the W2.1/W2.2 jobs; the real backend
+// owns this progression. `paidEligibleAt` is mock bookkeeping, stripped on read.
+interface MockMintRecord extends MintOrderDetail {
+  paidEligibleAt: number | null;
+}
+const mintOrders = new Map<string, MockMintRecord>();
+const MOCK_PAID_AFTER_MS = 8_000;
+const MOCK_DONE_AFTER_MS = 16_000;
+
+export async function mockCreateMintOrder(req: CreateMintOrderRequest): Promise<MintOrderCreated> {
+  await delay(600);
+  const rate = mockEffectiveBuyRate();
+  const amountUsdx = req.amountCurrency === "USD" ? Number(req.amount) : Number(req.amount) / rate;
+  const subtotalIdr = req.amountCurrency === "IDR" ? Number(req.amount) : amountUsdx * rate;
+  const mintFeeIdr = subtotalIdr * (MOCK_MINT_FEE_PCT / 100);
+  const id = "mint_" + Date.now();
+  const nowIso = new Date().toISOString();
+  const channels: MintChannelOption[] = [
+    { channel: "VA", pgFeeIdr: idr(MOCK_PG_FEE_VA), banks: MOCK_VA_BANKS },
+    { channel: "QRIS", pgFeeIdr: idr(subtotalIdr * (MOCK_PG_FEE_QRIS_PCT / 100)), banks: null },
+  ];
+  const created: MintOrderCreated = {
+    id,
+    orderNumber: "USDX-" + String(Date.now()).slice(-8),
+    customerName: currentAccount()?.user.name ?? "Demo User",
+    userAddress: req.userAddress,
+    chain: req.chain || "polygon",
+    amount: idr(amountUsdx),
+    baseRate: idr(MOCK_BASE_RATE),
+    spreadBuyPct: String(MOCK_SPREAD_BUY_PCT),
+    effectiveRate: idr(rate),
+    subtotalIdr: idr(subtotalIdr),
+    mintFeeIdr: idr(mintFeeIdr),
+    totalBeforePgFeeIdr: idr(subtotalIdr + mintFeeIdr),
+    paymentStatus: "REQUESTED",
+    safeStatus: "NONE",
+    status: "WAITING_FOR_PAYMENT",
+    expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(),
+    channels,
+  };
+  mintOrders.set(id, {
+    ...created,
+    type: "MINT",
+    inputCurrency: req.amountCurrency,
+    mintFeePct: String(MOCK_MINT_FEE_PCT),
+    paymentChannel: null,
+    pgFeeIdr: null,
+    totalFeeIdr: null,
+    totalPayIdr: null,
+    paymentBank: null,
+    paymentProvider: "MOCK",
+    virtualAccountNo: null,
+    paymentUrl: null,
+    paymentRef: null,
+    paidAt: null,
+    safeTxHash: null,
+    onChainTxHash: null,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+    paidEligibleAt: null,
+  });
+  return created;
+}
+
+export async function mockPayMintOrder(
+  id: string,
+  req: PayMintOrderRequest,
+): Promise<MintOrderDetail> {
+  await delay(500);
+  const order = mintOrders.get(id);
+  if (!order) throw new ApiError(404, "NOT_FOUND", "Order tidak ditemukan");
+  if (order.paymentStatus !== "REQUESTED") {
+    throw new ApiError(409, "INVALID_ORDER_STATE", "Order tidak dalam status REQUESTED");
+  }
+  const subtotal = Number(order.subtotalIdr);
+  const pgFee = req.channel === "VA" ? MOCK_PG_FEE_VA : subtotal * (MOCK_PG_FEE_QRIS_PCT / 100);
+  const totalFee = Number(order.mintFeeIdr) + pgFee;
+  order.paymentChannel = req.channel;
+  order.paymentBank = req.channel === "VA" ? (req.bank ?? "BCA") : null;
+  order.pgFeeIdr = idr(pgFee);
+  order.totalFeeIdr = idr(totalFee);
+  order.totalPayIdr = idr(Math.floor(subtotal + totalFee)); // ≥ Rp10.000 floor, round down
+  order.virtualAccountNo = req.channel === "VA" ? "8808" + String(Date.now()).slice(-10) : null;
+  order.paymentUrl = req.channel === "QRIS" ? "https://mock.pay.local/qris/" + id : null;
+  order.paymentRef = "MOCKREF" + String(Date.now()).slice(-8);
+  order.paymentStatus = "WAITING_FOR_PAYMENT";
+  order.status = "WAITING_FOR_PAYMENT";
+  order.expiresAt = new Date(Date.now() + 60 * 60_000).toISOString();
+  order.updatedAt = new Date().toISOString();
+  order.paidEligibleAt = Date.now() + MOCK_PAID_AFTER_MS;
+  return stripMockBookkeeping(order);
+}
+
+export async function mockGetMintOrder(id: string): Promise<MintOrderDetail> {
+  await delay(200);
+  const order = mintOrders.get(id);
+  if (!order) throw new ApiError(404, "NOT_FOUND", "Order tidak ditemukan");
+  advanceMockMintLifecycle(order);
+  return stripMockBookkeeping(order);
+}
+
+function advanceMockMintLifecycle(order: MockMintRecord): void {
+  if (order.paidEligibleAt == null) return;
+  const now = Date.now();
+  if (order.paymentStatus === "WAITING_FOR_PAYMENT" && now >= order.paidEligibleAt) {
+    order.paymentStatus = "PAID";
+    order.paidAt = new Date().toISOString();
+    order.safeStatus = "PENDING_APPROVAL";
+    order.status = "WAITING_FOR_APPROVAL";
+    order.updatedAt = order.paidAt;
+  }
+  if (
+    order.paymentStatus === "PAID" &&
+    order.status !== "COMPLETED" &&
+    now >= order.paidEligibleAt - MOCK_PAID_AFTER_MS + MOCK_DONE_AFTER_MS
+  ) {
+    order.safeStatus = "EXECUTED";
+    order.status = "COMPLETED";
+    order.onChainTxHash = "0x" + now.toString(16).padStart(64, "0").slice(0, 64);
+    order.safeTxHash = "0x" + (now + 1).toString(16).padStart(64, "0").slice(0, 64);
+    order.updatedAt = new Date().toISOString();
+  }
+}
+
+function stripMockBookkeeping(order: MockMintRecord): MintOrderDetail {
+  const { paidEligibleAt: _paidEligibleAt, ...detail } = order;
+  return detail;
+}
+
+function mintRecordToTransaction(order: MockMintRecord): ConsumerTransaction {
+  return {
+    id: order.id,
+    type: "MINT",
+    amount: order.amount,
+    subtotalIdr: order.subtotalIdr,
+    totalPayIdr: order.totalPayIdr,
+    effectiveRate: order.effectiveRate,
+    chain: order.chain,
+    paymentStatus: order.paymentStatus,
+    status: order.status,
+    txHash: order.onChainTxHash,
+    createdAt: order.createdAt,
+    updatedAt: order.updatedAt,
+  };
+}
+
+// A few deterministic completed mint rows so /history (USDX-204) isn't empty in
+// mock dev before the user creates any order this session.
+function seededTransactions(): ConsumerTransaction[] {
+  const base = new Date("2026-06-10T09:00:00Z").getTime();
+  const amounts = [100, 250, 500, 1000, 75, 320];
+  return amounts.map((usdx, i) => {
+    const subtotal = usdx * mockEffectiveBuyRate();
+    return {
+      id: `seed_tx_${String(i + 1).padStart(3, "0")}`,
+      type: "MINT" as const,
+      amount: idr(usdx),
+      subtotalIdr: idr(subtotal),
+      totalPayIdr: idr(Math.floor(subtotal * 1.017)),
+      effectiveRate: idr(mockEffectiveBuyRate()),
+      chain: "polygon",
+      paymentStatus: "PAID" as const,
+      status: "COMPLETED" as const,
+      txHash: "0x" + (2_000_000 + i * 7919).toString(16).padStart(64, "0").slice(0, 64),
+      createdAt: new Date(base - i * 6 * 3_600_000).toISOString(),
+      updatedAt: new Date(base - i * 6 * 3_600_000).toISOString(),
+    };
+  });
+}
+
+export async function mockListConsumerTransactions(
+  params: ListTransactionsParams = {},
+): Promise<Paginated<ConsumerTransaction>> {
+  await delay(250);
+  const page = params.page ?? 1;
+  const take = params.take ?? 10;
+  const all = [
+    ...[...mintOrders.values()].map(mintRecordToTransaction),
+    ...seededTransactions(),
+  ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const filtered = params.type ? all.filter((t) => t.type === params.type) : all;
+  const start = (page - 1) * take;
+  return {
+    data: filtered.slice(start, start + take),
+    metadata: { page, limit: take, total: filtered.length },
+  };
 }

@@ -1,4 +1,4 @@
-import type { EntityType } from "@/types";
+import type { AmountCurrency, ConsumerOrderType, EntityType, PaymentChannel, VaBank } from "@/types";
 
 // ── Auth (openapi auth.yaml — Auth v2 / consumer) ──────────────────────────
 export interface LoginRequest {
@@ -75,7 +75,8 @@ export interface PresignedUploadResult {
   headers?: Record<string, string>;
 }
 
-// ── Mint / Redeem (W2+, still mocked) ──────────────────────────────────────
+// ── Mint / Redeem (legacy W1-era mock shapes — used by the not-yet-migrated
+// mint/redeem pages until USDX-201/W3 swap them) ───────────────────────────
 export interface CreateMintRequest {
   chainId: string;
   amount: number;
@@ -87,4 +88,31 @@ export interface CreateRedeemRequest {
   amount: number;
   bankAccountId: string;
   walletAddress: string;
+}
+
+// ── Phase 2 Week 2 — consumer mint v2 + address book (USDX-205) ─────────────
+// Request bodies for the real `/api/v2/*` client modules (mint-api, address-book-api).
+// openapi mint.yaml CreateMintOrderV2 / PayMintOrderRequest, address-book.yaml.
+
+export interface CreateMintOrderRequest {
+  userAddress: string; // EVM address (manual / address book); stored as-is
+  amount: string; // decimal — USD = USDX amount, IDR = subtotal (mint value)
+  amountCurrency: AmountCurrency;
+  chain: string; // Phase 2 = Polygon-only → FE sends "polygon" (hardcoded)
+}
+
+export interface PayMintOrderRequest {
+  channel: PaymentChannel;
+  bank?: VaBank | null; // required when channel = VA, ignored for QRIS
+}
+
+export interface CreateAddressBookRequest {
+  address: string;
+  label: string; // max 50 chars
+}
+
+export interface ListTransactionsParams {
+  page?: number;
+  take?: number; // 1..50, default 10
+  type?: ConsumerOrderType; // W2 effective MINT
 }

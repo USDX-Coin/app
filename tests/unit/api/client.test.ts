@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
-import { apiFetch, configureApiClient, ApiError } from "@/lib/api/client";
+import { apiFetch, apiFetchPaginated, configureApiClient, ApiError } from "@/lib/api/client";
 
 function jsonResponse(
   status: number,
@@ -106,6 +106,26 @@ describe("apiFetch", () => {
       await expect(apiFetch("/api/v2/auth/me")).rejects.toThrow("nope");
       expect(onUnauthorized).toHaveBeenCalledTimes(1);
     });
+
+    test("fires onForbidden with the code on an authenticated 403 before throwing", async () => {
+      const onForbidden = vi.fn();
+      configureApiClient({ getToken: () => "tok", onUnauthorized: () => {}, onForbidden });
+      fetchMock.mockResolvedValue(
+        jsonResponse(403, { status: "error", error: { code: "ACCOUNT_SUSPENDED", message: "nope" } }),
+      );
+      await expect(apiFetch("/api/v2/mint")).rejects.toThrow("nope");
+      expect(onForbidden).toHaveBeenCalledWith("ACCOUNT_SUSPENDED");
+    });
+
+    test("does NOT fire onForbidden on a skipAuth 403 (login/register keep inline handling)", async () => {
+      const onForbidden = vi.fn();
+      configureApiClient({ getToken: () => null, onUnauthorized: () => {}, onForbidden });
+      fetchMock.mockResolvedValue(
+        jsonResponse(403, { status: "error", error: { code: "ACCOUNT_SUSPENDED", message: "x" } }),
+      );
+      await expect(apiFetch("/api/v2/auth/login", { skipAuth: true })).rejects.toThrow("x");
+      expect(onForbidden).not.toHaveBeenCalled();
+    });
   });
 
   describe("edge cases", () => {
@@ -146,6 +166,31 @@ describe("apiFetch", () => {
       await apiFetch("/api/v2/auth/login", { method: "POST", body: {}, skipAuth: true });
       const [, init] = fetchMock.mock.calls[0];
       expect((init.headers as Headers).get("Authorization")).toBeNull();
+    });
+  });
+});
+
+describe("apiFetchPaginated", () => {
+  describe("positive", () => {
+    test("returns the data array together with the SoT pagination metadata", async () => {
+      fetchMock.mockResolvedValue(
+        jsonResponse(200, {
+          status: "success",
+          metadata: { page: 2, limit: 10, total: 42 },
+          data: [{ id: "a" }, { id: "b" }],
+        }),
+      );
+      const result = await apiFetchPaginated<{ id: string }>("/api/v2/transactions?page=2");
+      expect(result.data).toEqual([{ id: "a" }, { id: "b" }]);
+      expect(result.metadata).toEqual({ page: 2, limit: 10, total: 42 });
+    });
+  });
+
+  describe("edge cases", () => {
+    test("defaults page/limit/total from the data when metadata is absent", async () => {
+      fetchMock.mockResolvedValue(jsonResponse(200, { status: "success", data: [{ id: "a" }] }));
+      const result = await apiFetchPaginated<{ id: string }>("/api/v2/transactions");
+      expect(result.metadata).toEqual({ page: 1, limit: 1, total: 1 });
     });
   });
 });

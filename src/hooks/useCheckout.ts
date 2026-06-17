@@ -9,7 +9,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getMintOrder, payMintOrder } from "@/lib/api/mint-api";
-import { isApiError } from "@/lib/api/errors";
+import { isApiError, isValidationError } from "@/lib/api/errors";
 import type { PaymentChannel, VaBank } from "@/types";
 
 const POLL_MS = 3000;
@@ -19,7 +19,7 @@ function payErrorKey(error: unknown): string | null {
   if (!error) return null;
   if (isApiError(error)) {
     if (error.code === "INVALID_ORDER_STATE") return "checkout.errOrderState";
-    if (error.code === "VALIDATION_ERROR") return "checkout.errValidation";
+    if (isValidationError(error)) return "checkout.errValidation";
     if (error.code === "MINT_DISABLED") return "mint.errDisabled";
   }
   return "checkout.errPayGeneric";

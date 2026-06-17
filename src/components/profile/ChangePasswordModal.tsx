@@ -92,7 +92,10 @@ export function ChangePasswordModal({ open, onOpenChange }: ChangePasswordModalP
         toast.error(t("auth.tooManyAttempts"));
         return;
       }
-      // 400 fallbacks — client validation should catch these first.
+      // PASSWORD_MISMATCH / WEAK_PASSWORD — matched by code, not status: per SoT
+      // these keep their own code (WEAK_PASSWORD stays 400 — conventions.md
+      // § Validation Error v2 lists it under token/policy, not the generic 422
+      // VALIDATION_ERROR). Client validation should catch them first anyway.
       if (hasErrorCode(err, "PASSWORD_MISMATCH")) {
         setErrors({
           confirm:

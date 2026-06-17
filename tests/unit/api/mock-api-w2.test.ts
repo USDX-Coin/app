@@ -29,7 +29,7 @@ describe("mockGetConsumerRate", () => {
 describe("mock address book", () => {
   describe("positive", () => {
     test("adds an entry and lists it back", async () => {
-      const entry = await mockAddAddressBook({ address: "0xList0000000000000000000000000000000000001", label: "Alice" });
+      const entry = await mockAddAddressBook({ address: "0x1111111111111111111111111111111111111111", label: "Alice" });
       expect(entry.id).toMatch(/^addr_/);
       expect(entry.label).toBe("Alice");
       const list = await mockListAddressBook();
@@ -39,12 +39,34 @@ describe("mock address book", () => {
 
   describe("negative", () => {
     test("rejects a duplicate address with 409 ADDRESS_ALREADY_EXISTS", async () => {
-      const address = "0xDup00000000000000000000000000000000000002";
+      const address = "0x2222222222222222222222222222222222222222";
       await mockAddAddressBook({ address, label: "first" });
       await expect(mockAddAddressBook({ address, label: "again" })).rejects.toMatchObject({
         status: 409,
         code: "ADDRESS_ALREADY_EXISTS",
       });
+    });
+
+    // USDX-214: body validation on /api/v2/* surfaces 422 VALIDATION_ERROR (not 400).
+    test("rejects a label over 50 chars with 422 VALIDATION_ERROR", async () => {
+      await expect(
+        mockAddAddressBook({
+          address: "0x3333333333333333333333333333333333333333",
+          label: "x".repeat(51),
+        }),
+      ).rejects.toMatchObject({ status: 422, code: "VALIDATION_ERROR" });
+    });
+
+    test("rejects an empty label with 422 VALIDATION_ERROR", async () => {
+      await expect(
+        mockAddAddressBook({ address: "0x4444444444444444444444444444444444444444", label: "   " }),
+      ).rejects.toMatchObject({ status: 422, code: "VALIDATION_ERROR" });
+    });
+
+    test("rejects an invalid EVM address with 422 VALIDATION_ERROR", async () => {
+      await expect(
+        mockAddAddressBook({ address: "0x123", label: "Bad" }),
+      ).rejects.toMatchObject({ status: 422, code: "VALIDATION_ERROR" });
     });
 
     test("delete of an unknown id throws 404", async () => {

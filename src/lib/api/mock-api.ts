@@ -34,7 +34,7 @@ import type {
   VaBank,
 } from "@/types";
 import { ApiError, type Paginated } from "./client";
-import { validatePassword } from "@/lib/validations";
+import { validatePassword, validateAddress } from "@/lib/validations";
 
 // Simulated delay
 function delay(ms = 500): Promise<void> {
@@ -471,6 +471,14 @@ export async function mockListAddressBook(): Promise<AddressBookEntry[]> {
 
 export async function mockAddAddressBook(req: CreateAddressBookRequest): Promise<AddressBookEntry> {
   await delay(200);
+  // v2 DTO validation → 422 VALIDATION_ERROR (conventions.md § Validation Error
+  // (v2); USDX-213/214) — invalid EVM address or empty/over-50-char label. Mirrors
+  // the backend pipe so the FE 422 path is real. Runs before the 409 duplicate
+  // business check (validation precedes business logic).
+  const label = req.label.trim();
+  if (validateAddress(req.address.trim()) || label.length === 0 || label.length > 50) {
+    throw new ApiError(422, "VALIDATION_ERROR", "Alamat atau label tidak valid");
+  }
   const duplicate = [...addressBook.values()].some(
     (e) => e.address.toLowerCase() === req.address.toLowerCase(),
   );

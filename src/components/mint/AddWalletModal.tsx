@@ -8,8 +8,8 @@
 // - Wallet Address: EVM, checksum-insensitive (validateAddress). Required.
 // - Label: required, max 50 chars.
 // - Add button: disabled until both fields are valid.
-// - 409 ADDRESS_ALREADY_EXISTS → inline error; other failures → generic inline error.
-// - The scan-QR icon is a deferred placeholder (functional scanner = follow-up).
+// - 409 ADDRESS_ALREADY_EXISTS → inline error; 422 VALIDATION_ERROR → inline
+//   validation message (USDX-214); other failures → generic inline error.
 
 import { useState } from "react";
 import { ScanLine } from "lucide-react";
@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { AddressScannerDialog } from "@/components/mint/AddressScannerDialog";
 import { useAddAddressBook } from "@/hooks/useAddressBook";
 import { validateAddress } from "@/lib/validations";
-import { hasErrorCode } from "@/lib/api/errors";
+import { hasErrorCode, isValidationError } from "@/lib/api/errors";
 import { useLang } from "@/providers/LanguageProvider";
 
 const LABEL_MAX = 50;
@@ -45,7 +45,9 @@ export function AddWalletModal({ open, onOpenChange, onAdded }: AddWalletModalPr
   const submitError = addMutation.error
     ? hasErrorCode(addMutation.error, "ADDRESS_ALREADY_EXISTS")
       ? t("addrbook.errDuplicate")
-      : t("addrbook.errGeneric")
+      : isValidationError(addMutation.error)
+        ? t("addrbook.errValidation")
+        : t("addrbook.errGeneric")
     : null;
 
   function reset() {

@@ -19,7 +19,11 @@
 
 ## Root Layout
 
-`layout.tsx` wraps everything with `<Providers>` (Wagmi, QueryClient, RainbowKit, Toaster).
+`layout.tsx` wraps everything with `<Providers>` (ThemeProvider, LanguageProvider,
+QueryClient, `ApiClientBridge`, Toaster). Wallet libs (Wagmi/RainbowKit) are **not**
+loaded at the root — `WalletProviders` is dashboard-only and dynamically imported,
+and stays **dormant** in Phase 2 Week 2: there is **no global connect-wallet button**
+(mint needs no wallet connect; connect returns with redeem in Week 3, USDX-205).
 
 ## Home Page
 

@@ -25,6 +25,18 @@ export function isAccountSuspended(error: unknown): boolean {
   return isApiError(error) && error.status === 403 && error.code === "ACCOUNT_SUSPENDED";
 }
 
+// 403 KYC_NOT_VERIFIED — consumer gate (common.yaml § ConsumerGateForbidden).
+// User must finish KYC before transacting; surface the /kyc CTA, not a toast.
+export function isKycNotVerified(error: unknown): boolean {
+  return isApiError(error) && error.status === 403 && error.code === "KYC_NOT_VERIFIED";
+}
+
+// 503 MINT_DISABLED — mint gated off in this environment (no real payment
+// provider yet; week2.md § Environment gate). Surface "mint belum dibuka".
+export function isMintDisabled(error: unknown): boolean {
+  return isApiError(error) && error.status === 503 && error.code === "MINT_DISABLED";
+}
+
 // 429 — rate limited (TOO_MANY_ATTEMPTS / TOO_MANY_REQUESTS). Returns seconds to
 // wait if known, else null.
 export function getRateLimitSeconds(error: unknown): number | null {

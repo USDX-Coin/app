@@ -5,6 +5,8 @@ import {
   getErrorMessage,
   isEmailNotVerified,
   isAccountSuspended,
+  isKycNotVerified,
+  isMintDisabled,
   getRateLimitSeconds,
   isInvalidCredentials,
   hasErrorCode,
@@ -26,6 +28,18 @@ describe("errors helpers", () => {
     test("isAccountSuspended matches 403 ACCOUNT_SUSPENDED", () => {
       expect(isAccountSuspended(new ApiError(403, "ACCOUNT_SUSPENDED", "x"))).toBe(true);
       expect(isAccountSuspended(new ApiError(403, "EMAIL_NOT_VERIFIED", "x"))).toBe(false);
+    });
+
+    test("isKycNotVerified matches 403 KYC_NOT_VERIFIED only", () => {
+      expect(isKycNotVerified(new ApiError(403, "KYC_NOT_VERIFIED", "x"))).toBe(true);
+      expect(isKycNotVerified(new ApiError(403, "EMAIL_NOT_VERIFIED", "x"))).toBe(false);
+      expect(isKycNotVerified(new ApiError(401, "KYC_NOT_VERIFIED", "x"))).toBe(false);
+    });
+
+    test("isMintDisabled matches 503 MINT_DISABLED only", () => {
+      expect(isMintDisabled(new ApiError(503, "MINT_DISABLED", "x"))).toBe(true);
+      expect(isMintDisabled(new ApiError(403, "MINT_DISABLED", "x"))).toBe(false);
+      expect(isMintDisabled(new ApiError(503, "SERVICE_UNAVAILABLE", "x"))).toBe(false);
     });
 
     test("getRateLimitSeconds returns seconds from a 429 ApiError", () => {

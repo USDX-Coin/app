@@ -7,6 +7,7 @@ import {
   isAccountSuspended,
   isKycNotVerified,
   isMintDisabled,
+  isValidationError,
   getRateLimitSeconds,
   isInvalidCredentials,
   hasErrorCode,
@@ -40,6 +41,16 @@ describe("errors helpers", () => {
       expect(isMintDisabled(new ApiError(503, "MINT_DISABLED", "x"))).toBe(true);
       expect(isMintDisabled(new ApiError(403, "MINT_DISABLED", "x"))).toBe(false);
       expect(isMintDisabled(new ApiError(503, "SERVICE_UNAVAILABLE", "x"))).toBe(false);
+    });
+
+    test("isValidationError matches VALIDATION_ERROR by code (status-agnostic), per conventions v2", () => {
+      // SoT v2 surface emits 422; we match the code so a legacy 400 still routes
+      // to validation, and business codes (409, etc.) never do.
+      expect(isValidationError(new ApiError(422, "VALIDATION_ERROR", "x"))).toBe(true);
+      expect(isValidationError(new ApiError(400, "VALIDATION_ERROR", "x"))).toBe(true);
+      expect(isValidationError(new ApiError(409, "ADDRESS_ALREADY_EXISTS", "x"))).toBe(false);
+      expect(isValidationError(new ApiError(422, "RECIPIENT_BLACKLISTED", "x"))).toBe(false);
+      expect(isValidationError(new Error("x"))).toBe(false);
     });
 
     test("getRateLimitSeconds returns seconds from a 429 ApiError", () => {

@@ -15,7 +15,7 @@ import { createMintOrder } from "@/lib/api/mint-api";
 import { validateAmount, validateAddress } from "@/lib/validations";
 import { parseAmount } from "@/lib/utils";
 import { getChainById } from "@/lib/chains";
-import { isApiError } from "@/lib/api/errors";
+import { isApiError, isValidationError } from "@/lib/api/errors";
 
 // Maps a create-order failure to an i18n key the review modal renders inline
 // (week2.md § Endpoints Mint error codes).
@@ -23,7 +23,7 @@ function mintErrorKey(error: unknown): string | null {
   if (!error) return null;
   if (isApiError(error)) {
     if (error.code === "RECIPIENT_BLACKLISTED") return "mint.errBlacklisted";
-    if (error.code === "VALIDATION_ERROR") return "mint.errValidation";
+    if (isValidationError(error)) return "mint.errValidation";
     if (error.code === "MINT_DISABLED") return "mint.errDisabled";
     if (error.status === 403) return "mint.errGate"; // EMAIL/KYC/SUSPENDED gating
   }

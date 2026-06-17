@@ -37,6 +37,16 @@ export function isMintDisabled(error: unknown): boolean {
   return isApiError(error) && error.status === 503 && error.code === "MINT_DISABLED";
 }
 
+// 422 VALIDATION_ERROR — body/input validation failure on any /api/v2/* endpoint
+// (conventions.md § Validation Error (v2); USDX-213 BE / USDX-214 FE). The v2
+// global pipe emits 422 (not 400) with code VALIDATION_ERROR. We match on the SoT
+// *code* (status-agnostic) so a form treats it as an input error — surface the
+// field / inline validation message, never the generic catch-all. Business
+// failures keep their own code (e.g. 409 ADDRESS_ALREADY_EXISTS) and don't match.
+export function isValidationError(error: unknown): boolean {
+  return isApiError(error) && error.code === "VALIDATION_ERROR";
+}
+
 // 429 — rate limited (TOO_MANY_ATTEMPTS / TOO_MANY_REQUESTS). Returns seconds to
 // wait if known, else null.
 export function getRateLimitSeconds(error: unknown): number | null {

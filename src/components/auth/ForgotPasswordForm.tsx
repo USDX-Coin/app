@@ -10,7 +10,7 @@ import { FieldError } from "@/components/ui/field-error";
 import { useAuth } from "@/hooks/useAuth";
 import { useCooldown, DEFAULT_COOLDOWN_SECONDS } from "@/hooks/useCooldown";
 import { useLang } from "@/providers/LanguageProvider";
-import { getErrorMessage, getRateLimitSeconds } from "@/lib/api/errors";
+import { getErrorMessage, getRateLimitSeconds, isValidationError } from "@/lib/api/errors";
 import { formatDuration } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -43,6 +43,12 @@ export function ForgotPasswordForm() {
       if (retryAfter !== null) {
         cooldown.start(retryAfter > 0 ? retryAfter : DEFAULT_COOLDOWN_SECONDS);
         toast.error(t("auth.forgot.tooMany"));
+        return;
+      }
+      // 422 VALIDATION_ERROR (invalid email body) → inline on the field, not a
+      // toast (USDX-214; client-side email validation usually catches it first).
+      if (isValidationError(err)) {
+        setError(getErrorMessage(err, t("auth.forgot.failed")));
         return;
       }
       toast.error(getErrorMessage(err, t("auth.forgot.failed")));

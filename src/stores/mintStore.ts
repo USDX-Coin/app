@@ -3,8 +3,8 @@ import type { AmountCurrency } from "@/types";
 import { MINT_CHAIN_ID } from "@/lib/constants";
 
 // Mint form state (USDX-201). The review (Ringkasan) is now a modal and the
-// post-create flow redirects to /mint/checkout/{id} (own-hosted checkout,
-// USDX-202), so the old form→confirmation→status step machine + result are gone.
+// post-create flow hands off (cross-origin) to the own-hosted checkout repo
+// (mint.usdx.co.id, USDX-225), so the old form→confirmation→status machine is gone.
 // `chainId` is fixed to Polygon in Phase 2 (week2.md § Chain) — kept in state so
 // the create request carries it, but there's no chain picker in the UI.
 interface MintState {

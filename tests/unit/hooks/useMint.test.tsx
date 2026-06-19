@@ -120,18 +120,26 @@ describe("useMint", () => {
   });
 
   describe("submit", () => {
-    test("submitMint creates the order and redirects to /mint/checkout/{id}", async () => {
-      useMintStore.getState().setAmount("100");
-      useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
-      const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+    test("submitMint creates the order and hands off (cross-origin) to the checkout repo", async () => {
+      // useMint redirects via window.location.href to mint.usdx.co.id/checkout/{id}.
+      const originalLocation = window.location;
+      const locationStub = { href: "" } as Location;
+      Object.defineProperty(window, "location", { configurable: true, value: locationStub });
 
-      await waitFor(() => expect(result.current.isFormValid).toBe(true));
-      await act(async () => {
-        await result.current.submitMint();
-      });
+      try {
+        useMintStore.getState().setAmount("100");
+        useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
 
-      expect(pushMock).toHaveBeenCalledTimes(1);
-      expect(pushMock.mock.calls[0][0]).toMatch(/^\/mint\/checkout\//);
+        await waitFor(() => expect(result.current.isFormValid).toBe(true));
+        await act(async () => {
+          await result.current.submitMint();
+        });
+
+        expect(locationStub.href).toMatch(/^https:\/\/mint\.usdx\.co\.id\/checkout\/mint_/);
+      } finally {
+        Object.defineProperty(window, "location", { configurable: true, value: originalLocation });
+      }
     });
   });
 });

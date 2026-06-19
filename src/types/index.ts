@@ -159,8 +159,9 @@ export interface MintChannelOption {
   banks: VaBank[] | null;
 }
 
-// Step-1 (create) response. PG fee + total-to-pay only exist after a channel is
-// chosen, so they live on `MintOrderDetail`, not here.
+// Step-1 (create) response — satu-satunya bentuk order yang app pakai sekarang
+// (pay + status detail dipegang repo `checkout`, USDX-225). PG fee + total-to-pay
+// baru muncul setelah pilih channel di checkout, jadi tidak ada di sini.
 export interface MintOrderCreated {
   id: string;
   orderNumber: string;
@@ -179,51 +180,6 @@ export interface MintOrderCreated {
   status: MintOrderStatus;
   expiresAt: string;
   channels: MintChannelOption[];
-}
-
-// Full mint order (GET detail / after /pay). FE view model — backend-only fields
-// (idempotencyKey, amountWei, safeType) are omitted; estimated revenue is never
-// exposed to the consumer (backoffice only).
-export interface MintOrderDetail {
-  id: string;
-  orderNumber: string;
-  customerName: string;
-  type: ConsumerOrderType;
-  userAddress: string;
-  chain: string;
-  inputCurrency: AmountCurrency;
-  amount: string;
-  baseRate: string;
-  spreadBuyPct: string;
-  effectiveRate: string;
-  subtotalIdr: string;
-  mintFeePct: string;
-  mintFeeIdr: string;
-  totalBeforePgFeeIdr: string;
-  paymentChannel: PaymentChannel | null;
-  pgFeeIdr: string | null;
-  totalFeeIdr: string | null;
-  totalPayIdr: string | null;
-  paymentBank: VaBank | null;
-  paymentStatus: MintPaymentStatus;
-  safeStatus: MintSafeStatus;
-  status: MintOrderStatus;
-  paymentProvider: string;
-  virtualAccountNo: string | null;
-  paymentUrl: string | null;
-  paymentRef: string | null;
-  paidAt: string | null;
-  expiresAt: string;
-  safeTxHash: string | null;
-  onChainTxHash: string | null;
-  createdAt: string;
-  // Payment channel options + per-channel pg fee, needed by the checkout method
-  // selector while REQUESTED. The CREATE response (MintOrderCreated) always
-  // carries this; GET currently does NOT per OpenAPI — optional here so the
-  // checkout falls back to a static VA/QRIS list on refresh. Backend gap flagged
-  // to add `channels[]` to GET /v2/mint/{id} while paymentStatus=REQUESTED.
-  channels?: MintChannelOption[];
-  updatedAt: string;
 }
 
 // transactions.yaml TransactionItem — one history row. Mint-only in W2.

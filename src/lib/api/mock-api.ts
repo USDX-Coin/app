@@ -10,7 +10,6 @@ import type {
   CreateMintRequest,
   CreateRedeemRequest,
   CreateMintOrderRequest,
-  PayMintOrderRequest,
   CreateAddressBookRequest,
   ListTransactionsParams,
 } from "./types";
@@ -29,7 +28,6 @@ import type {
   AddressBookEntry,
   MintChannelOption,
   MintOrderCreated,
-  MintOrderDetail,
   ConsumerTransaction,
   VaBank,
 } from "@/types";
@@ -502,17 +500,17 @@ export async function mockDeleteAddressBook(id: string): Promise<{ id: string }>
   return { id };
 }
 
-// In-memory mint orders + a coarse lifecycle so the checkout status tracker
-// (USDX-202) has something to poll: after /pay the order auto-advances
-// WAITING_FOR_PAYMENT → PAID (after MOCK_PAID_AFTER_MS) → COMPLETED (after
-// MOCK_DONE_AFTER_MS). This approximates the W2.1/W2.2 jobs; the real backend
-// owns this progression. `paidEligibleAt` is mock bookkeeping, stripped on read.
-interface MockMintRecord extends MintOrderDetail {
-  paidEligibleAt: number | null;
+// In-memory mint orders (mock) — feeds the consumer history list (USDX-204) agar
+// order yang baru dibuat langsung muncul. Checkout (status tracker + pay) pindah ke
+// repo `checkout` (USDX-224/225); mock di sini tidak lagi advance lifecycle atau
+// melayani GET/pay — record cukup menyimpan field yang dibaca mapper history.
+interface MockMintRecord extends MintOrderCreated {
+  totalPayIdr: string | null;
+  onChainTxHash: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 const mintOrders = new Map<string, MockMintRecord>();
-const MOCK_PAID_AFTER_MS = 8_000;
-const MOCK_DONE_AFTER_MS = 16_000;
 
 export async function mockCreateMintOrder(req: CreateMintOrderRequest): Promise<MintOrderCreated> {
   await delay(600);
@@ -554,93 +552,16 @@ export async function mockCreateMintOrder(req: CreateMintOrderRequest): Promise<
     expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(),
     channels,
   };
+  // Order tetap REQUESTED di mock app — progres pembayaran/on-chain ditangani repo
+  // checkout + job backend, bukan di sini. Disimpan agar muncul di history.
   mintOrders.set(id, {
     ...created,
-    type: "MINT",
-    inputCurrency: req.amountCurrency,
-    mintFeePct: String(MOCK_MINT_FEE_PCT),
-    paymentChannel: null,
-    pgFeeIdr: null,
-    totalFeeIdr: null,
     totalPayIdr: null,
-    paymentBank: null,
-    paymentProvider: "MOCK",
-    virtualAccountNo: null,
-    paymentUrl: null,
-    paymentRef: null,
-    paidAt: null,
-    safeTxHash: null,
     onChainTxHash: null,
     createdAt: nowIso,
     updatedAt: nowIso,
-    paidEligibleAt: null,
   });
   return created;
-}
-
-export async function mockPayMintOrder(
-  id: string,
-  req: PayMintOrderRequest,
-): Promise<MintOrderDetail> {
-  await delay(500);
-  const order = mintOrders.get(id);
-  if (!order) throw new ApiError(404, "NOT_FOUND", "Order tidak ditemukan");
-  if (order.paymentStatus !== "REQUESTED") {
-    throw new ApiError(409, "INVALID_ORDER_STATE", "Order tidak dalam status REQUESTED");
-  }
-  const subtotal = Number(order.subtotalIdr);
-  const pgFee = req.channel === "VA" ? MOCK_PG_FEE_VA : subtotal * (MOCK_PG_FEE_QRIS_PCT / 100);
-  const totalFee = Number(order.mintFeeIdr) + pgFee;
-  order.paymentChannel = req.channel;
-  order.paymentBank = req.channel === "VA" ? (req.bank ?? "BCA") : null;
-  order.pgFeeIdr = idr(pgFee);
-  order.totalFeeIdr = idr(totalFee);
-  order.totalPayIdr = idr(Math.floor(subtotal + totalFee)); // ≥ Rp10.000 floor, round down
-  order.virtualAccountNo = req.channel === "VA" ? "8808" + String(Date.now()).slice(-10) : null;
-  order.paymentUrl = req.channel === "QRIS" ? "https://mock.pay.local/qris/" + id : null;
-  order.paymentRef = "MOCKREF" + String(Date.now()).slice(-8);
-  order.paymentStatus = "WAITING_FOR_PAYMENT";
-  order.status = "WAITING_FOR_PAYMENT";
-  order.expiresAt = new Date(Date.now() + 60 * 60_000).toISOString();
-  order.updatedAt = new Date().toISOString();
-  order.paidEligibleAt = Date.now() + MOCK_PAID_AFTER_MS;
-  return stripMockBookkeeping(order);
-}
-
-export async function mockGetMintOrder(id: string): Promise<MintOrderDetail> {
-  await delay(200);
-  const order = mintOrders.get(id);
-  if (!order) throw new ApiError(404, "NOT_FOUND", "Order tidak ditemukan");
-  advanceMockMintLifecycle(order);
-  return stripMockBookkeeping(order);
-}
-
-function advanceMockMintLifecycle(order: MockMintRecord): void {
-  if (order.paidEligibleAt == null) return;
-  const now = Date.now();
-  if (order.paymentStatus === "WAITING_FOR_PAYMENT" && now >= order.paidEligibleAt) {
-    order.paymentStatus = "PAID";
-    order.paidAt = new Date().toISOString();
-    order.safeStatus = "PENDING_APPROVAL";
-    order.status = "WAITING_FOR_APPROVAL";
-    order.updatedAt = order.paidAt;
-  }
-  if (
-    order.paymentStatus === "PAID" &&
-    order.status !== "COMPLETED" &&
-    now >= order.paidEligibleAt - MOCK_PAID_AFTER_MS + MOCK_DONE_AFTER_MS
-  ) {
-    order.safeStatus = "EXECUTED";
-    order.status = "COMPLETED";
-    order.onChainTxHash = "0x" + now.toString(16).padStart(64, "0").slice(0, 64);
-    order.safeTxHash = "0x" + (now + 1).toString(16).padStart(64, "0").slice(0, 64);
-    order.updatedAt = new Date().toISOString();
-  }
-}
-
-function stripMockBookkeeping(order: MockMintRecord): MintOrderDetail {
-  const { paidEligibleAt: _paidEligibleAt, ...detail } = order;
-  return detail;
 }
 
 function mintRecordToTransaction(order: MockMintRecord): ConsumerTransaction {

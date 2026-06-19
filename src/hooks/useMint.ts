@@ -2,16 +2,16 @@
 
 // Mint form logic (USDX-201). Combines the mint store + live rate
 // (GET /v2/rate) + validation + the create-order mutation (POST /v2/mint).
-// On success it redirects to the own-hosted checkout (/mint/checkout/{id},
-// USDX-202). The Ringkasan (review) is a modal, so there's no in-page step
-// machine anymore — see mintStore.
+// On success it hands off (cross-origin redirect) to the own-hosted checkout repo
+// at `mint.usdx.co.id/checkout/{id}` (USDX-225). The Ringkasan (review) is a modal,
+// so there's no in-page step machine anymore — see mintStore.
 
 import { useMemo } from "react";
-import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMintStore } from "@/stores/mintStore";
 import { useConsumerRate } from "@/hooks/useConsumerRate";
 import { createMintOrder } from "@/lib/api/mint-api";
+import { env } from "@/lib/env";
 import { validateAmount, validateAddress } from "@/lib/validations";
 import { parseAmount } from "@/lib/utils";
 import { getChainById } from "@/lib/chains";
@@ -32,7 +32,6 @@ function mintErrorKey(error: unknown): string | null {
 
 export function useMint() {
   const store = useMintStore();
-  const router = useRouter();
   const queryClient = useQueryClient();
   const rateQuery = useConsumerRate();
 
@@ -84,7 +83,10 @@ export function useMint() {
       }),
     onSuccess: (order) => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      router.push(`/mint/checkout/${order.id}`);
+      // Cross-origin handoff ke checkout own-hosted (repo `checkout`). location.href
+      // (push, bukan replace) → tombol "Kembali" di checkout balik ke /mint. Cookie
+      // sesi `.usdx.co.id` kebawa lintas-subdomain (USDX-222).
+      window.location.href = `${env.checkoutUrl}/checkout/${order.id}`;
     },
   });
 

@@ -157,7 +157,7 @@ export function TransactionList() {
         <button
           onClick={() => copy(tx.txHash!)}
           className="text-muted-foreground hover:text-foreground"
-          aria-label={t("checkout.copy")}
+          aria-label={t("common.copy")}
         >
           <Copy className="size-3.5" />
         </button>

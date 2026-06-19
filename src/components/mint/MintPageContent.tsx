@@ -1,8 +1,8 @@
 "use client";
 
 // /mint page (USDX-201). Single form view — the review is a modal and the
-// post-create flow redirects to /mint/checkout/{id} (USDX-202), so there's no
-// in-page confirmation/status step anymore.
+// post-create flow hands off (cross-origin) to the checkout repo at
+// mint.usdx.co.id (USDX-225), so there's no in-page confirmation/status step.
 
 import { PageHeader } from "@/components/shared/PageHeader";
 import { KycStatusSection } from "@/components/kyc/KycStatusSection";

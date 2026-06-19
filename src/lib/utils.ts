@@ -21,11 +21,12 @@ export function formatUSD(value: number): string {
   }).format(value);
 }
 
+// Tampilkan IDR sebagai rupiah bulat (tanpa ,00 di belakang) biar bersih dibaca —
+// konsisten dengan halaman checkout. Display-only; nominal otoritatif tetap dari backend.
 export function formatIDR(value: number): string {
   if (!Number.isFinite(value)) return "—";
   return `Rp ${new Intl.NumberFormat("id-ID", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    maximumFractionDigits: 0,
   }).format(value)}`;
 }
 

@@ -2,9 +2,9 @@
 
 // Ringkasan Transaksi modal (USDX-201, week2.md § Halaman Checkout & Ringkasan #2).
 // Final confirmation before the order is created. "Lanjut Pembayaran" calls
-// POST /v2/mint (create) then the hook redirects to /mint/checkout/{id}.
-// Create errors (422 RECIPIENT_BLACKLISTED / VALIDATION_ERROR, 503 MINT_DISABLED)
-// surface inline.
+// POST /v2/mint (create) then the hook hands off (cross-origin) to the checkout
+// repo at mint.usdx.co.id (USDX-225). Create errors (422 RECIPIENT_BLACKLISTED /
+// VALIDATION_ERROR, 503 MINT_DISABLED) surface inline.
 
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useMint } from "@/hooks/useMint";
@@ -66,7 +66,7 @@ export function MintReview({ open, onOpenChange }: MintReviewProps) {
 
         <div className="mt-1 flex flex-col gap-1 border-t border-border pt-3">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-foreground">{t("checkout.totalPayment")}</span>
+            <span className="text-sm font-medium text-foreground">{t("sum.totalPayment")}</span>
             <span className="text-sm font-semibold text-foreground">≈ {formatIDR(subtotalIdr)}</span>
           </div>
           <p className="text-xs text-muted-foreground">{t("sum.feeNote")}</p>

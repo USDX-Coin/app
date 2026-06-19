@@ -1,4 +1,4 @@
-import type { AmountCurrency, ConsumerOrderType, EntityType, PaymentChannel, VaBank } from "@/types";
+import type { AmountCurrency, ConsumerOrderType, EntityType } from "@/types";
 
 // ── Auth (openapi auth.yaml — Auth v2 / consumer) ──────────────────────────
 export interface LoginRequest {
@@ -92,18 +92,13 @@ export interface CreateRedeemRequest {
 
 // ── Phase 2 Week 2 — consumer mint v2 + address book (USDX-205) ─────────────
 // Request bodies for the real `/api/v2/*` client modules (mint-api, address-book-api).
-// openapi mint.yaml CreateMintOrderV2 / PayMintOrderRequest, address-book.yaml.
+// openapi mint.yaml CreateMintOrderV2, address-book.yaml.
 
 export interface CreateMintOrderRequest {
   userAddress: string; // EVM address (manual / address book); stored as-is
   amount: string; // decimal — USD = USDX amount, IDR = subtotal (mint value)
   amountCurrency: AmountCurrency;
   chain: string; // Phase 2 = Polygon-only → FE sends "polygon" (hardcoded)
-}
-
-export interface PayMintOrderRequest {
-  channel: PaymentChannel;
-  bank?: VaBank | null; // required when channel = VA, ignored for QRIS
 }
 
 export interface CreateAddressBookRequest {

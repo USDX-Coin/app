@@ -17,8 +17,16 @@ async function login(page: import("@playwright/test").Page) {
 
 test.describe("Mint Flow", () => {
   test.describe("positive", () => {
-    test("complete mint flow: form -> Ringkasan modal -> checkout", async ({ page }) => {
+    test("complete mint flow: form -> Ringkasan modal -> redirect handoff to checkout", async ({
+      page,
+    }) => {
       await login(page);
+
+      // Checkout lives in a separate repo/origin (mint.usdx.co.id) — stub it so the
+      // cross-origin handoff lands on a controllable page, not the real site.
+      await page.route("https://mint.usdx.co.id/**", (route) =>
+        route.fulfill({ status: 200, contentType: "text/html", body: "<h1>checkout</h1>" }),
+      );
 
       // Fill mint form
       await page.getByPlaceholder("0", { exact: true }).fill("250");
@@ -30,15 +38,10 @@ test.describe("Mint Flow", () => {
       await expect(page.getByText("250 USDX").first()).toBeVisible();
       await expect(page.getByText("0xabcd...ef12")).toBeVisible();
 
-      // Proceed -> creates the order and redirects to the own-hosted checkout
+      // Proceed -> creates the order (POST /v2/mint) -> hands off (cross-origin) to
+      // mint.usdx.co.id/checkout/{orderId} (USDX-225).
       await page.getByRole("button", { name: "Proceed Payment" }).click();
-      await page.waitForURL(/\/mint\/checkout\//, { timeout: 15000 });
-      await expect(page.getByText("Choose payment method")).toBeVisible();
-      await expect(page.getByText(/#USDX-/)).toBeVisible();
-
-      // Cancel (before choosing a method) returns to the mint form
-      await page.getByRole("button", { name: "Cancel" }).click();
-      await expect(page.getByText("You will mint")).toBeVisible({ timeout: 15000 });
+      await page.waitForURL(/^https:\/\/mint\.usdx\.co\.id\/checkout\/mint_/, { timeout: 15000 });
     });
   });
 

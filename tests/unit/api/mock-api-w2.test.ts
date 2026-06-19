@@ -5,8 +5,6 @@ import {
   mockAddAddressBook,
   mockDeleteAddressBook,
   mockCreateMintOrder,
-  mockPayMintOrder,
-  mockGetMintOrder,
   mockListConsumerTransactions,
   MOCK_BLACKLISTED_ADDRESS,
 } from "@/lib/api/mock-api";
@@ -75,7 +73,9 @@ describe("mock address book", () => {
   });
 });
 
-describe("mock mint v2 lifecycle", () => {
+// Pay + status (GET/pay) dipindah ke repo `checkout` (USDX-225); app mock hanya
+// CREATE (order tetap REQUESTED) + feeds history. Lifecycle tracker diuji di checkout.
+describe("mock mint v2 create", () => {
   describe("positive", () => {
     test("create returns a REQUESTED order with VA (banks) + QRIS (no banks) channels", async () => {
       const order = await mockCreateMintOrder({
@@ -92,44 +92,9 @@ describe("mock mint v2 lifecycle", () => {
       expect(va?.banks?.length).toBeGreaterThan(0);
       expect(qris?.banks).toBeNull();
     });
-
-    test("pay sets WAITING_FOR_PAYMENT + a VA number + total to pay", async () => {
-      const order = await mockCreateMintOrder({
-        userAddress: "0xMint00000000000000000000000000000000000b",
-        amount: "50",
-        amountCurrency: "USD",
-        chain: "polygon",
-      });
-      const paid = await mockPayMintOrder(order.id, { channel: "VA", bank: "BCA" });
-      expect(paid.paymentStatus).toBe("WAITING_FOR_PAYMENT");
-      expect(paid.paymentChannel).toBe("VA");
-      expect(paid.paymentBank).toBe("BCA");
-      expect(paid.virtualAccountNo).toBeTruthy();
-      expect(paid.totalPayIdr).toBeTruthy();
-      // mock bookkeeping field must not leak into the returned detail
-      expect("paidEligibleAt" in paid).toBe(false);
-    });
   });
 
   describe("negative", () => {
-    test("paying twice throws 409 INVALID_ORDER_STATE", async () => {
-      const order = await mockCreateMintOrder({
-        userAddress: "0xMint00000000000000000000000000000000000c",
-        amount: "10",
-        amountCurrency: "USD",
-        chain: "polygon",
-      });
-      await mockPayMintOrder(order.id, { channel: "QRIS" });
-      await expect(mockPayMintOrder(order.id, { channel: "QRIS" })).rejects.toMatchObject({
-        status: 409,
-        code: "INVALID_ORDER_STATE",
-      });
-    });
-
-    test("get of an unknown order throws 404", async () => {
-      await expect(mockGetMintOrder("mint_nope")).rejects.toMatchObject({ status: 404 });
-    });
-
     test("create rejects a blacklisted recipient with 422 RECIPIENT_BLACKLISTED", async () => {
       await expect(
         mockCreateMintOrder({

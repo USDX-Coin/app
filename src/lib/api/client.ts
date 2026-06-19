@@ -3,6 +3,9 @@
 // mental model:
 // - Prepends `env.apiBaseUrl` so requests hit the configured backend, not the FE origin.
 // - Attaches `Authorization: Bearer <token>` (openapi global `security: [bearerAuth]`).
+// - Sends `credentials: "include"` so the cross-subdomain session cookie (`.usdx.co.id`,
+//   USDX-222/228) is stored on login + sent to the API — the own-hosted checkout
+//   (`mint.usdx.co.id`) authenticates via that cookie, not Bearer (USDX-226). See fetch below.
 // - Unwraps the SoT `{ status, metadata, data }` envelope and returns `data`
 //   (`apiFetch`), or keeps `metadata` for paginated lists (`apiFetchPaginated`).
 // - Throws `ApiError` (SoT `ErrorResponse` shape) for non-2xx, parsing `Retry-After`.
@@ -123,6 +126,12 @@ async function request(path: string, options: ApiFetchOptions = {}): Promise<unk
   const response = await fetch(`${env.apiBaseUrl}${path}`, {
     ...rest,
     headers: finalHeaders,
+    // USDX-226/228: credentialed so the cross-subdomain session cookie (`.usdx.co.id`) is
+    // honored. Login is a CROSS-ORIGIN request to the API (app + API are sibling subdomains);
+    // a non-credentialed cross-origin response has its `Set-Cookie` DISCARDED by the browser,
+    // so without this the checkout (mint.usdx.co.id) cookie is never stored → checkout 401.
+    // Harmless for bearer flows (backend reads Bearer); CORS already allows credentials (USDX-222).
+    credentials: "include",
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 

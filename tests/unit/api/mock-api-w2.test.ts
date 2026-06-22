@@ -117,5 +117,29 @@ describe("mockListConsumerTransactions", () => {
       expect(result.metadata.limit).toBe(5);
       expect(result.data.every((t) => t.type === "MINT")).toBe(true);
     });
+
+    // USDX-244: union now includes redeem rows (type=REDEEM filter effective).
+    test("returns redeem rows with net payout + RedeemStatus + burn fields", async () => {
+      const result = await mockListConsumerTransactions({ page: 1, take: 50, type: "REDEEM" });
+      expect(result.data.length).toBeGreaterThan(0);
+      expect(result.data.every((t) => t.type === "REDEEM")).toBe(true);
+      const row = result.data[0];
+      // Redeem rows carry gross + net (not the mint subtotal/totalPay fields).
+      expect(row.netPayoutIdr).not.toBeNull();
+      expect(row.grossIdr).not.toBeNull();
+      expect(row.subtotalIdr).toBeNull();
+      expect(row.totalPayIdr).toBeNull();
+      expect(row.paymentStatus).toBeNull();
+      // A completed redeem exposes its burn tx hash.
+      const complete = result.data.find((t) => t.status === "PAYOUT_COMPLETE");
+      expect(complete?.txHash).toMatch(/^0x/);
+    });
+
+    test("unfiltered union contains both mint and redeem", async () => {
+      const result = await mockListConsumerTransactions({ page: 1, take: 50 });
+      const types = new Set(result.data.map((t) => t.type));
+      expect(types.has("MINT")).toBe(true);
+      expect(types.has("REDEEM")).toBe(true);
+    });
   });
 });

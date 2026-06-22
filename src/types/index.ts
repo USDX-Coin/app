@@ -245,18 +245,23 @@ export interface RedeemOrderDetail extends RedeemOrderCreated {
   updatedAt: string;
 }
 
-// transactions.yaml TransactionItem — one history row. Mint-only in W2.
+// transactions.yaml TransactionItem — one history row, union mint + redeem
+// (REDEEM effective W3, USDX-244). Which money fields are populated depends on
+// `type`: MINT → subtotalIdr + totalPayIdr + paymentStatus (MintOrderStatus);
+// REDEEM → grossIdr + netPayoutIdr + status (RedeemStatus), txHash = burn hash.
 export interface ConsumerTransaction {
   id: string;
   type: ConsumerOrderType;
-  amount: string;
-  subtotalIdr: string;
-  totalPayIdr: string | null;
-  effectiveRate: string;
+  amount: string; // decimal USDX
+  subtotalIdr: string | null; // MINT: amount × effectiveBuyRate. Null for redeem.
+  grossIdr: string | null; // REDEEM: amount × effectiveSellRate (pre-fee). Null for mint.
+  totalPayIdr: string | null; // MINT: total paid (null before channel pick). REDEEM: null.
+  netPayoutIdr: string | null; // REDEEM: IDR received (gross − fee). Null for mint.
+  effectiveRate: string; // snapshot rate (buy for mint, sell for redeem)
   chain: string;
-  paymentStatus: MintPaymentStatus;
-  status: MintOrderStatus;
-  txHash: string | null;
+  paymentStatus: MintPaymentStatus | null; // MINT only. Null for redeem.
+  status: MintOrderStatus | RedeemStatus; // MINT → MintOrderStatus; REDEEM → RedeemStatus
+  txHash: string | null; // MINT: on-chain tx. REDEEM: burn tx.
   createdAt: string;
   updatedAt: string;
 }

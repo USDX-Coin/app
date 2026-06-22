@@ -584,7 +584,9 @@ function mintRecordToTransaction(order: MockMintRecord): ConsumerTransaction {
     type: "MINT",
     amount: order.amount,
     subtotalIdr: order.subtotalIdr,
+    grossIdr: null, // redeem-only
     totalPayIdr: order.totalPayIdr,
+    netPayoutIdr: null, // redeem-only
     effectiveRate: order.effectiveRate,
     chain: order.chain,
     paymentStatus: order.paymentStatus,
@@ -607,7 +609,9 @@ function seededTransactions(): ConsumerTransaction[] {
       type: "MINT" as const,
       amount: idr(usdx),
       subtotalIdr: idr(subtotal),
+      grossIdr: null,
       totalPayIdr: idr(Math.floor(subtotal * 1.017)),
+      netPayoutIdr: null,
       effectiveRate: idr(mockEffectiveBuyRate()),
       chain: "polygon",
       paymentStatus: "PAID" as const,
@@ -628,6 +632,8 @@ export async function mockListConsumerTransactions(
   const all = [
     ...[...mintOrders.values()].map(mintRecordToTransaction),
     ...seededTransactions(),
+    ...[...redeemOrders.values()].map(redeemRecordToTransaction),
+    ...seededRedeemTransactions(),
   ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const filtered = params.type ? all.filter((t) => t.type === params.type) : all;
   const start = (page - 1) * take;
@@ -818,4 +824,62 @@ export async function mockGetRedeemOrder(id: string): Promise<RedeemOrderDetail>
   const record = redeemOrders.get(id);
   if (!record) throw new ApiError(404, "NOT_FOUND", "Redeem order tidak ditemukan");
   return resolveRedeemDetail(record);
+}
+
+// ── Mock W3: redeem rows in the union history list (USDX-244) ───────────────
+// `GET /v2/transactions` is union mint + redeem. Map any redeem orders created
+// this session, plus a few seeded rows (various RedeemStatus) so /history shows
+// redeem in mock dev before the user redeems. REDEEM rows fill grossIdr +
+// netPayoutIdr + status (RedeemStatus); txHash = burn hash.
+function redeemRecordToTransaction(record: MockRedeemRecord): ConsumerTransaction {
+  const d = resolveRedeemDetail(record);
+  return {
+    id: d.id,
+    type: "REDEEM",
+    amount: d.amount,
+    subtotalIdr: null, // mint-only
+    grossIdr: d.grossIdr,
+    totalPayIdr: null, // mint-only
+    netPayoutIdr: d.netPayoutIdr,
+    effectiveRate: d.effectiveRate,
+    chain: d.chain,
+    paymentStatus: null, // mint-only
+    status: d.status,
+    txHash: d.burnTxHash,
+    createdAt: d.createdAt,
+    updatedAt: d.updatedAt,
+  };
+}
+
+function seededRedeemTransactions(): ConsumerTransaction[] {
+  const base = new Date("2026-06-11T09:00:00Z").getTime();
+  const rate = mockEffectiveSellRate();
+  const seeds: { usdx: number; status: RedeemStatus; burned: boolean }[] = [
+    { usdx: 100, status: "PAYOUT_COMPLETE", burned: true },
+    { usdx: 250, status: "PROCESSING_PAYOUT", burned: true },
+    { usdx: 50, status: "AWAITING_BURN", burned: false },
+    { usdx: 500, status: "EXPIRED", burned: false },
+  ];
+  return seeds.map((s, i) => {
+    const gross = s.usdx * rate;
+    const net = Math.floor(gross - (gross * (REDEEM_FEE_PCT / 100) + DISBURSEMENT_FEE_FLAT_IDR));
+    return {
+      id: `seed_rdm_${String(i + 1).padStart(3, "0")}`,
+      type: "REDEEM" as const,
+      amount: idr(s.usdx),
+      subtotalIdr: null,
+      grossIdr: idr(gross),
+      totalPayIdr: null,
+      netPayoutIdr: idr(net),
+      effectiveRate: idr(rate),
+      chain: "polygon",
+      paymentStatus: null,
+      status: s.status,
+      txHash: s.burned
+        ? "0x" + (3_000_000 + i * 7919).toString(16).padStart(64, "0").slice(0, 64)
+        : null,
+      createdAt: new Date(base - i * 5 * 3_600_000).toISOString(),
+      updatedAt: new Date(base - i * 5 * 3_600_000).toISOString(),
+    };
+  });
 }

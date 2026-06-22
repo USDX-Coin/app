@@ -3,6 +3,7 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import { createWrapper } from "../../helpers/test-utils";
 import { useMint } from "@/hooks/useMint";
 import { useMintStore } from "@/stores/mintStore";
+import { useAuthStore } from "@/stores/authStore";
 
 const { pushMock } = vi.hoisted(() => ({ pushMock: vi.fn() }));
 
@@ -16,6 +17,7 @@ const EFFECTIVE_RATE = 16400;
 
 beforeEach(() => {
   useMintStore.getState().reset();
+  useAuthStore.setState({ token: null });
   pushMock.mockReset();
 });
 
@@ -120,13 +122,14 @@ describe("useMint", () => {
   });
 
   describe("submit", () => {
-    test("submitMint creates the order and hands off (cross-origin) to the checkout repo", async () => {
-      // useMint redirects via window.location.href to mint.usdx.co.id/checkout/{id}.
+    test("submitMint creates the order and hands off to checkout with the bearer token in the URL hash (USDX-240)", async () => {
+      // useMint redirects via window.location.href to mint.usdx.co.id/checkout/{id}#token=<jwt>.
       const originalLocation = window.location;
       const locationStub = { href: "" } as Location;
       Object.defineProperty(window, "location", { configurable: true, value: locationStub });
 
       try {
+        useAuthStore.setState({ token: "tok/abc" });
         useMintStore.getState().setAmount("100");
         useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
         const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
@@ -136,7 +139,9 @@ describe("useMint", () => {
           await result.current.submitMint();
         });
 
-        expect(locationStub.href).toMatch(/^https:\/\/mint\.usdx\.co\.id\/checkout\/mint_/);
+        expect(locationStub.href).toContain("/checkout/mint_");
+        // Token di-handoff via URL hash, URL-encoded (USDX-240, supersede cookie).
+        expect(locationStub.href).toContain("#token=tok%2Fabc");
       } finally {
         Object.defineProperty(window, "location", { configurable: true, value: originalLocation });
       }

@@ -122,3 +122,13 @@ export const VIEWPORTS = {
 export async function seedWallet(page: import("@playwright/test").Page) {
   await page.addInitScript(() => localStorage.setItem("usdx-mock-wallet", "1"));
 }
+
+/**
+ * Arm the mint/redeem throughput-throttle seam (mock-api RATE_LIMIT_OVERRIDE_KEY,
+ * USDX-252): every mint/redeem create + status poll returns 429 RATE_LIMITED with
+ * this Retry-After, so the central throttle toast + poll backoff are testable
+ * offline. Call before the first page.goto().
+ */
+export async function seedRateLimit(page: import("@playwright/test").Page, seconds = 3) {
+  await page.addInitScript((s) => localStorage.setItem("usdx-mock-ratelimit", s), String(seconds));
+}

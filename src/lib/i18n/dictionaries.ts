@@ -170,6 +170,8 @@ const en: Dict = {
   "toast.sendSubmitted": "Send request submitted",
   "toast.redeemSubmitted": "Redeem request submitted",
   "toast.copied": "Copied!",
+  // 429 RATE_LIMITED throttle toast (USDX-252)
+  "rate.limited": "Too many requests, please try again shortly.",
   // confirmation / status (Redeem / Bridge / Send)
   "title.redeemConfirmation": "Redeem Confirmation",
   "title.redeemStatus": "Redeem Status",
@@ -566,6 +568,8 @@ const id: Dict = {
   "toast.sendSubmitted": "Permintaan kirim terkirim",
   "toast.redeemSubmitted": "Permintaan redeem terkirim",
   "toast.copied": "Disalin!",
+  // 429 RATE_LIMITED throttle toast (USDX-252)
+  "rate.limited": "Terlalu banyak permintaan, coba lagi sebentar.",
   "title.redeemConfirmation": "Konfirmasi Redeem",
   "title.redeemStatus": "Status Redeem",
   "title.bridgeConfirmation": "Konfirmasi Bridge",

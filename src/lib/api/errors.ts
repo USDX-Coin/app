@@ -47,11 +47,20 @@ export function isValidationError(error: unknown): boolean {
   return isApiError(error) && error.code === "VALIDATION_ERROR";
 }
 
-// 429 — rate limited (TOO_MANY_ATTEMPTS / TOO_MANY_REQUESTS). Returns seconds to
-// wait if known, else null.
+// 429 — rate limited (TOO_MANY_ATTEMPTS / TOO_MANY_REQUESTS / RATE_LIMITED).
+// Returns seconds to wait if known, else null.
 export function getRateLimitSeconds(error: unknown): number | null {
   if (isApiError(error) && error.status === 429) return error.retryAfterSeconds ?? 0;
   return null;
+}
+
+// 429 RATE_LIMITED — throughput throttle on mint/redeem (5 req/s per user;
+// conventions.md § Rate Limiting (Redis)). Distinct from auth's TOO_MANY_ATTEMPTS
+// (wrong-credential attempts) / TOO_MANY_REQUESTS (resend cooldown), which drive a
+// countdown. A transient throttle, NOT a session error — handle with a backoff +
+// toast, and never logout (unlike 401).
+export function isRateLimited(error: unknown): boolean {
+  return isApiError(error) && error.status === 429 && error.code === "RATE_LIMITED";
 }
 
 // 401 INVALID_CREDENTIALS — generic "wrong password" (auth.yaml login /

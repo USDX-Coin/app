@@ -17,12 +17,16 @@ import { env } from "@/lib/env";
 import { validateAmount, validateAddress } from "@/lib/validations";
 import { parseAmount } from "@/lib/utils";
 import { getChainById } from "@/lib/chains";
-import { isApiError, isValidationError } from "@/lib/api/errors";
+import { isApiError, isValidationError, isRateLimited } from "@/lib/api/errors";
 
 // Maps a create-order failure to an i18n key the review modal renders inline
 // (week2.md § Endpoints Mint error codes).
 function mintErrorKey(error: unknown): string | null {
   if (!error) return null;
+  // 429 RATE_LIMITED is surfaced globally as a toast (Providers query/mutation
+  // cache, USDX-252) — suppress the inline modal error (would read as a generic
+  // failure); the user can retry once the throttle clears.
+  if (isRateLimited(error)) return null;
   if (isApiError(error)) {
     if (error.code === "RECIPIENT_BLACKLISTED") return "mint.errBlacklisted";
     if (isValidationError(error)) return "mint.errValidation";

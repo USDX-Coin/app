@@ -1,35 +1,47 @@
 import { create } from "zustand";
-import type { RedeemStep, RedeemOrder } from "@/types";
-import { DEFAULT_CHAIN_ID } from "@/lib/chains";
+import type { RedeemStep, AmountCurrency } from "@/types";
 
+// Redeem form state (USDX-243). Bank fields are entered inline per order
+// (redeem.yaml CreateRedeemOrder) — there's no saved bank-account book. The
+// Ringkasan is a modal over the form, so the only views are `form` and the
+// `tracker` (polling the created order). `chain` is fixed to Polygon in Phase 2
+// (week3.md § Chain) and applied at request build, so it isn't kept in state.
 interface RedeemState {
   step: RedeemStep;
-  chainId: string;
   amount: string;
-  bankAccountId: string;
-  result: RedeemOrder | null;
+  amountCurrency: AmountCurrency; // currency the user typed the amount in
+  bankCode: string;
+  bankAccountNumber: string;
+  bankAccountName: string;
+  orderId: string | null; // created order id the status tracker polls
   setStep: (step: RedeemStep) => void;
-  setChainId: (chainId: string) => void;
   setAmount: (amount: string) => void;
-  setBankAccountId: (id: string) => void;
-  setResult: (result: RedeemOrder) => void;
+  setAmountCurrency: (currency: AmountCurrency) => void;
+  setBankCode: (code: string) => void;
+  setBankAccountNumber: (value: string) => void;
+  setBankAccountName: (value: string) => void;
+  setOrderId: (id: string) => void;
   reset: () => void;
 }
 
 const initialState = {
   step: "form" as RedeemStep,
-  chainId: DEFAULT_CHAIN_ID,
   amount: "",
-  bankAccountId: "",
-  result: null as RedeemOrder | null,
+  amountCurrency: "USD" as AmountCurrency,
+  bankCode: "",
+  bankAccountNumber: "",
+  bankAccountName: "",
+  orderId: null as string | null,
 };
 
 export const useRedeemStore = create<RedeemState>()((set) => ({
   ...initialState,
   setStep: (step) => set({ step }),
-  setChainId: (chainId) => set({ chainId }),
   setAmount: (amount) => set({ amount }),
-  setBankAccountId: (id) => set({ bankAccountId: id }),
-  setResult: (result) => set({ result }),
+  setAmountCurrency: (amountCurrency) => set({ amountCurrency }),
+  setBankCode: (bankCode) => set({ bankCode }),
+  setBankAccountNumber: (bankAccountNumber) => set({ bankAccountNumber }),
+  setBankAccountName: (bankAccountName) => set({ bankAccountName }),
+  setOrderId: (orderId) => set({ orderId }),
   reset: () => set(initialState),
 }));

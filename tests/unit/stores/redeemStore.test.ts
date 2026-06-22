@@ -8,25 +8,41 @@ describe("redeemStore", () => {
 
   describe("positive", () => {
     test("setStep changes step", () => {
-      useRedeemStore.getState().setStep("confirmation");
-      expect(useRedeemStore.getState().step).toBe("confirmation");
+      useRedeemStore.getState().setStep("tracker");
+      expect(useRedeemStore.getState().step).toBe("tracker");
     });
 
-    test("setBankAccountId changes bank account", () => {
-      useRedeemStore.getState().setBankAccountId("bank_1");
-      expect(useRedeemStore.getState().bankAccountId).toBe("bank_1");
+    test("setters update amount + bank fields", () => {
+      const s = useRedeemStore.getState();
+      s.setAmount("100");
+      s.setAmountCurrency("IDR");
+      s.setBankCode("014");
+      s.setBankAccountNumber("1234563210");
+      s.setBankAccountName("SINGGIH BRILIAN TARA");
+      s.setOrderId("rdm_1");
+
+      const state = useRedeemStore.getState();
+      expect(state.amount).toBe("100");
+      expect(state.amountCurrency).toBe("IDR");
+      expect(state.bankCode).toBe("014");
+      expect(state.bankAccountNumber).toBe("1234563210");
+      expect(state.bankAccountName).toBe("SINGGIH BRILIAN TARA");
+      expect(state.orderId).toBe("rdm_1");
     });
 
     test("reset restores initial state", () => {
-      useRedeemStore.getState().setStep("status");
-      useRedeemStore.getState().setAmount("1000");
-      useRedeemStore.getState().setBankAccountId("bank_1");
-      useRedeemStore.getState().reset();
+      const s = useRedeemStore.getState();
+      s.setStep("tracker");
+      s.setAmount("1000");
+      s.setBankCode("014");
+      s.setOrderId("rdm_1");
+      s.reset();
 
       const state = useRedeemStore.getState();
       expect(state.step).toBe("form");
       expect(state.amount).toBe("");
-      expect(state.bankAccountId).toBe("");
+      expect(state.bankCode).toBe("");
+      expect(state.orderId).toBeNull();
     });
   });
 
@@ -34,23 +50,24 @@ describe("redeemStore", () => {
     test("initial state has empty form data", () => {
       const state = useRedeemStore.getState();
       expect(state.amount).toBe("");
-      expect(state.bankAccountId).toBe("");
+      expect(state.bankCode).toBe("");
+      expect(state.bankAccountNumber).toBe("");
+      expect(state.bankAccountName).toBe("");
+      expect(state.orderId).toBeNull();
     });
   });
 
   describe("edge cases", () => {
-    test("can transition through all redeem steps", () => {
-      const store = useRedeemStore.getState();
-      store.setStep("form");
-      expect(useRedeemStore.getState().step).toBe("form");
-      store.setStep("confirmation");
-      expect(useRedeemStore.getState().step).toBe("confirmation");
-      store.setStep("status");
-      expect(useRedeemStore.getState().step).toBe("status");
+    test("default denomination is USD", () => {
+      expect(useRedeemStore.getState().amountCurrency).toBe("USD");
     });
 
-    test("default chain is base", () => {
-      expect(useRedeemStore.getState().chainId).toBe("base");
+    test("can transition form → tracker", () => {
+      const s = useRedeemStore.getState();
+      s.setStep("form");
+      expect(useRedeemStore.getState().step).toBe("form");
+      s.setStep("tracker");
+      expect(useRedeemStore.getState().step).toBe("tracker");
     });
   });
 });

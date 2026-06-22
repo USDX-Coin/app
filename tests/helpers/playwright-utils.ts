@@ -111,3 +111,14 @@ export const VIEWPORTS = {
   tablet: { width: 768, height: 1024 },
   desktop: { width: 1280, height: 720 },
 } as const;
+
+/**
+ * Arm the redeem wallet seam (lib/redeem/wallet.ts MOCK_WALLET_SEAM_KEY).
+ * Playwright has no wallet extension, so the contextual connect would otherwise
+ * open RainbowKit and stall. With the seam armed, connect() resolves to a
+ * deterministic mock address — letting the full redeem flow (connect →
+ * Ringkasan → burn → tracker) run offline. Call before the first page.goto().
+ */
+export async function seedWallet(page: import("@playwright/test").Page) {
+  await page.addInitScript(() => localStorage.setItem("usdx-mock-wallet", "1"));
+}

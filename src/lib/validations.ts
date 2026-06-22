@@ -91,3 +91,18 @@ export function validatePhone(phone: string): string | null {
   if (!PHONE_REGEX.test(cleaned)) return "Enter a valid Indonesian number (+62… or 08…)";
   return null;
 }
+
+// Redeem destination bank account (USDX-243). Number is digits-only (6–20);
+// holder name is free text. The backend re-validates via the provider inquiry
+// (422 INVALID_BANK_ACCOUNT) — these are the up-front field checks.
+export function validateBankAccountNumber(value: string): string | null {
+  if (!value || value.trim() === "") return "Account number is required";
+  if (!/^[0-9]{6,20}$/.test(value.trim())) return "Account number must be 6–20 digits";
+  return null;
+}
+
+export function validateBankAccountName(value: string): string | null {
+  if (!value || value.trim() === "") return "Account holder name is required";
+  if (value.trim().length < 2) return "Name must be at least 2 characters";
+  return null;
+}

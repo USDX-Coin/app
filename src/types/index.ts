@@ -105,7 +105,10 @@ export interface RegisterResult {
 }
 
 export type MintStep = "form" | "confirmation" | "status";
-export type RedeemStep = "form" | "confirmation" | "status";
+// Redeem is a single form view + a polling status tracker (USDX-243). The
+// Ringkasan is a modal over the form (like mint), so there's no in-page
+// confirmation step — `form` collects input, `tracker` polls the order status.
+export type RedeemStep = "form" | "tracker";
 
 // ── Phase 2 Week 2 — consumer mint / rate / address book / history (USDX-205) ──
 // Mirrors the OpenAPI contract (rate.yaml, address-book.yaml, mint.yaml,
@@ -135,12 +138,16 @@ export type MintOrderStatus = "WAITING_FOR_PAYMENT" | "WAITING_FOR_APPROVAL" | "
 // Consumer order type (openapi TransactionType). W2 = MINT; REDEEM effective W3.
 export type ConsumerOrderType = "MINT" | "REDEEM";
 
-// GET /api/v2/rate — base + directional spread for the consumer mint preview.
+// GET /api/v2/rate — base + directional spread for the consumer preview.
+// Mint previews with `effectiveBuyRate`, redeem (W3) with `effectiveSellRate`
+// (rate.yaml § ConsumerRate). The final transaction value is re-snapshotted by
+// the backend at order create — the FE never re-floats these.
 export interface ConsumerRate {
   baseRate: string;
   spreadBuyPct: string;
   spreadSellPct: string;
-  effectiveBuyRate: string; // FE uses this for the mint conversion preview
+  effectiveBuyRate: string; // baseRate × (1 + spreadBuyPct/100); mint preview
+  effectiveSellRate: string; // baseRate × (1 − spreadSellPct/100); redeem preview
   updatedAt: string;
 }
 
@@ -180,6 +187,62 @@ export interface MintOrderCreated {
   status: MintOrderStatus;
   expiresAt: string;
   channels: MintChannelOption[];
+}
+
+// ── Phase 2 Week 3 — consumer redeem (USDX-243, redeem.yaml) ───────────────
+// Redeem burns USDX on-chain (user self-signs) → IDR disbursed to the user's
+// bank. The app builds the flow against the OpenAPI contract; the real on-chain
+// burn + real API land in INT-1 (USDX-249). Monetary values are decimal strings
+// (backend authoritative). Status enum = conventions.md § Status Enums → Redeem.
+export type RedeemStatus =
+  | "AWAITING_BURN" // order created, waiting for the on-chain burn
+  | "BURNED" // Redeem event detected (amount matched)
+  | "PROCESSING_PAYOUT" // disbursement created with the provider
+  | "PAYOUT_COMPLETE" // payout confirmed
+  | "EXPIRED"; // AWAITING_BURN passed expires_at without a burn (late burn → BURNED)
+
+// POST /api/v2/redeem response (redeem.yaml RedeemOrderCreated). Carries the
+// on-chain args the FE needs to build the burn tx `redeem(redeemId, amountWei)`.
+export interface RedeemOrderCreated {
+  id: string;
+  orderNumber: string; // = partner_reference_no (prefix RDM)
+  customerName: string;
+  chain: string;
+  contractAddress: string; // USDX proxy address on this chain
+  redeemId: string; // bytes32 hex (0x-prefixed) — `id` arg for redeem(id, amount)
+  amount: string; // decimal USDX
+  amountWei: string; // uint256 string — `amount` arg for redeem(id, amount)
+  baseRate: string;
+  spreadSellPct: string;
+  effectiveRate: string; // baseRate × (1 − spreadSellPct/100); = rateUsed
+  grossIdr: string; // amount × effectiveRate (before fee)
+  redeemFeePct: string;
+  redeemFeeIdr: string;
+  disbursementFeeIdr: string; // = provider service fee (reference in W3)
+  totalFeeIdr: string; // redeemFeeIdr + disbursementFeeIdr
+  netPayoutIdr: string; // grossIdr − totalFeeIdr (user receives; ≥ Rp 10.000, floor)
+  bankCode: string;
+  bankAccountNumberMasked: string; // last 4 digits; plaintext never returned
+  bankAccountName: string; // user sees their own data
+  status: RedeemStatus;
+  expiresAt: string;
+}
+
+// GET /api/v2/redeem/{id} — full order + live status (redeem.yaml RedeemOrder).
+// Adds the on-chain / payout fields the status tracker polls. estimatedRevenue is
+// backoffice-only and intentionally absent here.
+export interface RedeemOrderDetail extends RedeemOrderCreated {
+  type: ConsumerOrderType;
+  userAddress: string | null; // burn source wallet (set from the Redeem event at BURNED)
+  inputCurrency: AmountCurrency;
+  lateBurn: boolean;
+  payoutProvider: string; // MOCK in W3
+  payoutRef: string | null;
+  burnTxHash: string | null;
+  burnedAt: string | null;
+  payoutCompletedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // transactions.yaml TransactionItem — one history row. Mint-only in W2.

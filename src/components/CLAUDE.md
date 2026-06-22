@@ -7,7 +7,7 @@ components/
   ui/          # shadcn/ui base components (auto-generated, don't edit)
   layout/      # App layout: AuthLayout, Header, Sidebar, Logo
   mint/        # Mint flow: MintForm, MintReview, ChainSelector
-  redeem/      # Redeem flow: RedeemForm, RedeemReview, BankAccountSelector
+  redeem/      # Redeem flow: RedeemForm, RedeemReview, RedeemStatus (tracker), BankSelect
 ```
 
 ## Conventions

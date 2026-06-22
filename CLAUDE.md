@@ -97,9 +97,9 @@ Detailed skeleton components matching exact layout per feature. Used with condit
 All validators return `string | null` (error message or null for valid). Located in `src/lib/validations.ts`. EVM-only address validation (must start with `0x`). Hoisted regex at module level.
 
 ### Multi-Step Forms
-Mint and Redeem use step-based state machines:
-- Mint: `form` → `review` → `payment`
-- Redeem: `form` → `review` → `executing` → `success`
+Mint and Redeem keep their state in Zustand stores; the Ringkasan is a modal:
+- Mint: single form view → Ringkasan modal → cross-origin checkout handoff (USDX-201/225)
+- Redeem: `form` → `tracker`; Ringkasan modal over the form → create order → contextual wallet burn (simulated in W3) → status tracker polling (USDX-243)
 
 Step state lives in Zustand stores. Form data preserved when going back.
 
@@ -115,7 +115,7 @@ All backend calls go through `src/lib/api/mock-api.ts` with simulated delays. Re
 - `React.memo` on ChainSelector
 - `useMemo` for selectedChain in hooks, initials in Header
 - Query invalidation after mint/redeem mutations
-- Double-submission guard in executeRedeem
+- Redeem status tracker polling stops at terminal states (PAYOUT_COMPLETE / EXPIRED)
 
 ## Responsive Design
 

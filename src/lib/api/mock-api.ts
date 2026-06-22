@@ -10,6 +10,7 @@ import type {
   CreateMintRequest,
   CreateRedeemRequest,
   CreateMintOrderRequest,
+  CreateRedeemOrderRequest,
   CreateAddressBookRequest,
   ListTransactionsParams,
 } from "./types";
@@ -30,9 +31,20 @@ import type {
   MintOrderCreated,
   ConsumerTransaction,
   VaBank,
+  AmountCurrency,
+  RedeemOrderCreated,
+  RedeemOrderDetail,
+  RedeemStatus,
 } from "@/types";
 import { ApiError, type Paginated } from "./client";
 import { validatePassword, validateAddress } from "@/lib/validations";
+import { computeRedeemBreakdown } from "@/lib/redeem/fees";
+import {
+  REDEEM_FEE_PCT,
+  DISBURSEMENT_FEE_FLAT_IDR,
+  MIN_REDEEM_PAYOUT_IDR,
+  USDX_DECIMALS,
+} from "@/lib/constants";
 
 // Simulated delay
 function delay(ms = 500): Promise<void> {
@@ -423,6 +435,7 @@ const MOCK_VA_BANKS: VaBank[] = [
 ];
 
 const mockEffectiveBuyRate = () => MOCK_BASE_RATE * (1 + MOCK_SPREAD_BUY_PCT / 100);
+const mockEffectiveSellRate = () => MOCK_BASE_RATE * (1 - MOCK_SPREAD_SELL_PCT / 100);
 const idr = (n: number) => n.toFixed(2);
 
 export async function mockGetConsumerRate(): Promise<ConsumerRate> {
@@ -432,6 +445,7 @@ export async function mockGetConsumerRate(): Promise<ConsumerRate> {
     spreadBuyPct: String(MOCK_SPREAD_BUY_PCT),
     spreadSellPct: String(MOCK_SPREAD_SELL_PCT),
     effectiveBuyRate: idr(mockEffectiveBuyRate()),
+    effectiveSellRate: idr(mockEffectiveSellRate()),
     updatedAt: new Date().toISOString(),
   };
 }
@@ -621,4 +635,187 @@ export async function mockListConsumerTransactions(
     data: filtered.slice(start, start + take),
     metadata: { page, limit: take, total: filtered.length },
   };
+}
+
+// ── Mock W3 consumer: redeem (USDX-243) ─────────────────────────────────────
+// Simulates the redeem lifecycle that the status tracker polls. The burn is
+// *real on-chain* in W3-real (Polygon), but here it's simulated end-to-end:
+// create → broadcast (mockBroadcastRedeemBurn, stands in for sign + on-chain
+// Redeem event + Event Scanner) → status derived from timestamps (mirrors the
+// W2 mint mock deriving from expires_at, and the real Disbursement Trigger
+// auto-completing after MOCK_DISBURSEMENT_AUTO_COMPLETE_DELAY). Real burn + real
+// API land in INT-1 (USDX-249).
+
+const MOCK_USDX_CONTRACT = "0x1eaed5000000000000000000000000000000d5e5"; // USDX proxy (mock, Polygon)
+const MOCK_REDEEM_BURN_TTL_MS = 30 * 60_000; // week3.md REDEEM_BURN_TTL default (30 min)
+const MOCK_BURNED_VISIBLE_MS = 2_500; // how long BURNED shows before payout starts
+const MOCK_PAYOUT_COMPLETE_MS = 6_000; // PROCESSING_PAYOUT → PAYOUT_COMPLETE after this
+// Test seam: a redeem to this account number fails inquiry → 422
+// INVALID_BANK_ACCOUNT (week3.md § Validasi rekening), so the FE inline-error
+// path is exercisable offline. Any other number passes (mock inquiry always valid).
+export const MOCK_INVALID_BANK_ACCOUNT = "0000000000";
+
+interface MockRedeemRecord {
+  order: RedeemOrderCreated; // create-time snapshot (immutable money/bank fields)
+  inputCurrency: AmountCurrency;
+  bankAccountNumber: string; // plaintext kept only to derive payoutRef determinism; never returned
+  createdAtMs: number;
+  expiresAtMs: number;
+  burnedAtMs: number | null;
+  burnTxHash: string | null;
+  userAddress: string | null;
+}
+const redeemOrders = new Map<string, MockRedeemRecord>();
+
+function randomHex(bytes: number): string {
+  let hex = "";
+  for (let i = 0; i < bytes * 2; i++) hex += Math.floor(Math.random() * 16).toString(16);
+  return hex;
+}
+
+function maskAccount(accountNumber: string): string {
+  return "••••••" + accountNumber.slice(-4);
+}
+
+// 6-decimal USDX → uint256 micro-units string ("100" → "100000000").
+function toUsdxWei(amountUsdx: number): string {
+  return BigInt(Math.round(amountUsdx * 10 ** USDX_DECIMALS)).toString();
+}
+
+export async function mockCreateRedeemOrder(
+  req: CreateRedeemOrderRequest,
+): Promise<RedeemOrderCreated> {
+  await delay(600);
+  // Account inquiry (week3.md § Validasi rekening) runs before burn — invalid
+  // rekening rejected up front so no USDX is burned without a valid payout target.
+  if (req.bankAccountNumber === MOCK_INVALID_BANK_ACCOUNT) {
+    throw new ApiError(422, "INVALID_BANK_ACCOUNT", "Rekening tujuan tidak valid atau tidak ditemukan");
+  }
+  const rate = mockEffectiveSellRate();
+  const b = computeRedeemBreakdown({
+    amount: Number(req.amount),
+    amountCurrency: req.amountCurrency,
+    effectiveSellRate: rate,
+    redeemFeePct: REDEEM_FEE_PCT,
+    disbursementFeeFlatIdr: DISBURSEMENT_FEE_FLAT_IDR,
+  });
+  // Minimum payout floor checked from create (week3.md § Min payout) → reject
+  // before the user burns.
+  if (b.netPayoutIdr < MIN_REDEEM_PAYOUT_IDR) {
+    throw new ApiError(
+      422,
+      "VALIDATION_ERROR",
+      `Jumlah diterima minimal Rp${MIN_REDEEM_PAYOUT_IDR.toLocaleString("id-ID")}`,
+    );
+  }
+  const nowMs = Date.now();
+  const id = "rdm_" + nowMs;
+  const order: RedeemOrderCreated = {
+    id,
+    orderNumber: "RDM" + nowMs.toString(36).toUpperCase(),
+    customerName: currentAccount()?.user.name ?? "Demo User",
+    chain: req.chain || "polygon",
+    contractAddress: MOCK_USDX_CONTRACT,
+    redeemId: "0x" + randomHex(32),
+    amount: String(req.amountCurrency === "USD" ? Number(req.amount) : b.amountUsdx),
+    amountWei: toUsdxWei(b.amountUsdx),
+    baseRate: idr(MOCK_BASE_RATE),
+    spreadSellPct: String(MOCK_SPREAD_SELL_PCT),
+    effectiveRate: idr(rate),
+    grossIdr: idr(b.grossIdr),
+    redeemFeePct: String(REDEEM_FEE_PCT),
+    redeemFeeIdr: idr(b.redeemFeeIdr),
+    disbursementFeeIdr: idr(b.disbursementFeeIdr),
+    totalFeeIdr: idr(b.totalFeeIdr),
+    netPayoutIdr: idr(b.netPayoutIdr),
+    bankCode: req.bankCode,
+    bankAccountNumberMasked: maskAccount(req.bankAccountNumber),
+    bankAccountName: req.bankAccountName,
+    status: "AWAITING_BURN",
+    expiresAt: new Date(nowMs + MOCK_REDEEM_BURN_TTL_MS).toISOString(),
+  };
+  redeemOrders.set(id, {
+    order,
+    inputCurrency: req.amountCurrency,
+    bankAccountNumber: req.bankAccountNumber,
+    createdAtMs: nowMs,
+    expiresAtMs: nowMs + MOCK_REDEEM_BURN_TTL_MS,
+    burnedAtMs: null,
+    burnTxHash: null,
+    userAddress: null,
+  });
+  return order;
+}
+
+// Stands in for: user signs `redeem(redeemId, amountWei)` from their wallet →
+// broadcast → backend Redeem Event Scanner marks the order BURNED. In W3-real
+// the FE just broadcasts and the real scanner advances the order; this mock call
+// exists only so the offline status tracker can progress. `fromAddress` is the
+// connected wallet (real, even in mock mode).
+export async function mockBroadcastRedeemBurn(
+  redeemId: string,
+  fromAddress: string,
+): Promise<{ burnTxHash: string }> {
+  await delay(400);
+  const record = [...redeemOrders.values()].find((r) => r.order.redeemId === redeemId);
+  if (!record) throw new ApiError(404, "NOT_FOUND", "Redeem order tidak ditemukan");
+  // Idempotent: a re-broadcast keeps the first burn (week3.md § Scanner idempotent).
+  if (!record.burnedAtMs) {
+    record.burnedAtMs = Date.now();
+    record.burnTxHash = "0x" + randomHex(32);
+    record.userAddress = fromAddress;
+  }
+  return { burnTxHash: record.burnTxHash! };
+}
+
+// Derives the live status + payout fields from elapsed time since the burn,
+// mirroring the W3 job lifecycle (BURNED → PROCESSING_PAYOUT → PAYOUT_COMPLETE).
+function resolveRedeemDetail(record: MockRedeemRecord): RedeemOrderDetail {
+  const { order, burnedAtMs, expiresAtMs } = record;
+  let status: RedeemStatus;
+  let payoutRef: string | null = null;
+  let payoutCompletedAt: string | null = null;
+
+  if (burnedAtMs == null) {
+    status = Date.now() > expiresAtMs ? "EXPIRED" : "AWAITING_BURN";
+  } else {
+    const elapsed = Date.now() - burnedAtMs;
+    if (elapsed < MOCK_BURNED_VISIBLE_MS) {
+      status = "BURNED";
+    } else if (elapsed < MOCK_PAYOUT_COMPLETE_MS) {
+      status = "PROCESSING_PAYOUT";
+      payoutRef = "MOCK-" + order.orderNumber;
+    } else {
+      status = "PAYOUT_COMPLETE";
+      payoutRef = "MOCK-" + order.orderNumber;
+      payoutCompletedAt = new Date(burnedAtMs + MOCK_PAYOUT_COMPLETE_MS).toISOString();
+    }
+  }
+  // Late burn: a burn detected after the order had already EXPIRED still pays out.
+  const lateBurn = burnedAtMs != null && burnedAtMs > expiresAtMs;
+  const burnedAt = burnedAtMs != null ? new Date(burnedAtMs).toISOString() : null;
+  const nowIso = new Date().toISOString();
+
+  return {
+    ...order,
+    status,
+    type: "REDEEM",
+    userAddress: record.userAddress,
+    inputCurrency: record.inputCurrency,
+    lateBurn,
+    payoutProvider: "MOCK",
+    payoutRef,
+    burnTxHash: record.burnTxHash,
+    burnedAt,
+    payoutCompletedAt,
+    createdAt: new Date(record.createdAtMs).toISOString(),
+    updatedAt: nowIso,
+  };
+}
+
+export async function mockGetRedeemOrder(id: string): Promise<RedeemOrderDetail> {
+  await delay(250);
+  const record = redeemOrders.get(id);
+  if (!record) throw new ApiError(404, "NOT_FOUND", "Redeem order tidak ditemukan");
+  return resolveRedeemDetail(record);
 }

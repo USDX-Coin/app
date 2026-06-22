@@ -34,9 +34,19 @@ test.describe("History Page", () => {
     });
 
     test("shows the IDR columns from the SoT history spec", async ({ page }) => {
-      await expect(page.getByText("Subtotal").first()).toBeVisible();
-      await expect(page.getByText("Total Pay").first()).toBeVisible();
-      await expect(page.getByText("Rate").first()).toBeVisible();
+      await expect(page.getByRole("columnheader", { name: "Subtotal" })).toBeVisible();
+      // Neutral header serves both mint (paid) and redeem (received) — USDX-244.
+      await expect(page.getByRole("columnheader", { name: "Total", exact: true })).toBeVisible();
+      await expect(page.getByRole("columnheader", { name: "Rate" })).toBeVisible();
+    });
+
+    test("shows redeem rows with net payout, status, and burn tx link", async ({ page }) => {
+      await page.getByRole("button", { name: "All Transaction" }).click();
+      await page.getByRole("button", { name: "Redeem", exact: true }).click();
+      // Seeded completed redeem: 100 USDX → net Rp 1.547.320 (week3 worked example).
+      await expect(page.getByText("Payout complete").first()).toBeVisible();
+      await expect(page.getByText("Rp 1.547.320").first()).toBeVisible();
+      await expect(page.locator('a[href*="polygonscan.com/tx/0x"]').first()).toBeVisible();
     });
   });
 
@@ -47,16 +57,12 @@ test.describe("History Page", () => {
   });
 
   test.describe("edge cases", () => {
-    test("type filter offers Mint and a disabled Redeem (W3)", async ({
-      page,
-    }) => {
+    test("type filter offers Mint and Redeem (W3 enabled)", async ({ page }) => {
       await page.getByRole("button", { name: "All Transaction" }).click();
-      await expect(
-        page.getByRole("button", { name: "Minting" })
-      ).toBeVisible();
-      const redeem = page.getByRole("button", { name: "Redeem (soon)" });
+      await expect(page.getByRole("button", { name: "Minting" })).toBeVisible();
+      const redeem = page.getByRole("button", { name: "Redeem", exact: true });
       await expect(redeem).toBeVisible();
-      await expect(redeem).toBeDisabled();
+      await expect(redeem).toBeEnabled();
     });
   });
 });

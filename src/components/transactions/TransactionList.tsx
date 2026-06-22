@@ -10,6 +10,7 @@ import {
   Copy,
   ExternalLink,
   History,
+  RefreshCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTransactions } from "@/hooks/useTransactions";
@@ -30,6 +31,7 @@ import type {
   ConsumerTransaction,
   MintOrderStatus,
   MintPaymentStatus,
+  RedeemStatus,
 } from "@/types";
 
 const PAGE_SIZE = 10;
@@ -54,6 +56,38 @@ const statusLabelKey: Record<BadgeKey, string> = {
 
 function badgeKey(status: MintOrderStatus, paymentStatus: MintPaymentStatus): BadgeKey {
   return paymentStatus === "EXPIRED" ? "EXPIRED" : status;
+}
+
+// Per-type icon + brand color (matches Figma: mint=green, redeem=amber).
+const typeMeta: Record<ConsumerOrderType, { icon: typeof ArrowDownToLine; color: string; key: string }> = {
+  MINT: { icon: ArrowDownToLine, color: "text-green-600 dark:text-green-500", key: "tx.minting" },
+  REDEEM: { icon: RefreshCcw, color: "text-amber-600 dark:text-amber-500", key: "tx.redeem" },
+};
+
+// Redeem status badge (USDX-244). Reuses the redeem.status* labels (USDX-243).
+const redeemStatusStyles: Record<RedeemStatus, string> = {
+  AWAITING_BURN: "bg-warning/15 text-warning",
+  BURNED: "bg-sky-500/15 text-sky-600 dark:text-sky-400",
+  PROCESSING_PAYOUT: "bg-sky-500/15 text-sky-600 dark:text-sky-400",
+  PAYOUT_COMPLETE: "bg-success/15 text-success",
+  EXPIRED: "bg-muted text-muted-foreground",
+};
+const redeemStatusLabelKey: Record<RedeemStatus, string> = {
+  AWAITING_BURN: "redeem.statusAwaitingBurn",
+  BURNED: "redeem.statusBurned",
+  PROCESSING_PAYOUT: "redeem.statusProcessing",
+  PAYOUT_COMPLETE: "redeem.statusComplete",
+  EXPIRED: "redeem.statusExpired",
+};
+
+// Type-aware IDR values: the "Subtotal" column is the pre-fee value (mint
+// subtotal / redeem gross); the "Total" column is the settled value (mint total
+// paid / redeem net received).
+function subtotalValue(tx: ConsumerTransaction): string | null {
+  return tx.type === "REDEEM" ? tx.grossIdr : tx.subtotalIdr;
+}
+function totalValue(tx: ConsumerTransaction): string | null {
+  return tx.type === "REDEEM" ? tx.netPayoutIdr : tx.totalPayIdr;
 }
 
 // Block explorer tx link for the order's chain, or null when the chain has no
@@ -81,11 +115,11 @@ function pageList(current: number, total: number): (number | "…")[] {
   return [1, "…", current - 1, current, current + 1, "…", total];
 }
 
-// UI filter value → API `type` param. Week 2 is mint-only; REDEEM is W3 (the
-// option renders disabled), so only "mint" maps to a server filter today.
+// UI filter value → API `type` param. Union mint + redeem (USDX-244).
 const typeParam: Record<string, ConsumerOrderType | undefined> = {
   all: undefined,
   mint: "MINT",
+  redeem: "REDEEM",
 };
 
 export function TransactionList() {
@@ -107,7 +141,7 @@ export function TransactionList() {
   const typeOptions = [
     { value: "all", label: t("tx.allTransaction") },
     { value: "mint", label: t("tx.minting") },
-    { value: "redeem", label: t("tx.redeemSoon"), disabled: true },
+    { value: "redeem", label: t("tx.redeem") },
   ];
 
   function copy(text: string) {
@@ -117,12 +151,13 @@ export function TransactionList() {
 
   if (isLoading) return <TransactionListSkeleton />;
 
-  function TypeCell() {
-    // Mint-only in W2; the icon/label stay union-ready for REDEEM (W3).
+  function TypeCell({ type }: { type: ConsumerOrderType }) {
+    const meta = typeMeta[type];
+    const Icon = meta.icon;
     return (
       <span className="flex items-center gap-2 text-foreground">
-        <ArrowDownToLine className="size-4 shrink-0 text-green-600 dark:text-green-500" />
-        {t("tx.minting")}
+        <Icon className={cn("size-4 shrink-0", meta.color)} />
+        {t(meta.key)}
       </span>
     );
   }
@@ -166,12 +201,13 @@ export function TransactionList() {
   }
 
   function StatusPill({ tx }: { tx: ConsumerTransaction }) {
-    const key = badgeKey(tx.status, tx.paymentStatus);
-    return (
-      <span className={cn("inline-flex rounded-md px-2 py-0.5 text-xs font-medium", statusStyles[key])}>
-        {t(statusLabelKey[key])}
-      </span>
-    );
+    const cls = "inline-flex rounded-md px-2 py-0.5 text-xs font-medium";
+    if (tx.type === "REDEEM") {
+      const status = tx.status as RedeemStatus;
+      return <span className={cn(cls, redeemStatusStyles[status])}>{t(redeemStatusLabelKey[status])}</span>;
+    }
+    const key = badgeKey(tx.status as MintOrderStatus, tx.paymentStatus ?? "REQUESTED");
+    return <span className={cn(cls, statusStyles[key])}>{t(statusLabelKey[key])}</span>;
   }
 
   function chainLabel(chain: string) {
@@ -220,10 +256,10 @@ export function TransactionList() {
                 {rows.map((tx) => (
                   <TableRow key={tx.id} className="border-border">
                     <TableCell className="whitespace-nowrap text-muted-foreground">{formatDateTime(tx.createdAt)}</TableCell>
-                    <TableCell><TypeCell /></TableCell>
+                    <TableCell><TypeCell type={tx.type} /></TableCell>
                     <TableCell><AmountCell amount={tx.amount} /></TableCell>
-                    <TableCell className="whitespace-nowrap text-foreground">{idrOrDash(tx.subtotalIdr)}</TableCell>
-                    <TableCell className="whitespace-nowrap text-foreground">{idrOrDash(tx.totalPayIdr)}</TableCell>
+                    <TableCell className="whitespace-nowrap text-foreground">{idrOrDash(subtotalValue(tx))}</TableCell>
+                    <TableCell className="whitespace-nowrap text-foreground">{idrOrDash(totalValue(tx))}</TableCell>
                     <TableCell className="whitespace-nowrap text-muted-foreground">{idrOrDash(tx.effectiveRate)}</TableCell>
                     <TableCell className="text-foreground">{chainLabel(tx.chain)}</TableCell>
                     <TableCell><TxHashCell tx={tx} /></TableCell>
@@ -243,11 +279,11 @@ export function TransactionList() {
                   <StatusPill tx={tx} />
                 </div>
                 <div className="flex items-center justify-between">
-                  <TypeCell />
+                  <TypeCell type={tx.type} />
                   <AmountCell amount={tx.amount} />
                 </div>
-                <CardRow label={t("tx.subtotal")} value={idrOrDash(tx.subtotalIdr)} />
-                <CardRow label={t("tx.totalPay")} value={idrOrDash(tx.totalPayIdr)} />
+                <CardRow label={t("tx.subtotal")} value={idrOrDash(subtotalValue(tx))} />
+                <CardRow label={t("tx.totalPay")} value={idrOrDash(totalValue(tx))} />
                 <CardRow label={t("tx.rate")} value={idrOrDash(tx.effectiveRate)} />
                 <CardRow label={t("tx.chain")} value={chainLabel(tx.chain)} />
                 <div className="flex items-center justify-between text-sm">

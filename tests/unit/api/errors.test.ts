@@ -9,6 +9,7 @@ import {
   isMintDisabled,
   isValidationError,
   getRateLimitSeconds,
+  isRateLimited,
   isInvalidCredentials,
   hasErrorCode,
 } from "@/lib/api/errors";
@@ -55,6 +56,15 @@ describe("errors helpers", () => {
 
     test("getRateLimitSeconds returns seconds from a 429 ApiError", () => {
       expect(getRateLimitSeconds(new ApiError(429, "TOO_MANY_ATTEMPTS", "x", undefined, 42))).toBe(42);
+    });
+
+    test("isRateLimited matches 429 RATE_LIMITED only (not auth 429s)", () => {
+      expect(isRateLimited(new ApiError(429, "RATE_LIMITED", "x", undefined, 1))).toBe(true);
+      // Auth throttles share the 429 status but a different code → not a throughput throttle.
+      expect(isRateLimited(new ApiError(429, "TOO_MANY_ATTEMPTS", "x"))).toBe(false);
+      expect(isRateLimited(new ApiError(429, "TOO_MANY_REQUESTS", "x"))).toBe(false);
+      expect(isRateLimited(new ApiError(401, "RATE_LIMITED", "x"))).toBe(false);
+      expect(isRateLimited(new Error("x"))).toBe(false);
     });
 
     test("isInvalidCredentials matches 401 INVALID_CREDENTIALS only", () => {

@@ -1,13 +1,23 @@
-import { describe, test, expect } from "vitest";
+import { describe, test, expect, afterEach } from "vitest";
 import {
   mockGetConsumerRate,
   mockListAddressBook,
   mockAddAddressBook,
   mockDeleteAddressBook,
   mockCreateMintOrder,
+  mockCreateRedeemOrder,
   mockListConsumerTransactions,
   MOCK_BLACKLISTED_ADDRESS,
 } from "@/lib/api/mock-api";
+
+const VALID_REDEEM = {
+  amount: "100",
+  amountCurrency: "USD" as const,
+  chain: "polygon",
+  bankCode: "014",
+  bankAccountNumber: "1234563210",
+  bankAccountName: "SINGGIH BRILIAN TARA",
+};
 
 // Mock W2 layer (USDX-205). State is module-scoped, so tests use distinct
 // addresses to stay isolated; the duplicate test deliberately adds twice.
@@ -140,6 +150,33 @@ describe("mockListConsumerTransactions", () => {
       const types = new Set(result.data.map((t) => t.type));
       expect(types.has("MINT")).toBe(true);
       expect(types.has("REDEEM")).toBe(true);
+    });
+  });
+});
+
+// USDX-252: the throughput-throttle seam (localStorage "usdx-mock-ratelimit")
+// makes mint/redeem create + status poll return 429 RATE_LIMITED so the central
+// toast + poll backoff are exercisable offline.
+describe("429 RATE_LIMITED seam", () => {
+  afterEach(() => {
+    localStorage.removeItem("usdx-mock-ratelimit");
+  });
+
+  describe("positive", () => {
+    test("armed seam → redeem create throws 429 RATE_LIMITED with Retry-After", async () => {
+      localStorage.setItem("usdx-mock-ratelimit", "3");
+      await expect(mockCreateRedeemOrder(VALID_REDEEM)).rejects.toMatchObject({
+        status: 429,
+        code: "RATE_LIMITED",
+        retryAfterSeconds: 3,
+      });
+    });
+  });
+
+  describe("negative", () => {
+    test("unarmed → create proceeds normally", async () => {
+      const order = await mockCreateRedeemOrder(VALID_REDEEM);
+      expect(order.status).toBe("AWAITING_BURN");
     });
   });
 });

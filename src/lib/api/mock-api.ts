@@ -110,6 +110,27 @@ function maybeThrowRateLimitOverride(code: "TOO_MANY_ATTEMPTS" | "TOO_MANY_REQUE
   );
 }
 
+// Test seam (USDX-252): arm `429 RATE_LIMITED` (throughput throttle, distinct from
+// the auth seam above) via localStorage ("usdx-mock-ratelimit" = Retry-After
+// seconds) so the central throttle toast + poll backoff are exercisable offline —
+// the real 5 req/s throttle (USDX-250) isn't reachable in a per-page-load mock.
+// Armed → every mint/redeem create + status poll returns 429. Mock-only.
+const RATE_LIMIT_OVERRIDE_KEY = "usdx-mock-ratelimit";
+
+function maybeThrowRateLimited(): void {
+  if (typeof localStorage === "undefined") return;
+  const raw = localStorage.getItem(RATE_LIMIT_OVERRIDE_KEY);
+  if (raw === null) return;
+  const seconds = Number(raw);
+  throw new ApiError(
+    429,
+    "RATE_LIMITED",
+    "Terlalu banyak request, coba lagi sebentar",
+    undefined,
+    Number.isFinite(seconds) && seconds > 0 ? seconds : 1,
+  );
+}
+
 // Rate-limit simulation (week1.md § Login: 5 wrong attempts per 15 min per email).
 // Mirrors the real 429 TOO_MANY_ATTEMPTS so the FE cooldown countdown is testable
 // offline. State is per page load (module scope), like the rest of the mock.
@@ -528,6 +549,7 @@ const mintOrders = new Map<string, MockMintRecord>();
 
 export async function mockCreateMintOrder(req: CreateMintOrderRequest): Promise<MintOrderCreated> {
   await delay(600);
+  maybeThrowRateLimited(); // 429 RATE_LIMITED seam (USDX-252)
   const rate = mockEffectiveBuyRate();
   const amountUsdx = req.amountCurrency === "USD" ? Number(req.amount) : Number(req.amount) / rate;
   const subtotalIdr = req.amountCurrency === "IDR" ? Number(req.amount) : amountUsdx * rate;
@@ -692,6 +714,7 @@ export async function mockCreateRedeemOrder(
   req: CreateRedeemOrderRequest,
 ): Promise<RedeemOrderCreated> {
   await delay(600);
+  maybeThrowRateLimited(); // 429 RATE_LIMITED seam (USDX-252)
   // Account inquiry (week3.md § Validasi rekening) runs before burn — invalid
   // rekening rejected up front so no USDX is burned without a valid payout target.
   if (req.bankAccountNumber === MOCK_INVALID_BANK_ACCOUNT) {
@@ -821,6 +844,7 @@ function resolveRedeemDetail(record: MockRedeemRecord): RedeemOrderDetail {
 
 export async function mockGetRedeemOrder(id: string): Promise<RedeemOrderDetail> {
   await delay(250);
+  maybeThrowRateLimited(); // 429 RATE_LIMITED seam (USDX-252)
   const record = redeemOrders.get(id);
   if (!record) throw new ApiError(404, "NOT_FOUND", "Redeem order tidak ditemukan");
   return resolveRedeemDetail(record);

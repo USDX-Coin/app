@@ -56,6 +56,13 @@ describe("apiFetch", () => {
       expect((init.headers as Headers).get("Authorization")).toBe("Bearer tok-123");
     });
 
+    test("does NOT send credentials: include (checkout handoff pindah ke bearer JWT, USDX-240)", async () => {
+      fetchMock.mockResolvedValue(jsonResponse(200, { status: "success", data: null }));
+      await apiFetch("/api/v2/auth/me");
+      const [, init] = fetchMock.mock.calls[0];
+      expect(init.credentials).toBeUndefined();
+    });
+
     test("serializes the body as JSON with Content-Type", async () => {
       fetchMock.mockResolvedValue(jsonResponse(200, { status: "success", data: null }));
       await apiFetch("/api/v2/auth/login", { method: "POST", body: { email: "a@b.c" } });

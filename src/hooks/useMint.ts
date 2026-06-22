@@ -3,12 +3,14 @@
 // Mint form logic (USDX-201). Combines the mint store + live rate
 // (GET /v2/rate) + validation + the create-order mutation (POST /v2/mint).
 // On success it hands off (cross-origin redirect) to the own-hosted checkout repo
-// at `mint.usdx.co.id/checkout/{id}` (USDX-225). The Ringkasan (review) is a modal,
+// at `mint.usdx.co.id/checkout/{id}#token=<jwt>` — bearer JWT lewat URL hash (USDX-240,
+// supersede cross-subdomain cookie USDX-225/226). The Ringkasan (review) is a modal,
 // so there's no in-page step machine anymore — see mintStore.
 
 import { useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMintStore } from "@/stores/mintStore";
+import { useAuthStore } from "@/stores/authStore";
 import { useConsumerRate } from "@/hooks/useConsumerRate";
 import { createMintOrder } from "@/lib/api/mint-api";
 import { env } from "@/lib/env";
@@ -84,9 +86,12 @@ export function useMint() {
     onSuccess: (order) => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       // Cross-origin handoff ke checkout own-hosted (repo `checkout`). location.href
-      // (push, bukan replace) → tombol "Kembali" di checkout balik ke /mint. Cookie
-      // sesi `.usdx.co.id` kebawa lintas-subdomain (USDX-222).
-      window.location.href = `${env.checkoutUrl}/checkout/${order.id}`;
+      // (push, bukan replace) → tombol "Kembali" di checkout balik ke /mint. Auth =
+      // bearer JWT lewat URL hash `#token=` (USDX-240, supersede cookie); checkout
+      // capture token → sessionStorage → strip URL.
+      const token = useAuthStore.getState().token;
+      const hash = token ? `#token=${encodeURIComponent(token)}` : "";
+      window.location.href = `${env.checkoutUrl}/checkout/${order.id}${hash}`;
     },
   });
 

@@ -106,6 +106,18 @@ export interface CreateAddressBookRequest {
   label: string; // max 50 chars
 }
 
+// ── Phase 2 Week 3 — consumer redeem v2 (USDX-243) ──────────────────────────
+// POST /api/v2/redeem body (redeem.yaml CreateRedeemOrder). Bank fields are
+// encrypted PII server-side; the FE sends them plaintext over TLS.
+export interface CreateRedeemOrderRequest {
+  amount: string; // decimal — USD = USDX amount (burned), IDR = gross_idr (sale value)
+  amountCurrency: AmountCurrency;
+  chain: string; // Phase 2 = Polygon-only → FE sends "polygon" (hardcoded)
+  bankCode: string; // destination bank (provider-specific code)
+  bankAccountNumber: string;
+  bankAccountName: string;
+}
+
 export interface ListTransactionsParams {
   page?: number;
   take?: number; // 1..50, default 10

@@ -1,15 +1,17 @@
 "use client";
 
+// /redeem page (USDX-243). Two views: the form (with the Ringkasan modal +
+// contextual wallet connect over it) and the status tracker. Step state lives in
+// redeemStore; the Ringkasan confirm creates the order and switches to `tracker`.
+
 import { useRedeemStore } from "@/stores/redeemStore";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { RedeemForm } from "@/components/redeem/RedeemForm";
-import { RedeemConfirmation } from "@/components/redeem/RedeemConfirmation";
 import { RedeemStatus } from "@/components/redeem/RedeemStatus";
 
 const HEADERS = {
   form: { crumbs: ["crumb.transaction", "nav.redeem"], title: "title.redeem" },
-  confirmation: { crumbs: ["crumb.transaction", "nav.redeem", "crumb.confirmationShort"], title: "title.redeemConfirmation" },
-  status: { crumbs: ["crumb.transaction", "nav.redeem", "crumb.status"], title: "title.redeemStatus" },
+  tracker: { crumbs: ["crumb.transaction", "nav.redeem", "crumb.status"], title: "title.redeemStatus" },
 } as const;
 
 export function RedeemPageContent() {
@@ -21,8 +23,7 @@ export function RedeemPageContent() {
       <PageHeader crumbs={[...header.crumbs]} title={header.title} />
       <div className="flex flex-1 justify-center pt-8">
         {step === "form" && <RedeemForm />}
-        {step === "confirmation" && <RedeemConfirmation />}
-        {step === "status" && <RedeemStatus />}
+        {step === "tracker" && <RedeemStatus />}
       </div>
     </div>
   );

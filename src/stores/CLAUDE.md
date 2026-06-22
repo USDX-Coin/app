@@ -8,7 +8,7 @@ Client-side state stores using Zustand 5.
 |-------|-----------|-------|
 | `authStore` | Yes (localStorage `usdx-auth`) | `user`, `token`, `isAuthenticated` |
 | `mintStore` | No | `step`, `chainId`, `amount`, `destinationAddress` |
-| `redeemStore` | No | `step`, `chainId`, `amount`, `bankAccountId` |
+| `redeemStore` | No | `step`, `amount`, `amountCurrency`, `bankCode`, `bankAccountNumber`, `bankAccountName`, `orderId` |
 
 ## Pattern
 
@@ -29,7 +29,7 @@ export const useStore = create<State>()((set) => ({
 ## Step Types
 
 - **Mint**: `"form" | "review" | "payment"`
-- **Redeem**: `"form" | "review" | "executing" | "success"`
+- **Redeem**: `"form" | "tracker"` (Ringkasan is a modal over the form; `tracker` polls the created order — USDX-243)
 
 Step transitions are controlled by hooks (`useMint`, `useRedeem`), not by components directly.
 

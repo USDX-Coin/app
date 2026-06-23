@@ -1,18 +1,20 @@
 "use client";
 
-// Redeem form logic (USDX-243). Combines the redeem store + live sell rate
-// (GET /v2/rate `effectiveSellRate`) + fee breakdown + validation + the
-// contextual wallet connect + the create-order mutation (POST /v2/redeem), then
-// hands the created order to the status tracker. The on-chain burn is simulated
-// in W3 (lib/redeem/burn.ts); real burn + real API land in INT-1 (USDX-249).
+// Redeem form logic (USDX-243, hardened USDX-259). Combines the redeem store + live
+// sell rate (GET /v2/rate `effectiveSellRate`) + fee breakdown + validation + the
+// contextual wallet connect & precondition gate (network/balance/gas) + the
+// create-order mutation (POST /v2/redeem, sending the connected `userAddress`),
+// then hands the created order to the status tracker and runs the guarded burn.
+// The on-chain burn is simulated in W3 (lib/redeem/burn.ts); real burn + real API
+// land in INT-1 (USDX-249).
 
 import { useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useRedeemStore } from "@/stores/redeemStore";
 import { useConsumerRate } from "@/hooks/useConsumerRate";
-import { useRedeemWallet } from "@/lib/redeem/wallet";
+import { useRedeemPreconditions } from "@/lib/redeem/wallet";
+import { useRedeemBurn } from "@/hooks/useRedeemBurn";
 import { createRedeemOrder } from "@/lib/api/redeem-api";
-import { signAndBroadcastBurn } from "@/lib/redeem/burn";
 import { computeRedeemBreakdown } from "@/lib/redeem/fees";
 import {
   validateAmount,
@@ -26,7 +28,13 @@ import {
   DISBURSEMENT_FEE_FLAT_IDR,
   MIN_REDEEM_PAYOUT_IDR,
 } from "@/lib/constants";
-import { isApiError, isValidationError, isRateLimited } from "@/lib/api/errors";
+import {
+  isApiError,
+  isValidationError,
+  isRateLimited,
+  isInsufficientBalance,
+  isWalletBlacklisted,
+} from "@/lib/api/errors";
 
 // Maps a create-order failure to an i18n key the review modal renders inline
 // (week3.md § Endpoints Redeem error codes).
@@ -37,6 +45,10 @@ function redeemErrorKey(error: unknown): string | null {
   // generic message, and let the user retry after the throttle clears.
   if (isRateLimited(error)) return null;
   if (isApiError(error)) {
+    // Wallet pre-check failures (USDX-259) — the precondition gate normally blocks
+    // these before create, but surface the backend backstop inline too.
+    if (isInsufficientBalance(error)) return "redeem.errInsufficientBalance";
+    if (isWalletBlacklisted(error)) return "redeem.errWalletBlacklisted";
     if (error.code === "INVALID_BANK_ACCOUNT") return "redeem.errBankAccount";
     if (isValidationError(error)) return "redeem.errValidation";
     if (error.code === "REDEEM_DISABLED") return "redeem.errDisabled";
@@ -48,7 +60,6 @@ function redeemErrorKey(error: unknown): string | null {
 export function useRedeem() {
   const store = useRedeemStore();
   const rateQuery = useConsumerRate();
-  const wallet = useRedeemWallet();
 
   const effectiveSellRate = rateQuery.data ? Number(rateQuery.data.effectiveSellRate) : null;
   const enteredAmount = parseAmount(store.amount);
@@ -66,6 +77,10 @@ export function useRedeem() {
       }),
     [enteredAmount, store.amountCurrency, effectiveSellRate],
   );
+
+  // Wallet precondition gate against the burn amount (network/balance/gas).
+  const preconditions = useRedeemPreconditions(breakdown.amountUsdx);
+  const { runBurn } = useRedeemBurn();
 
   // Validate the USDX amount against the redeem min/max. A USD input is itself
   // the USDX amount; an IDR input needs the rate to convert first (skip until loaded).
@@ -109,6 +124,7 @@ export function useRedeem() {
         amount: store.amount.trim(),
         amountCurrency: store.amountCurrency,
         chain: REDEEM_CHAIN_ID,
+        userAddress: preconditions.address ?? "", // connected burn wallet (USDX-259)
         bankCode: store.bankCode,
         bankAccountNumber: store.bankAccountNumber.trim(),
         bankAccountName: store.bankAccountName.trim(),
@@ -119,14 +135,15 @@ export function useRedeem() {
     store.setAmountCurrency(store.amountCurrency === "USD" ? "IDR" : "USD");
   }
 
-  // Create the order → navigate to the tracker → sign + broadcast the burn.
-  // The burn is fired (not awaited) so the modal closes as soon as the order
-  // exists; the tracker polls and reflects AWAITING_BURN → … → PAYOUT_COMPLETE.
+  // Create the order → navigate to the tracker → sign + broadcast the burn (with
+  // the guard double-burn state machine). The burn is fired (not awaited) so the
+  // modal closes as soon as the order exists; the tracker polls and reflects
+  // AWAITING_BURN → … → PAYOUT_COMPLETE and the burn state.
   async function submitRedeem() {
     const order = await createMutation.mutateAsync();
     store.setOrderId(order.id);
     store.setStep("tracker");
-    void signAndBroadcastBurn(order, wallet.address ?? "").catch(() => {});
+    void runBurn(order, preconditions.address ?? "");
     return order;
   }
 
@@ -156,11 +173,18 @@ export function useRedeem() {
     accountNameError,
     belowMinPayout,
     isFormValid,
-    // wallet (contextual connect — redeem-only, no global button)
-    isWalletConnected: wallet.isConnected,
-    walletAddress: wallet.address,
-    connectWallet: wallet.connect,
-    // submit (create order → tracker → simulated burn)
+    // wallet + preconditions (contextual connect — redeem-only, no global button)
+    isWalletConnected: preconditions.isConnected,
+    walletAddress: preconditions.address,
+    connectWallet: preconditions.connect,
+    chainOk: preconditions.chainOk,
+    switchNetwork: preconditions.switchNetwork,
+    isSwitchingNetwork: preconditions.isSwitchingNetwork,
+    balanceUsdx: preconditions.balanceUsdx,
+    insufficientBalance: preconditions.insufficientBalance,
+    lowGasWarning: preconditions.lowGasWarning,
+    canBurn: preconditions.canBurn,
+    // submit (create order → tracker → guarded burn)
     submitRedeem,
     isCreating: createMutation.isPending,
     createErrorKey: redeemErrorKey(createMutation.error),

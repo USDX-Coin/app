@@ -106,16 +106,27 @@ export interface CreateAddressBookRequest {
   label: string; // max 50 chars
 }
 
-// ── Phase 2 Week 3 — consumer redeem v2 (USDX-243) ──────────────────────────
+// ── Phase 2 Week 3 — consumer redeem v2 (USDX-243, hardened USDX-259) ────────
 // POST /api/v2/redeem body (redeem.yaml CreateRedeemOrder). Bank fields are
 // encrypted PII server-side; the FE sends them plaintext over TLS.
 export interface CreateRedeemOrderRequest {
   amount: string; // decimal — USD = USDX amount (burned), IDR = gross_idr (sale value)
   amountCurrency: AmountCurrency;
   chain: string; // Phase 2 = Polygon-only → FE sends "polygon" (hardcoded)
+  // Connected wallet that will burn (week3.md § Week 3 Addendum, USDX-259). The
+  // backend binds the order to it (user_address), pre-checks balance + blacklist,
+  // and the scanner only accepts a Redeem event from this address.
+  userAddress: string;
   bankCode: string; // destination bank (provider-specific code)
   bankAccountNumber: string;
   bankAccountName: string;
+}
+
+// POST /api/v2/redeem/{id}/burn-tx body (redeem.yaml redeemV2BurnTx, USDX-259).
+// FE reports the burn tx hash optimistically right after broadcast; status stays
+// AWAITING_BURN (the scanner remains the source of truth for BURNED).
+export interface ReportBurnTxRequest {
+  txHash: string; // 0x-prefixed redeem tx hash
 }
 
 export interface ListTransactionsParams {

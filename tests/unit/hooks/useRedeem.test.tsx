@@ -5,9 +5,22 @@ import { useRedeem } from "@/hooks/useRedeem";
 import { useRedeemStore } from "@/stores/redeemStore";
 
 // The wallet is real (RainbowKit/wagmi) in the app, but there's no provider in
-// jsdom — stub the contextual-connect hook. Form validity doesn't depend on it.
+// jsdom — stub the contextual-connect + precondition hooks. Form validity doesn't
+// depend on them. `canBurn: true` lets the submit test reach create.
 vi.mock("@/lib/redeem/wallet", () => ({
   useRedeemWallet: () => ({ isConnected: false, address: undefined, connect: () => {} }),
+  useRedeemPreconditions: () => ({
+    isConnected: true,
+    address: "0x000000C528aE908fB929a0898B65e913623c9aFf",
+    connect: () => {},
+    chainOk: true,
+    switchNetwork: () => {},
+    isSwitchingNetwork: false,
+    balanceUsdx: 1_000_000,
+    insufficientBalance: false,
+    lowGasWarning: false,
+    canBurn: true,
+  }),
 }));
 
 // Mock sell rate (mock-api): base 16000 × (1 − 2%) = 15680.

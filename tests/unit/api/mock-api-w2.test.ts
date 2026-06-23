@@ -6,6 +6,8 @@ import {
   mockDeleteAddressBook,
   mockCreateMintOrder,
   mockCreateRedeemOrder,
+  mockGetRedeemOrder,
+  mockReportBurnTx,
   mockListConsumerTransactions,
   MOCK_BLACKLISTED_ADDRESS,
 } from "@/lib/api/mock-api";
@@ -14,6 +16,7 @@ const VALID_REDEEM = {
   amount: "100",
   amountCurrency: "USD" as const,
   chain: "polygon",
+  userAddress: "0x000000C528aE908fB929a0898B65e913623c9aFf",
   bankCode: "014",
   bankAccountNumber: "1234563210",
   bankAccountName: "SINGGIH BRILIAN TARA",
@@ -150,6 +153,76 @@ describe("mockListConsumerTransactions", () => {
       const types = new Set(result.data.map((t) => t.type));
       expect(types.has("MINT")).toBe(true);
       expect(types.has("REDEEM")).toBe(true);
+    });
+  });
+});
+
+// USDX-259: redeem create binds + pre-checks the burn wallet, and the burn-tx
+// report stamps the order optimistically (status stays AWAITING_BURN).
+describe("mock redeem create — wallet pre-check (USDX-259)", () => {
+  afterEach(() => {
+    localStorage.removeItem("usdx-mock-wallet-balance");
+  });
+
+  describe("positive", () => {
+    test("echoes the bound userAddress on the created order", async () => {
+      const order = await mockCreateRedeemOrder(VALID_REDEEM);
+      expect(order.userAddress).toBe(VALID_REDEEM.userAddress);
+      expect(order.status).toBe("AWAITING_BURN");
+    });
+  });
+
+  describe("negative", () => {
+    test("blacklisted wallet → 422 WALLET_BLACKLISTED", async () => {
+      await expect(
+        mockCreateRedeemOrder({ ...VALID_REDEEM, userAddress: MOCK_BLACKLISTED_ADDRESS }),
+      ).rejects.toMatchObject({ status: 422, code: "WALLET_BLACKLISTED" });
+    });
+
+    test("armed balance below amount → 422 INSUFFICIENT_BALANCE", async () => {
+      localStorage.setItem("usdx-mock-wallet-balance", "10"); // < 100 USDX
+      await expect(mockCreateRedeemOrder(VALID_REDEEM)).rejects.toMatchObject({
+        status: 422,
+        code: "INSUFFICIENT_BALANCE",
+      });
+    });
+  });
+});
+
+describe("mockReportBurnTx (USDX-259)", () => {
+  const TX = "0x" + "ab".repeat(32);
+
+  describe("positive", () => {
+    test("stamps burnSubmittedAt + burnTxHash, status stays AWAITING_BURN", async () => {
+      const order = await mockCreateRedeemOrder(VALID_REDEEM);
+      const after = await mockReportBurnTx(order.id, TX);
+      expect(after.status).toBe("AWAITING_BURN");
+      expect(after.burnTxHash).toBe(TX);
+      expect(after.burnSubmittedAt).not.toBeNull();
+      // The GET reflects the same optimistic stamp.
+      const fetched = await mockGetRedeemOrder(order.id);
+      expect(fetched.burnSubmittedAt).not.toBeNull();
+    });
+
+    test("idempotent — re-report keeps the first timestamp", async () => {
+      const order = await mockCreateRedeemOrder(VALID_REDEEM);
+      const first = await mockReportBurnTx(order.id, TX);
+      const second = await mockReportBurnTx(order.id, TX);
+      expect(second.burnSubmittedAt).toBe(first.burnSubmittedAt);
+    });
+  });
+
+  describe("negative", () => {
+    test("invalid tx hash → 422 VALIDATION_ERROR", async () => {
+      const order = await mockCreateRedeemOrder(VALID_REDEEM);
+      await expect(mockReportBurnTx(order.id, "0xnope")).rejects.toMatchObject({
+        status: 422,
+        code: "VALIDATION_ERROR",
+      });
+    });
+
+    test("unknown order → 404", async () => {
+      await expect(mockReportBurnTx("rdm_missing", TX)).rejects.toMatchObject({ status: 404 });
     });
   });
 });

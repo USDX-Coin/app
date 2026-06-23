@@ -118,9 +118,43 @@ export const VIEWPORTS = {
  * open RainbowKit and stall. With the seam armed, connect() resolves to a
  * deterministic mock address — letting the full redeem flow (connect →
  * Ringkasan → burn → tracker) run offline. Call before the first page.goto().
+ *
+ * Pass an `address` (0x…) to bind a specific wallet — used by the resume flow to
+ * connect a wallet that differs from the order's bound `userAddress` and trigger
+ * the "terikat ke wallet lain" warning (USDX-259). Default "1" → the mock default.
  */
-export async function seedWallet(page: import("@playwright/test").Page) {
-  await page.addInitScript(() => localStorage.setItem("usdx-mock-wallet", "1"));
+export async function seedWallet(page: import("@playwright/test").Page, address?: string) {
+  await page.addInitScript((v) => localStorage.setItem("usdx-mock-wallet", v), address ?? "1");
+}
+
+/**
+ * Arm the redeem precondition seams (lib/redeem/wallet.ts, USDX-259) so the
+ * network / balance / gas gate states are exercisable offline:
+ *   chainId — wrong network → switch-network prompt (non-137)
+ *   balanceUsdx — below the amount → insufficient-balance gate
+ *   gasPol — 0 → low-gas warning (non-blocking)
+ * Call before the first page.goto(). Only the provided keys are armed.
+ */
+export async function seedWalletState(
+  page: import("@playwright/test").Page,
+  state: { chainId?: number; balanceUsdx?: number; gasPol?: number },
+) {
+  await page.addInitScript((s) => {
+    if (s.chainId !== undefined) localStorage.setItem("usdx-mock-wallet-chain", String(s.chainId));
+    if (s.balanceUsdx !== undefined)
+      localStorage.setItem("usdx-mock-wallet-balance", String(s.balanceUsdx));
+    if (s.gasPol !== undefined) localStorage.setItem("usdx-mock-wallet-gas", String(s.gasPol));
+  }, state);
+}
+
+/**
+ * Arm the one-shot burn-rejection seam (mock-api BURN_REJECT_KEY, USDX-259): the
+ * next broadcast throws a wallet-rejection error (then auto-disarms, so a retry
+ * succeeds). Exercises the guard-double-burn error → retry path. Call before the
+ * first page.goto().
+ */
+export async function seedBurnReject(page: import("@playwright/test").Page) {
+  await page.addInitScript(() => localStorage.setItem("usdx-mock-burn-reject", "1"));
 }
 
 /**

@@ -63,6 +63,28 @@ export function isRateLimited(error: unknown): boolean {
   return isApiError(error) && error.status === 429 && error.code === "RATE_LIMITED";
 }
 
+// 422 INSUFFICIENT_BALANCE — redeem pre-check: the burn wallet's USDX balance is
+// below the amount (week3.md § Week 3 Addendum, best-effort RPC balanceOf). The FE
+// already gates this client-side via the precondition read; this is the backend
+// backstop at create. Surface inline ("saldo USDX tidak cukup"), not a toast.
+export function isInsufficientBalance(error: unknown): boolean {
+  return isApiError(error) && error.status === 422 && error.code === "INSUFFICIENT_BALANCE";
+}
+
+// 422 WALLET_BLACKLISTED — redeem pre-check: the burn wallet is blacklisted
+// on-chain (week3.md § Week 3 Addendum; the contract reverts regardless). Surface
+// inline so the user knows this wallet can't burn.
+export function isWalletBlacklisted(error: unknown): boolean {
+  return isApiError(error) && error.status === 422 && error.code === "WALLET_BLACKLISTED";
+}
+
+// 409 INVALID_ORDER_STATE — reporting a burn tx (or acting) on an order that
+// isn't AWAITING_BURN/EXPIRED (week3.md § burn-tx endpoint). The scanner is the
+// arbiter; treat as a benign "already moved on" rather than a hard failure.
+export function isInvalidOrderState(error: unknown): boolean {
+  return isApiError(error) && error.status === 409 && error.code === "INVALID_ORDER_STATE";
+}
+
 // 401 INVALID_CREDENTIALS — generic "wrong password" (auth.yaml login /
 // changePasswordV2). For change-password this is the wrong *current* password,
 // surfaced inline rather than treated as an expired session.

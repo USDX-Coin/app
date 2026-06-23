@@ -167,6 +167,18 @@ export interface AddressBookEntry {
   createdAt: string;
 }
 
+// bank-accounts.yaml BankAccountEntry — a saved redeem payout bank account
+// (USDX-261). Parity with the address book, but the account is PII: the number is
+// only ever returned masked (4 digits), the name is shown to its owner.
+export interface BankAccountEntry {
+  id: string;
+  bankCode: string;
+  accountNumberMasked: string; // last 4 digits; plaintext never returned
+  accountName: string;
+  label: string | null;
+  createdAt: string;
+}
+
 // One payment channel offered at create-time (VA carries a bank list; QRIS does not).
 export interface MintChannelOption {
   channel: PaymentChannel;

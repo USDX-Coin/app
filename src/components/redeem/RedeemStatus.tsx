@@ -1,21 +1,27 @@
 "use client";
 
-// Redeem status tracker (USDX-243). Polls GET /v2/redeem/{id} and walks the
-// lifecycle AWAITING_BURN → BURNED → PROCESSING_PAYOUT → PAYOUT_COMPLETE (or
-// EXPIRED). Links the burn tx to the explorer, counts down the burn window while
-// AWAITING_BURN, and shows the simulation notice (payout is mocked in W3).
+// Redeem status tracker (USDX-243, hardened USDX-259). Polls GET /v2/redeem/{id}
+// and walks the lifecycle AWAITING_BURN → BURNED → PROCESSING_PAYOUT →
+// PAYOUT_COMPLETE (or EXPIRED). While AWAITING_BURN it hosts the burn action —
+// for the fresh-create flow (burn auto-runs) and the resume-from-/history flow
+// (reconnect wallet, then burn). The burn is guarded against double-submit and
+// bound to the order's wallet (week3.md § Guard double-burn / Resume). Links the
+// burn tx to the explorer, counts down the burn window, surfaces the optimistic
+// "memproses burn" state + the stale-burn hold, and shows the simulation notice.
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ExternalLink, Loader2, X } from "lucide-react";
+import { AlertTriangle, Check, ExternalLink, Loader2, X } from "lucide-react";
 import { useRedeemStore } from "@/stores/redeemStore";
 import { useRedeemTracker } from "@/hooks/useRedeemTracker";
+import { useRedeemPreconditions } from "@/lib/redeem/wallet";
+import { useRedeemBurn } from "@/hooks/useRedeemBurn";
 import { useLang } from "@/providers/LanguageProvider";
 import { cn, formatAmount, formatIDR, truncateAddress } from "@/lib/utils";
 import { getChainById } from "@/lib/chains";
 import { REDEEM_CHAIN_ID } from "@/lib/constants";
 import { env } from "@/lib/env";
-import type { RedeemStatus as RedeemStatusEnum } from "@/types";
+import type { RedeemOrderDetail, RedeemStatus as RedeemStatusEnum } from "@/types";
 
 const STEPS: { key: RedeemStatusEnum; label: string; desc: string }[] = [
   { key: "AWAITING_BURN", label: "redeem.statusAwaitingBurn", desc: "redeem.statusAwaitingBurnDesc" },
@@ -36,6 +42,12 @@ export function RedeemStatus() {
   const orderId = useRedeemStore((s) => s.orderId);
   const reset = useRedeemStore((s) => s.reset);
   const { data: order, isLoading } = useRedeemTracker(orderId);
+
+  // Preconditions + burn action (hooks must run before any early return). The
+  // amount is 0 until the order loads — preconditions stay inert until then.
+  const amountUsdx = order ? Number(order.amount) : 0;
+  const pre = useRedeemPreconditions(amountUsdx);
+  const { runBurn, burnState, burnErrorKey } = useRedeemBurn();
 
   // Tick once a second so the burn-window countdown stays live.
   const [now, setNow] = useState(() => Date.now());
@@ -74,6 +86,15 @@ export function RedeemStatus() {
       {env.useMock && (
         <p className="rounded-lg bg-[#eef4fb] p-3 text-xs text-muted-foreground dark:bg-[#13243d]">
           {t("redeem.simulationNotice")}
+        </p>
+      )}
+
+      {/* Stale burn: burned past the late-burn grace → payout held for manual
+          reconcile (week3.md § Late-burn cutoff, USDX-259). */}
+      {order.staleBurn && (
+        <p className="flex items-center gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-foreground">
+          <AlertTriangle className="size-4 shrink-0 text-warning" />
+          {t("redeem.staleBurn")}
         </p>
       )}
 
@@ -128,6 +149,17 @@ export function RedeemStatus() {
         })}
       </div>
 
+      {/* Burn action gate — only while awaiting the on-chain burn (USDX-259). */}
+      {order.status === "AWAITING_BURN" && (
+        <BurnGate
+          order={order}
+          pre={pre}
+          burnState={burnState}
+          burnErrorKey={burnErrorKey}
+          onBurn={() => runBurn(order, pre.address ?? "")}
+        />
+      )}
+
       {/* Burn tx + payout summary */}
       <div className="flex flex-col gap-2 rounded-xl bg-muted p-4 text-sm">
         <div className="flex items-center justify-between gap-3">
@@ -174,6 +206,109 @@ export function RedeemStatus() {
           {t("btn.viewHistory")}
         </button>
       </div>
+    </div>
+  );
+}
+
+// Burn action while AWAITING_BURN. Resolves the precondition + guard state and
+// renders exactly one affordance: processing → connect → wallet-mismatch →
+// switch-network → insufficient → Burn (with retry on a failed/rejected tx).
+function BurnGate({
+  order,
+  pre,
+  burnState,
+  burnErrorKey,
+  onBurn,
+}: {
+  order: RedeemOrderDetail;
+  pre: ReturnType<typeof useRedeemPreconditions>;
+  burnState: ReturnType<typeof useRedeemBurn>["burnState"];
+  burnErrorKey: string | null;
+  onBurn: () => void;
+}) {
+  const { t } = useLang();
+
+  // Optimistically broadcast/reported but not yet confirmed by the scanner.
+  const burnInFlight =
+    burnState === "submitting" || burnState === "submitted" || order.burnSubmittedAt != null;
+  if (burnInFlight) {
+    return (
+      <p className="flex items-center gap-2 rounded-lg border border-border bg-muted p-3 text-sm text-foreground">
+        <Loader2 className="size-4 shrink-0 animate-spin text-primary" />
+        {t("redeem.burnProcessing")}
+      </p>
+    );
+  }
+
+  // Resume: the connected wallet must equal the wallet the order is bound to
+  // (the scanner only accepts a burn from order.userAddress).
+  const walletMatches =
+    !!pre.address &&
+    !!order.userAddress &&
+    pre.address.toLowerCase() === order.userAddress.toLowerCase();
+
+  const burnButton = (
+    <button
+      type="button"
+      onClick={onBurn}
+      disabled={!pre.canBurn || !walletMatches}
+      className="brand-gradient flex h-[42px] w-full items-center justify-center rounded-lg text-sm font-medium text-white transition-opacity disabled:opacity-50"
+    >
+      {burnState === "error" ? t("redeem.retryBurn") : t("redeem.burnNow")}
+    </button>
+  );
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
+      {!pre.isConnected ? (
+        <button
+          type="button"
+          onClick={pre.connect}
+          className="brand-gradient flex h-[42px] w-full items-center justify-center rounded-lg text-sm font-medium text-white"
+        >
+          {t("btn.connectWallet")}
+        </button>
+      ) : !walletMatches ? (
+        <p className="flex items-start gap-2 text-sm text-destructive">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+          {t("redeem.walletMismatch", { address: truncateAddress(order.userAddress, 6) })}
+        </p>
+      ) : !pre.chainOk ? (
+        <>
+          <p className="flex items-center gap-2 text-sm text-foreground">
+            <AlertTriangle className="size-4 shrink-0 text-warning" />
+            {t("redeem.wrongNetwork")}
+          </p>
+          <button
+            type="button"
+            onClick={pre.switchNetwork}
+            disabled={pre.isSwitchingNetwork}
+            className="self-start rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50"
+          >
+            {pre.isSwitchingNetwork ? t("redeem.switchingNetwork") : t("redeem.switchNetwork")}
+          </button>
+        </>
+      ) : pre.insufficientBalance ? (
+        <p className="flex items-center gap-2 text-sm text-destructive">
+          <AlertTriangle className="size-4 shrink-0" />
+          {t("redeem.insufficientBalance")}
+        </p>
+      ) : (
+        <>
+          {pre.lowGasWarning && (
+            <p className="flex items-center gap-2 text-sm text-warning">
+              <AlertTriangle className="size-4 shrink-0" />
+              {t("redeem.lowGas")}
+            </p>
+          )}
+          {burnState === "error" && burnErrorKey && (
+            <p role="alert" className="text-sm text-destructive">
+              {t(burnErrorKey)}
+            </p>
+          )}
+          {burnButton}
+        </>
+      )}
     </div>
   );
 }

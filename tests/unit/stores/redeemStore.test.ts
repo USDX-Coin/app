@@ -70,4 +70,45 @@ describe("redeemStore", () => {
       expect(useRedeemStore.getState().step).toBe("tracker");
     });
   });
+
+  describe("burn guard (USDX-259)", () => {
+    test("default burn state is idle with no error", () => {
+      const state = useRedeemStore.getState();
+      expect(state.burnState).toBe("idle");
+      expect(state.burnErrorKey).toBeNull();
+    });
+
+    test("setBurnState + setBurnError update the guard", () => {
+      const s = useRedeemStore.getState();
+      s.setBurnState("submitting");
+      expect(useRedeemStore.getState().burnState).toBe("submitting");
+      s.setBurnState("error");
+      s.setBurnError("redeem.burnRejected");
+      expect(useRedeemStore.getState().burnState).toBe("error");
+      expect(useRedeemStore.getState().burnErrorKey).toBe("redeem.burnRejected");
+    });
+
+    test("resumeOrder opens the tracker for an existing order and clears burn state", () => {
+      const s = useRedeemStore.getState();
+      s.setBurnState("error");
+      s.setBurnError("redeem.burnFailed");
+      s.resumeOrder("rdm_resume_1");
+
+      const state = useRedeemStore.getState();
+      expect(state.orderId).toBe("rdm_resume_1");
+      expect(state.step).toBe("tracker");
+      expect(state.burnState).toBe("idle");
+      expect(state.burnErrorKey).toBeNull();
+    });
+
+    test("reset restores idle burn state", () => {
+      const s = useRedeemStore.getState();
+      s.setBurnState("submitted");
+      s.setBurnError("redeem.burnFailed");
+      s.reset();
+      const state = useRedeemStore.getState();
+      expect(state.burnState).toBe("idle");
+      expect(state.burnErrorKey).toBeNull();
+    });
+  });
 });

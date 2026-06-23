@@ -110,6 +110,14 @@ export type MintStep = "form" | "confirmation" | "status";
 // confirmation step — `form` collects input, `tracker` polls the order status.
 export type RedeemStep = "form" | "tracker";
 
+// Burn guard state machine (USDX-259, week3.md § Guard double-burn):
+//   idle       no burn in flight — the Burn CTA is actionable
+//   submitting signing + broadcasting (and reporting) — CTA disabled
+//   submitted  broadcast/reported optimistically — waiting for the scanner;
+//              CTA stays disabled ("memproses burn") until status leaves AWAITING_BURN
+//   error      tx rejected/failed — CTA re-enabled for retry (order still AWAITING_BURN)
+export type RedeemBurnState = "idle" | "submitting" | "submitted" | "error";
+
 // ── Phase 2 Week 2 — consumer mint / rate / address book / history (USDX-205) ──
 // Mirrors the OpenAPI contract (rate.yaml, address-book.yaml, mint.yaml,
 // transactions.yaml). Monetary values are decimal *strings* — the backend is
@@ -208,6 +216,9 @@ export interface RedeemOrderCreated {
   orderNumber: string; // = partner_reference_no (prefix RDM)
   customerName: string;
   chain: string;
+  // Burn wallet bound at create (echo of the request `userAddress`, USDX-259);
+  // the scanner only accepts a Redeem event from it.
+  userAddress: string;
   contractAddress: string; // USDX proxy address on this chain
   redeemId: string; // bytes32 hex (0x-prefixed) — `id` arg for redeem(id, amount)
   amount: string; // decimal USDX
@@ -233,12 +244,21 @@ export interface RedeemOrderCreated {
 // backoffice-only and intentionally absent here.
 export interface RedeemOrderDetail extends RedeemOrderCreated {
   type: ConsumerOrderType;
-  userAddress: string | null; // burn source wallet (set from the Redeem event at BURNED)
+  // `userAddress` is inherited from RedeemOrderCreated (bound at create, USDX-259):
+  // the burn source wallet the scanner cross-checks, and that resume requires the
+  // reconnected wallet to equal.
   inputCurrency: AmountCurrency;
   lateBurn: boolean;
+  // True once the user has burned past expires_at + REDEEM_LATE_BURN_GRACE
+  // (week3.md § Week 3 Addendum): payout is held for manual reconcile (USDX-259).
+  staleBurn: boolean;
   payoutProvider: string; // MOCK in W3
   payoutRef: string | null;
   burnTxHash: string | null;
+  // Stamped when the FE reports the burn tx optimistically (POST .../burn-tx).
+  // Status stays AWAITING_BURN until the scanner confirms — drives the "memproses
+  // burn, menunggu konfirmasi on-chain" tracker copy (USDX-259).
+  burnSubmittedAt: string | null;
   burnedAt: string | null;
   payoutCompletedAt: string | null;
   createdAt: string;

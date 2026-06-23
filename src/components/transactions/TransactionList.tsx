@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTransactions } from "@/hooks/useTransactions";
+import { useRedeemStore } from "@/stores/redeemStore";
 import { getChainById } from "@/lib/chains";
 import { formatAmount, formatIDR, truncateAddress, cn } from "@/lib/utils";
 import { useLang } from "@/providers/LanguageProvider";
@@ -125,8 +126,17 @@ const typeParam: Record<string, ConsumerOrderType | undefined> = {
 export function TransactionList() {
   const router = useRouter();
   const { t } = useLang();
+  const resumeRedeem = useRedeemStore((s) => s.resumeOrder);
   const [typeFilter, setTypeFilter] = useState("all");
   const [page, setPage] = useState(1);
+
+  // Resume an unburned redeem from history (USDX-259): load it into the tracker
+  // and navigate to /redeem. The `?order=` param makes resume deep-linkable and
+  // survive a full reload; the store update is the SPA fast-path.
+  function continueBurn(id: string) {
+    resumeRedeem(id);
+    router.push(`/redeem?order=${id}`);
+  }
 
   const { data, isLoading } = useTransactions({
     page,
@@ -263,7 +273,19 @@ export function TransactionList() {
                     <TableCell className="whitespace-nowrap text-muted-foreground">{idrOrDash(tx.effectiveRate)}</TableCell>
                     <TableCell className="text-foreground">{chainLabel(tx.chain)}</TableCell>
                     <TableCell><TxHashCell tx={tx} /></TableCell>
-                    <TableCell><StatusPill tx={tx} /></TableCell>
+                    <TableCell>
+                      <div className="flex flex-col items-start gap-1">
+                        <StatusPill tx={tx} />
+                        {tx.type === "REDEEM" && tx.status === "AWAITING_BURN" && (
+                          <button
+                            onClick={() => continueBurn(tx.id)}
+                            className="text-xs font-medium text-primary hover:underline"
+                          >
+                            {t("redeem.resume")}
+                          </button>
+                        )}
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -290,6 +312,14 @@ export function TransactionList() {
                   <span className="text-muted-foreground">{t("tx.txHash")}</span>
                   <TxHashCell tx={tx} />
                 </div>
+                {tx.type === "REDEEM" && tx.status === "AWAITING_BURN" && (
+                  <button
+                    onClick={() => continueBurn(tx.id)}
+                    className="brand-gradient mt-1 flex h-9 items-center justify-center rounded-lg text-sm font-medium text-white"
+                  >
+                    {t("redeem.resume")}
+                  </button>
+                )}
               </div>
             ))}
           </div>

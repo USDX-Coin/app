@@ -11,6 +11,20 @@ export const MINT_CHAIN_ID = "polygon";
 // Redeem is Polygon-only too (week3.md § Chain). Hardcoded in the create request;
 // there's no chain picker in the redeem form.
 export const REDEEM_CHAIN_ID = "polygon";
+// Numeric EIP-155 id for the redeem chain — Polygon mainnet (137). The
+// precondition gate enforces the connected wallet is on this network before the
+// burn (week3.md § Week 3 Addendum, USDX-259); mismatch → prompt switch.
+export const REDEEM_CHAIN_NUM_ID = 137;
+// USDX token contract on Polygon — read on-chain for the balance precondition
+// (balanceOf). Placeholder until the real address lands with INT-1 (USDX-249);
+// override per environment via NEXT_PUBLIC_USDX_CONTRACT_ADDRESS. The mock path
+// (env.useMock) never reads this.
+export const USDX_CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_USDX_CONTRACT_ADDRESS ??
+  "0x0000000000000000000000000000000000000000") as `0x${string}`;
+// Below this native POL balance the burn likely can't pay gas — surface a
+// non-blocking warning (week3.md § Precondition: "warning gas POL"). Heuristic
+// only; the wallet enforces the real gas cost.
+export const REDEEM_MIN_GAS_POL = 0.005;
 
 // Redeem fee config (week3.md § Fee & Spread). These mirror the backend
 // `fee_configs` so the form can preview "Anda akan terima" (net payout) before

@@ -1,12 +1,15 @@
 "use client";
 
-// Ringkasan Transaksi modal (USDX-243, week3.md § Ringkasan Transaksi). Final
-// confirmation before the burn. "Konfirmasi & Burn" calls POST /v2/redeem
-// (create), then the hook navigates to the status tracker and signs +
-// broadcasts the burn (simulated in W3; real on-chain burn = INT-1). Create
-// errors (422 INVALID_BANK_ACCOUNT / VALIDATION_ERROR, 503 REDEEM_DISABLED)
-// surface inline.
+// Ringkasan Transaksi modal (USDX-243, hardened USDX-259, week3.md § Ringkasan
+// Transaksi). Final confirmation before the burn. The precondition gate
+// (network = Polygon, USDX balance ≥ amount, POL gas warning) must pass before
+// "Konfirmasi & Burn" enables. Confirm calls POST /v2/redeem (sending the
+// connected userAddress), then the hook navigates to the status tracker and signs
+// + broadcasts the burn (simulated in W3; real on-chain burn = INT-1). Create
+// errors (422 INVALID_BANK_ACCOUNT / INSUFFICIENT_BALANCE / WALLET_BLACKLISTED /
+// VALIDATION_ERROR, 503 REDEEM_DISABLED) surface inline.
 
+import { AlertTriangle } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useRedeem } from "@/hooks/useRedeem";
 import { formatAmount, formatIDR, truncateAddress } from "@/lib/utils";
@@ -41,6 +44,12 @@ export function RedeemReview({ open, onOpenChange }: RedeemReviewProps) {
     bankAccountNumber,
     bankAccountName,
     walletAddress,
+    chainOk,
+    switchNetwork,
+    isSwitchingNetwork,
+    insufficientBalance,
+    lowGasWarning,
+    canBurn,
     submitRedeem,
     isCreating,
     createErrorKey,
@@ -93,6 +102,40 @@ export function RedeemReview({ open, onOpenChange }: RedeemReviewProps) {
           {t("redeem.burnNote")}
         </div>
 
+        {/* Precondition gate (week3.md § Precondition connect-wallet, USDX-259):
+            wrong network blocks with a switch prompt; insufficient USDX blocks;
+            low POL is a non-blocking warning. */}
+        {!chainOk && (
+          <div className="flex flex-col gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3">
+            <p className="flex items-center gap-2 text-sm text-foreground">
+              <AlertTriangle className="size-4 shrink-0 text-warning" />
+              {t("redeem.wrongNetwork")}
+            </p>
+            <button
+              type="button"
+              onClick={switchNetwork}
+              disabled={isSwitchingNetwork}
+              className="self-start rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50"
+            >
+              {isSwitchingNetwork ? t("redeem.switchingNetwork") : t("redeem.switchNetwork")}
+            </button>
+          </div>
+        )}
+
+        {chainOk && insufficientBalance && (
+          <p role="alert" className="flex items-center gap-2 text-sm text-destructive">
+            <AlertTriangle className="size-4 shrink-0" />
+            {t("redeem.insufficientBalance")}
+          </p>
+        )}
+
+        {chainOk && !insufficientBalance && lowGasWarning && (
+          <p className="flex items-center gap-2 text-sm text-warning">
+            <AlertTriangle className="size-4 shrink-0" />
+            {t("redeem.lowGas")}
+          </p>
+        )}
+
         {createErrorKey && (
           <p role="alert" className="text-sm text-destructive">
             {t(createErrorKey)}
@@ -111,7 +154,7 @@ export function RedeemReview({ open, onOpenChange }: RedeemReviewProps) {
           <button
             type="button"
             onClick={handleConfirm}
-            disabled={isCreating}
+            disabled={isCreating || !canBurn}
             className="brand-gradient flex h-[42px] flex-1 items-center justify-center rounded-lg text-sm font-medium text-white transition-opacity disabled:opacity-50"
           >
             {isCreating ? t("common.processing") : t("btn.confirmBurn")}

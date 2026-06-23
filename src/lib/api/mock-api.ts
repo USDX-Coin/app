@@ -12,6 +12,7 @@ import type {
   CreateMintOrderRequest,
   CreateRedeemOrderRequest,
   CreateAddressBookRequest,
+  CreateBankAccountRequest,
   ListTransactionsParams,
 } from "./types";
 import type {
@@ -27,6 +28,7 @@ import type {
   User,
   ConsumerRate,
   AddressBookEntry,
+  BankAccountEntry,
   MintChannelOption,
   MintOrderCreated,
   ConsumerTransaction,
@@ -532,6 +534,95 @@ export async function mockDeleteAddressBook(id: string): Promise<{ id: string }>
   await delay(150);
   if (!addressBook.has(id)) throw new ApiError(404, "NOT_FOUND", "Entry tidak ditemukan");
   addressBook.delete(id);
+  return { id };
+}
+
+// ── Mock W3 consumer: Bank Account Book (USDX-261) ──────────────────────────
+// In-memory saved redeem payout accounts (per page load). Parity address book,
+// but the account is PII: the plaintext number is kept only to dedup (mirrors the
+// backend blind index) and is NEVER returned — the entry exposes a masked number.
+// Seeded so the redeem bank-book picker isn't empty in dev; seeds share the map so
+// the dup-check (409) and delete cover them too.
+interface MockBankAccountRecord {
+  entry: BankAccountEntry;
+  accountNumber: string; // plaintext, dedup only; never returned
+}
+
+function makeBankAccountRecord(
+  id: string,
+  bankCode: string,
+  accountNumber: string,
+  accountName: string,
+  label: string | null,
+  createdAt: string,
+): [string, MockBankAccountRecord] {
+  return [
+    id,
+    {
+      entry: {
+        id,
+        bankCode,
+        accountNumberMasked: maskAccount(accountNumber),
+        accountName,
+        label,
+        createdAt,
+      },
+      accountNumber,
+    },
+  ];
+}
+
+const bankAccounts = new Map<string, MockBankAccountRecord>([
+  makeBankAccountRecord("seed_bank_1", "014", "1234563210", "SINGGIH BRILIAN TARA", "BCA utama", "2026-06-12T08:00:00.000Z"),
+  makeBankAccountRecord("seed_bank_2", "008", "7788990011", "SINGGIH BRILIAN TARA", null, "2026-06-11T08:00:00.000Z"),
+]);
+
+export async function mockListBankAccounts(): Promise<BankAccountEntry[]> {
+  await delay(150);
+  return [...bankAccounts.values()]
+    .map((r) => r.entry)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function mockAddBankAccount(req: CreateBankAccountRequest): Promise<BankAccountEntry> {
+  await delay(200);
+  // v2 DTO validation → 422 VALIDATION_ERROR (mirrors the backend pipe; runs before
+  // the 409 dup business check). account number 6–20 digits, name ≥ 2 chars, label ≤ 50.
+  const accountNumber = req.accountNumber.trim();
+  const accountName = req.accountName.trim();
+  const label = req.label?.trim() ?? "";
+  if (
+    req.bankCode.trim() === "" ||
+    !/^[0-9]{6,20}$/.test(accountNumber) ||
+    accountName.length < 2 ||
+    label.length > 50
+  ) {
+    throw new ApiError(422, "VALIDATION_ERROR", "Data rekening tidak valid");
+  }
+  // Dedup per user via bank_code + account_number (mock stand-in for the blind index).
+  const duplicate = [...bankAccounts.values()].some(
+    (r) => r.entry.bankCode === req.bankCode && r.accountNumber === accountNumber,
+  );
+  if (duplicate) {
+    throw new ApiError(409, "BANK_ACCOUNT_ALREADY_EXISTS", "Rekening sudah ada di daftar rekening Anda");
+  }
+  const id = "bank_" + Date.now();
+  const entry: BankAccountEntry = {
+    id,
+    bankCode: req.bankCode,
+    accountNumberMasked: maskAccount(accountNumber),
+    accountName,
+    label: label === "" ? null : label,
+    createdAt: new Date().toISOString(),
+  };
+  bankAccounts.set(id, { entry, accountNumber });
+  return entry;
+}
+
+export async function mockDeleteBankAccount(id: string): Promise<{ id: string }> {
+  await delay(150);
+  if (!bankAccounts.has(id)) throw new ApiError(404, "NOT_FOUND", "Rekening tidak ditemukan");
+  bankAccounts.delete(id);
   return { id };
 }
 

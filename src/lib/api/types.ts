@@ -129,6 +129,15 @@ export interface ReportBurnTxRequest {
   txHash: string; // 0x-prefixed redeem tx hash
 }
 
+// POST /api/v2/bank-accounts body (bank-accounts.yaml CreateBankAccountEntry,
+// USDX-261). account fields are encrypted PII server-side; sent plaintext over TLS.
+export interface CreateBankAccountRequest {
+  bankCode: string;
+  accountNumber: string;
+  accountName: string;
+  label?: string; // optional, max 50 chars
+}
+
 export interface ListTransactionsParams {
   page?: number;
   take?: number; // 1..50, default 10

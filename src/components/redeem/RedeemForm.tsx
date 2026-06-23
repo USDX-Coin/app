@@ -7,7 +7,7 @@
 // then the Ringkasan modal. KYC gate intercepts non-VERIFIED users (USDX-153).
 
 import { useState } from "react";
-import { ArrowUpDown } from "lucide-react";
+import { ArrowUpDown, BookText } from "lucide-react";
 import { useRedeem } from "@/hooks/useRedeem";
 import { useKycGate } from "@/hooks/useKycGate";
 import { formatAmount, formatIDR } from "@/lib/utils";
@@ -16,6 +16,7 @@ import { REDEEM_CHAIN_ID } from "@/lib/constants";
 import { useLang } from "@/providers/LanguageProvider";
 import { KycGateDialog } from "@/components/kyc/KycGateDialog";
 import { BankSelect } from "./BankSelect";
+import { BankAccountPicker, type BankFill } from "./BankAccountPicker";
 import { RedeemReview } from "./RedeemReview";
 
 const AMOUNT_INPUT_CLASS =
@@ -102,8 +103,34 @@ export function RedeemForm() {
   } = useRedeem();
 
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [bankPickerOpen, setBankPickerOpen] = useState(false);
+  // Masked number of a selected saved account (USDX-261, Option B): shown as a hint
+  // while the real number field is empty, since the plaintext is never returned and
+  // the redeem create needs it re-entered. A just-added account fills the number
+  // directly, so no hint then.
+  const [savedMaskedHint, setSavedMaskedHint] = useState<string | null>(null);
   const gate = useKycGate();
   const selectedChain = getChainById(REDEEM_CHAIN_ID);
+
+  // Apply a saved/added bank account to the form (USDX-261). Bank + holder name
+  // always autofill; the number autofills only when we have the plaintext (a
+  // just-added account) — otherwise the masked hint prompts re-entry.
+  function applyBankFill(fill: BankFill) {
+    setBankCode(fill.bankCode);
+    setBankAccountName(fill.accountName);
+    if (fill.accountNumber) {
+      setBankAccountNumber(fill.accountNumber);
+      setSavedMaskedHint(null);
+    } else {
+      setBankAccountNumber("");
+      setSavedMaskedHint(fill.accountNumberMasked ?? null);
+    }
+  }
+
+  function onAccountNumberChange(value: string) {
+    setBankAccountNumber(value.replace(/[^0-9]/g, ""));
+    if (savedMaskedHint) setSavedMaskedHint(null); // user is entering the real number
+  }
 
   const onAmountChange = (value: string) => setAmount(value.replace(/[^0-9.]/g, ""));
   const usdxDisplay = isRateLoading && amount ? "…" : amountUsdx > 0 ? formatAmount(amountUsdx) : "0";
@@ -212,9 +239,19 @@ export function RedeemForm() {
           )}
         </div>
 
-        {/* Destination bank (inline, per order — no saved book) */}
+        {/* Destination bank — saved bank-account book (USDX-261) or inline entry */}
         <div className="flex flex-col gap-3">
-          <p className="text-sm font-medium text-muted-foreground">{t("form.toThisBank")}</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-medium text-muted-foreground">{t("form.toThisBank")}</p>
+            <button
+              type="button"
+              onClick={() => setBankPickerOpen(true)}
+              className="flex items-center gap-1.5 text-sm font-medium text-gold underline-offset-2 hover:underline"
+            >
+              <BookText className="size-4" />
+              {t("bankbook.choose")}
+            </button>
+          </div>
           <div className="flex flex-col gap-1.5">
             <span className="text-xs font-medium text-muted-foreground">{t("form.bank")}</span>
             <BankSelect value={bankCode} onSelect={setBankCode} />
@@ -225,10 +262,15 @@ export function RedeemForm() {
               inputMode="numeric"
               placeholder={t("modal.accountNumberPh")}
               value={bankAccountNumber}
-              onChange={(e) => setBankAccountNumber(e.target.value.replace(/[^0-9]/g, ""))}
+              onChange={(e) => onAccountNumberChange(e.target.value)}
               aria-label={t("modal.accountNumber")}
               className="rounded-md bg-muted p-3 text-sm text-foreground outline-none placeholder:text-muted-foreground"
             />
+            {savedMaskedHint && !bankAccountNumber && (
+              <p className="text-xs text-muted-foreground">
+                {savedMaskedHint} — {t("bankbook.savedHint")}
+              </p>
+            )}
             {accountNumberError && <p className="text-sm text-destructive">{accountNumberError}</p>}
           </div>
           <div className="flex flex-col gap-1.5">
@@ -275,6 +317,12 @@ export function RedeemForm() {
         onOpenChange={gate.setOpen}
         status={gate.status}
         rejectionReason={gate.rejectionReason}
+      />
+
+      <BankAccountPicker
+        open={bankPickerOpen}
+        onOpenChange={setBankPickerOpen}
+        onApply={applyBankFill}
       />
 
       <RedeemReview open={reviewOpen} onOpenChange={setReviewOpen} />

@@ -9,6 +9,9 @@ import {
   mockGetRedeemOrder,
   mockReportBurnTx,
   mockListConsumerTransactions,
+  mockListBankAccounts,
+  mockAddBankAccount,
+  mockDeleteBankAccount,
   MOCK_BLACKLISTED_ADDRESS,
 } from "@/lib/api/mock-api";
 
@@ -223,6 +226,71 @@ describe("mockReportBurnTx (USDX-259)", () => {
 
     test("unknown order → 404", async () => {
       await expect(mockReportBurnTx("rdm_missing", TX)).rejects.toMatchObject({ status: 404 });
+    });
+  });
+});
+
+// USDX-261: Bank Account Book mock — saved redeem payout accounts. Parity with
+// the address-book mock, but the account number comes back masked only.
+describe("mock bank account book (USDX-261)", () => {
+  const VALID_BANK = {
+    bankCode: "014",
+    accountNumber: "5566778899",
+    accountName: "DEMO HOLDER",
+    label: "Tabungan",
+  };
+
+  describe("positive", () => {
+    test("seeded accounts list back with a masked number (never plaintext)", async () => {
+      const list = await mockListBankAccounts();
+      expect(list.length).toBeGreaterThan(0);
+      for (const e of list) {
+        expect(e.accountNumberMasked).toMatch(/^•+\d{4}$/);
+        // The plaintext number must never appear on the entry.
+        expect(JSON.stringify(e)).not.toContain("1234563210");
+      }
+    });
+
+    test("adds an entry and lists it back (masked)", async () => {
+      const entry = await mockAddBankAccount(VALID_BANK);
+      expect(entry.accountNumberMasked).toBe("••••••8899");
+      expect(entry.accountName).toBe("DEMO HOLDER");
+      expect(entry.label).toBe("Tabungan");
+      const list = await mockListBankAccounts();
+      expect(list.some((e) => e.id === entry.id)).toBe(true);
+      await mockDeleteBankAccount(entry.id); // cleanup (module-scoped state)
+    });
+
+    test("empty label is stored as null", async () => {
+      const entry = await mockAddBankAccount({ ...VALID_BANK, accountNumber: "5566778800", label: "" });
+      expect(entry.label).toBeNull();
+      await mockDeleteBankAccount(entry.id);
+    });
+  });
+
+  describe("negative", () => {
+    test("duplicate (bankCode + number) → 409 BANK_ACCOUNT_ALREADY_EXISTS", async () => {
+      const entry = await mockAddBankAccount({ ...VALID_BANK, accountNumber: "5566770000" });
+      await expect(
+        mockAddBankAccount({ ...VALID_BANK, accountNumber: "5566770000" }),
+      ).rejects.toMatchObject({ status: 409, code: "BANK_ACCOUNT_ALREADY_EXISTS" });
+      await mockDeleteBankAccount(entry.id);
+    });
+
+    test("account number with non-digits → 422 VALIDATION_ERROR", async () => {
+      await expect(
+        mockAddBankAccount({ ...VALID_BANK, accountNumber: "12ab" }),
+      ).rejects.toMatchObject({ status: 422, code: "VALIDATION_ERROR" });
+    });
+
+    test("label over 50 chars → 422 VALIDATION_ERROR", async () => {
+      await expect(
+        mockAddBankAccount({ ...VALID_BANK, accountNumber: "5566771111", label: "x".repeat(51) }),
+      ).rejects.toMatchObject({ status: 422, code: "VALIDATION_ERROR" });
+    });
+
+    test("delete of an unknown id throws 404", async () => {
+      await expect(mockDeleteBankAccount("bank_missing")).rejects.toMatchObject({ status: 404 });
     });
   });
 });

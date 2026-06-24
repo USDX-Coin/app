@@ -112,7 +112,8 @@ const en: Dict = {
   "bankbook.errDuplicate": "This bank account is already saved.",
   "bankbook.errValidation": "Please check the account details, then try again.",
   "bankbook.errGeneric": "Couldn't add the bank account. Please try again.",
-  "bankbook.savedHint": "Saved account · enter the full number to confirm.",
+  "bankbook.savedBadge": "Saved account",
+  "bankbook.change": "Change",
   // QR address scanner (USDX-217)
   "scan.open": "Scan QR code",
   "scan.title": "Scan QR",
@@ -553,7 +554,8 @@ const id: Dict = {
   "bankbook.errDuplicate": "Rekening ini sudah tersimpan.",
   "bankbook.errValidation": "Periksa kembali data rekening, lalu coba lagi.",
   "bankbook.errGeneric": "Gagal menambah rekening. Coba lagi.",
-  "bankbook.savedHint": "Rekening tersimpan · masukkan nomor lengkap untuk konfirmasi.",
+  "bankbook.savedBadge": "Rekening tersimpan",
+  "bankbook.change": "Ganti",
   // QR address scanner (USDX-217)
   "scan.open": "Scan QR code",
   "scan.title": "Scan QR",

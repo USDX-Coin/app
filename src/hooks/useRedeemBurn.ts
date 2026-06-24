@@ -7,15 +7,18 @@
 //   sign + broadcast → optimistic POST /v2/redeem/{id}/burn-tx → scanner confirms.
 // Once broadcast the order's burn button stays disabled (burnState submitting →
 // submitted); a rejected/failed tx flips to `error` so the user can retry (the
-// order stays AWAITING_BURN). The burn itself is simulated in W3 (lib/redeem/burn);
-// the real writeContract lands in INT-1 (USDX-249).
+// order stays AWAITING_BURN). The real on-chain `redeem()` write is signed via
+// wagmi's `writeContractAsync` here and injected into signAndBroadcastBurn
+// (USDX-263); when `env.useMock` is on the burn is simulated (lib/redeem/burn).
 
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useWriteContract } from "wagmi";
 import { useRedeemStore } from "@/stores/redeemStore";
-import { signAndBroadcastBurn } from "@/lib/redeem/burn";
+import { signAndBroadcastBurn, REDEEM_ABI, type BurnExecutor } from "@/lib/redeem/burn";
 import { reportBurnTx } from "@/lib/api/redeem-api";
 import { isInvalidOrderState } from "@/lib/api/errors";
+import { REDEEM_CHAIN_NUM_ID } from "@/lib/constants";
 import type { RedeemOrderCreated } from "@/types";
 
 // Wallet rejection (user denied the signature) vs any other failure — both keep
@@ -28,6 +31,7 @@ function mapBurnError(error: unknown): string {
 
 export function useRedeemBurn() {
   const queryClient = useQueryClient();
+  const { writeContractAsync } = useWriteContract();
   const burnState = useRedeemStore((s) => s.burnState);
   const burnErrorKey = useRedeemStore((s) => s.burnErrorKey);
   const setBurnState = useRedeemStore((s) => s.setBurnState);
@@ -39,10 +43,22 @@ export function useRedeemBurn() {
       const current = useRedeemStore.getState().burnState;
       if (current === "submitting" || current === "submitted") return;
 
+      // Wagmi-bound executor for the real on-chain write (USDX-263). Ignored on
+      // the mock path (env.useMock) where the burn is simulated.
+      const executor: BurnExecutor = ({ contractAddress, redeemId, amountWei, account }) =>
+        writeContractAsync({
+          address: contractAddress,
+          abi: REDEEM_ABI,
+          functionName: "redeem",
+          args: [redeemId, amountWei],
+          account,
+          chainId: REDEEM_CHAIN_NUM_ID,
+        });
+
       setBurnError(null);
       setBurnState("submitting");
       try {
-        const { burnTxHash } = await signAndBroadcastBurn(order, fromAddress);
+        const { burnTxHash } = await signAndBroadcastBurn(order, fromAddress, executor);
         // Broadcast succeeded — lock the button ("memproses burn") and report the
         // hash optimistically. The report is best-effort: a 409 INVALID_ORDER_STATE
         // (scanner already advanced) or any other failure never blocks the flow,
@@ -62,7 +78,7 @@ export function useRedeemBurn() {
         setBurnError(mapBurnError(error));
       }
     },
-    [queryClient, setBurnState, setBurnError],
+    [queryClient, setBurnState, setBurnError, writeContractAsync],
   );
 
   return { runBurn, burnState, burnErrorKey };

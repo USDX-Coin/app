@@ -23,6 +23,13 @@ vi.mock("@/lib/redeem/wallet", () => ({
   }),
 }));
 
+// useRedeemBurn reads wagmi's useWriteContract for the real on-chain burn
+// (USDX-263). There's no WagmiProvider in jsdom — stub it; the burn is never
+// broadcast in these form-logic tests (the mock layer simulates it via useMock).
+vi.mock("wagmi", () => ({
+  useWriteContract: () => ({ writeContractAsync: vi.fn() }),
+}));
+
 // Mock sell rate (mock-api): base 16000 × (1 − 2%) = 15680.
 const SELL_RATE = 15680;
 

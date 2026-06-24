@@ -9,9 +9,9 @@
 //   2. USDX balance ≥ amount — read on-chain (balanceOf)
 //   3. native POL gas warning (non-blocking)
 //
-// The connection + reads are REAL even when the API layer is mocked. Only the
-// on-chain burn is simulated in W3 (see lib/redeem/burn.ts); the real writeContract
-// lands in INT-1 (USDX-249).
+// The connection + reads are REAL even when the API layer is mocked. The burn is
+// real on-chain too when env.useMock is off (lib/redeem/burn.ts, USDX-263); the
+// mock layer simulates it offline.
 
 import { useCallback } from "react";
 import { create } from "zustand";

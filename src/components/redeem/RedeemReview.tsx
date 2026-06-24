@@ -40,9 +40,7 @@ export function RedeemReview({ open, onOpenChange }: RedeemReviewProps) {
     totalFeeIdr,
     netPayoutIdr,
     effectiveSellRate,
-    bankCode,
-    bankAccountNumber,
-    bankAccountName,
+    destination,
     walletAddress,
     chainOk,
     switchNetwork,
@@ -56,8 +54,9 @@ export function RedeemReview({ open, onOpenChange }: RedeemReviewProps) {
   } = useRedeem();
 
   const selectedChain = getChainById(REDEEM_CHAIN_ID);
-  const bank = getBankByCode(bankCode);
-  const maskedAccount = "••••" + bankAccountNumber.slice(-4);
+  // Destination is two-path (USDX-267): the hook hands us the bank code + masked
+  // number + name for whichever path is active (saved entry or manual).
+  const bank = getBankByCode(destination.bankCode);
 
   function handleConfirm() {
     // On success the hook navigates to the tracker (this modal unmounts); on
@@ -80,9 +79,9 @@ export function RedeemReview({ open, onOpenChange }: RedeemReviewProps) {
             {selectedChain?.name}
           </Row>
           <Row label={t("sum.sourceWallet")}>{walletAddress ? truncateAddress(walletAddress) : "—"}</Row>
-          <Row label={t("sum.bankDestination")}>{bank?.name ?? bankCode}</Row>
+          <Row label={t("sum.bankDestination")}>{bank?.name ?? destination.bankCode}</Row>
           <Row label={t("sum.accountName")}>
-            {bankAccountName} · {maskedAccount}
+            {destination.accountName} · {destination.accountNumberMasked}
           </Row>
           <Row label={t("sum.exchangeRate")}>
             1 USDX ≈ {effectiveSellRate ? formatAmount(effectiveSellRate) : "—"} IDR

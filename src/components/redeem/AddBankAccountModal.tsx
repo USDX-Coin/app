@@ -4,8 +4,11 @@
 // redeem payout account: POST /api/v2/bank-accounts. No inquiry at add (parity
 // address book; the account is validated at POST /v2/redeem). On success the modal
 // closes, the list refreshes (mutation invalidates BANK_ACCOUNTS_KEY), and the new
-// entry is applied to the redeem form via onAdded as a SAVED account (USDX-267):
-// the form sends `bankAccountId`, so no plaintext number is handed back.
+// entry is applied to the redeem form via onAdded WITH the plaintext number the user
+// just typed (week3.md § Form Redeem + § Bank Account Book "auto-isi bank + nomor +
+// nama"): a just-added account is the manual path (we hold the plaintext), so the
+// form auto-fills the editable fields. Only an EXISTING saved account — masked-only —
+// goes through `bankAccountId` (USDX-267).
 //
 // - Bank: required (BankSelect, same options as the redeem bank field).
 // - Account Number: required, 6–20 digits (validateBankAccountNumber).
@@ -30,8 +33,9 @@ const LABEL_MAX = 50;
 interface AddBankAccountModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Called after a successful add, with the new saved entry (USDX-267). */
-  onAdded: (entry: BankAccountEntry) => void;
+  /** Called after a successful add, with the new entry + the plaintext number
+   *  (the just-added account fills the form's manual fields — USDX-267). */
+  onAdded: (entry: BankAccountEntry, accountNumber: string) => void;
 }
 
 export function AddBankAccountModal({ open, onOpenChange, onAdded }: AddBankAccountModalProps) {
@@ -86,7 +90,7 @@ export function AddBankAccountModal({ open, onOpenChange, onAdded }: AddBankAcco
       })
       .then((entry) => {
         toast.success(t("bankbook.added"));
-        onAdded(entry);
+        onAdded(entry, number);
         reset();
         onOpenChange(false);
       })

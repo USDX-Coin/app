@@ -17,7 +17,7 @@ import { REDEEM_CHAIN_ID } from "@/lib/constants";
 import { useLang } from "@/providers/LanguageProvider";
 import { KycGateDialog } from "@/components/kyc/KycGateDialog";
 import { BankSelect } from "./BankSelect";
-import { BankAccountPicker } from "./BankAccountPicker";
+import { BankAccountPicker, type BankFill } from "./BankAccountPicker";
 import { RedeemReview } from "./RedeemReview";
 
 const AMOUNT_INPUT_CLASS =
@@ -128,6 +128,21 @@ export function RedeemForm() {
   const [bankPickerOpen, setBankPickerOpen] = useState(false);
   const gate = useKycGate();
   const selectedChain = getChainById(REDEEM_CHAIN_ID);
+
+  // Apply a picked bank account (USDX-267). An existing saved entry → saved path
+  // (bankAccountId + read-only summary, since only masked is ever returned). A
+  // just-added entry → manual path: auto-fill the editable fields with the plaintext
+  // the user just typed (week3.md § Bank Account Book "auto-isi bank + nomor + nama").
+  function applyBankFill(fill: BankFill) {
+    if (fill.mode === "saved") {
+      selectSavedAccount(fill.account);
+    } else {
+      clearSavedAccount();
+      setBankCode(fill.bankCode);
+      setBankAccountNumber(fill.accountNumber);
+      setBankAccountName(fill.accountName);
+    }
+  }
 
   const onAccountNumberChange = (value: string) => setBankAccountNumber(value.replace(/[^0-9]/g, ""));
   const onAmountChange = (value: string) => setAmount(value.replace(/[^0-9.]/g, ""));
@@ -383,7 +398,7 @@ export function RedeemForm() {
       <BankAccountPicker
         open={bankPickerOpen}
         onOpenChange={setBankPickerOpen}
-        onApply={selectSavedAccount}
+        onApply={applyBankFill}
       />
 
       <RedeemReview open={reviewOpen} onOpenChange={setReviewOpen} />

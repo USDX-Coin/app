@@ -3,9 +3,9 @@ import { loginViaStorage, forceEnglish } from "../helpers/playwright-utils";
 
 // Bank Account Book on the redeem form (USDX-261, reworked USDX-267): selecting a
 // saved payout account shows a read-only summary and the redeem create sends
-// `bankAccountId` (no number re-entry — only masked is ever returned); adding a new
-// account applies it the same way; dedup 409, delete, and manual entry still works
-// (bank book is optional). Mock layer.
+// `bankAccountId` (no number re-entry — only masked is ever returned); a just-added
+// account auto-fills the manual fields (we hold the plaintext → manual path); dedup
+// 409, delete, and manual entry still works (bank book is optional). Mock layer.
 
 test.beforeEach(async ({ page }) => {
   await forceEnglish(page);
@@ -39,7 +39,7 @@ test.describe("Redeem Bank Account Book", () => {
       await expect(form.getByLabel("Account Number")).toBeVisible();
     });
 
-    test("add a new account → applied as a saved account (summary, no number field)", async ({ page }) => {
+    test("add a new account → auto-fills the manual fields (incl. number) + appears in list", async ({ page }) => {
       await openPicker(page);
       await page.getByRole("button", { name: "Add Bank Account" }).click();
 
@@ -55,13 +55,12 @@ test.describe("Redeem Bank Account Book", () => {
       await expect(page.getByText("Bank account added")).toBeVisible({ timeout: 15000 });
       await expect(modal).toBeHidden();
 
-      // Applied as a saved account: read-only summary, no Account Number input. The
-      // redeem create will reference it by bankAccountId. Scope to the form.
+      // Just-added → manual path: the editable fields auto-fill with the plaintext we
+      // just typed (no bankAccountId round-trip — only existing saved accounts use it).
+      // Scope to the form to avoid the modal's inputs.
       const form = page.locator("main");
-      await expect(form.getByText("Saved account", { exact: true })).toBeVisible();
-      await expect(form.getByText("NEW HOLDER")).toBeVisible();
-      await expect(form.getByText(/6655/)).toBeVisible();
-      await expect(form.getByLabel("Account Number")).toHaveCount(0);
+      await expect(form.getByLabel("Holder Name")).toHaveValue("NEW HOLDER");
+      await expect(form.getByLabel("Account Number")).toHaveValue("9988776655");
 
       // Reopen the picker → the new account is listed.
       await openPicker(page);

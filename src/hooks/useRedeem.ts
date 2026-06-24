@@ -109,17 +109,37 @@ export function useRedeem() {
     effectiveSellRate != null &&
     breakdown.netPayoutIdr < MIN_REDEEM_PAYOUT_IDR;
 
+  // Bank destination is two-path (USDX-267): a saved account needs only the picked
+  // reference; manual entry needs the full, valid trio.
+  const hasBankDestination = store.savedAccount
+    ? true
+    : store.bankCode !== "" &&
+      store.bankAccountNumber !== "" &&
+      store.bankAccountName !== "" &&
+      !accountNumberError &&
+      !accountNameError;
+
   const isFormValid =
     store.amount !== "" &&
-    store.bankCode !== "" &&
-    store.bankAccountNumber !== "" &&
-    store.bankAccountName !== "" &&
+    hasBankDestination &&
     !amountError &&
-    !accountNumberError &&
-    !accountNameError &&
     effectiveSellRate != null &&
     breakdown.amountUsdx > 0 &&
     !belowMinPayout;
+
+  // Unified destination for the read-only summary + Ringkasan. Saved path uses the
+  // entry's masked number/name; manual path masks the typed number.
+  const destination = store.savedAccount
+    ? {
+        bankCode: store.savedAccount.bankCode,
+        accountNumberMasked: store.savedAccount.accountNumberMasked,
+        accountName: store.savedAccount.accountName,
+      }
+    : {
+        bankCode: store.bankCode,
+        accountNumberMasked: store.bankAccountNumber ? "••••" + store.bankAccountNumber.slice(-4) : "",
+        accountName: store.bankAccountName,
+      };
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -128,9 +148,16 @@ export function useRedeem() {
         amountCurrency: store.amountCurrency,
         chain: REDEEM_CHAIN_ID,
         userAddress: preconditions.address ?? "", // connected burn wallet (USDX-259)
-        bankCode: store.bankCode,
-        bankAccountNumber: store.bankAccountNumber.trim(),
-        bankAccountName: store.bankAccountName.trim(),
+        // Two-path bank destination (USDX-267): saved → only `bankAccountId` (the
+        // backend resolves the number/name from the entry); manual → the trio.
+        // Omitted fields drop from the JSON body.
+        ...(store.savedAccount
+          ? { bankAccountId: store.savedAccount.id }
+          : {
+              bankCode: store.bankCode,
+              bankAccountNumber: store.bankAccountNumber.trim(),
+              bankAccountName: store.bankAccountName.trim(),
+            }),
       }),
   });
 
@@ -177,6 +204,11 @@ export function useRedeem() {
     setBankAccountNumber: store.setBankAccountNumber,
     bankAccountName: store.bankAccountName,
     setBankAccountName: store.setBankAccountName,
+    // saved-account (two-path) destination — USDX-267
+    savedAccount: store.savedAccount,
+    selectSavedAccount: store.selectSavedAccount,
+    clearSavedAccount: store.clearSavedAccount,
+    destination, // unified display: { bankCode, accountNumberMasked, accountName }
     reset: store.reset,
     // rate
     effectiveSellRate,

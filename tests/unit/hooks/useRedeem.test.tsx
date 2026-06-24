@@ -166,4 +166,53 @@ describe("useRedeem", () => {
       });
     });
   });
+
+  // Saved Bank Account Book path (USDX-267): pick an entry → only bankAccountId is
+  // needed; no manual number re-entry. Uses seeded mock account seed_bank_1 (BCA).
+  describe("saved-account path (USDX-267)", () => {
+    const SAVED_ACCOUNT = {
+      id: "seed_bank_1",
+      bankCode: "014",
+      accountNumberMasked: "••••••3210",
+      accountName: "SINGGIH BRILIAN TARA",
+    };
+
+    describe("positive", () => {
+      test("valid without manual fields once an account is picked", async () => {
+        const s = useRedeemStore.getState();
+        s.setAmount("100");
+        s.selectSavedAccount(SAVED_ACCOUNT);
+        const { result } = renderHook(() => useRedeem(), { wrapper: createWrapper() });
+
+        await waitFor(() => expect(result.current.effectiveSellRate).toBe(SELL_RATE));
+        expect(result.current.bankAccountNumber).toBe(""); // no plaintext re-entry
+        expect(result.current.isFormValid).toBe(true);
+      });
+
+      test("destination mirrors the saved entry (masked + name)", () => {
+        useRedeemStore.getState().selectSavedAccount(SAVED_ACCOUNT);
+        const { result } = renderHook(() => useRedeem(), { wrapper: createWrapper() });
+        expect(result.current.destination).toEqual({
+          bankCode: "014",
+          accountNumberMasked: "••••••3210",
+          accountName: "SINGGIH BRILIAN TARA",
+        });
+      });
+
+      test("submitRedeem creates the order via bankAccountId", async () => {
+        const s = useRedeemStore.getState();
+        s.setAmount("100");
+        s.selectSavedAccount(SAVED_ACCOUNT);
+        const { result } = renderHook(() => useRedeem(), { wrapper: createWrapper() });
+        await waitFor(() => expect(result.current.isFormValid).toBe(true));
+
+        await act(async () => {
+          await result.current.submitRedeem();
+        });
+
+        expect(useRedeemStore.getState().step).toBe("tracker");
+        expect(useRedeemStore.getState().orderId).toMatch(/^rdm_/);
+      });
+    });
+  });
 });

@@ -41,6 +41,39 @@ test.describe("Redeem Flow", () => {
       await expect(page.getByText("Burn transaction")).toBeVisible();
       await expect(page.getByRole("button", { name: "Back to Redeem" })).toBeVisible();
     });
+
+    // Saved-account path (USDX-267): pick a saved account → the create sends only
+    // bankAccountId (no number re-entry) → mock resolves it → burn → payout.
+    test("saved-account path: pick saved → Ringkasan (masked) → burn → payout", async ({
+      page,
+    }) => {
+      await page.goto("/redeem");
+      await expect(page.getByText("You will redeem")).toBeVisible({ timeout: 15000 });
+
+      await page.getByPlaceholder("0", { exact: true }).fill("100");
+
+      // Pick the seeded saved account instead of typing the number.
+      await page.getByRole("button", { name: "Saved accounts" }).click();
+      await page.getByText("BCA utama").click();
+
+      // Saved path: read-only summary, no Account Number input.
+      const form = page.locator("main");
+      await expect(form.getByText("Saved account", { exact: true })).toBeVisible();
+      await expect(form.getByLabel("Account Number")).toHaveCount(0);
+
+      // Connect → Ringkasan, which shows the resolved masked number + name.
+      const redeem = page.getByRole("button", { name: "Redeem", exact: true });
+      await redeem.click();
+      await redeem.click();
+      const dialog = page.getByRole("dialog").filter({ hasText: "Transaction Summary" });
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByText(/3210/)).toBeVisible();
+      await expect(dialog.getByText("SINGGIH BRILIAN TARA")).toBeVisible();
+
+      // Confirm & Burn → tracker reaches payout (mock resolved bankAccountId).
+      await page.getByRole("button", { name: "Confirm & Burn" }).click();
+      await expect(page.getByText("Payout complete")).toBeVisible({ timeout: 20000 });
+    });
   });
 
   test.describe("negative", () => {

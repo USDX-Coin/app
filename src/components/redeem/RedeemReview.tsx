@@ -5,9 +5,9 @@
 // (network = Polygon, USDX balance ≥ amount, POL gas warning) must pass before
 // "Konfirmasi & Burn" enables. Confirm calls POST /v2/redeem (sending the
 // connected userAddress), then the hook navigates to the status tracker and signs
-// + broadcasts the burn (simulated in W3; real on-chain burn = INT-1). Create
-// errors (422 INVALID_BANK_ACCOUNT / INSUFFICIENT_BALANCE / WALLET_BLACKLISTED /
-// VALIDATION_ERROR, 503 REDEEM_DISABLED) surface inline.
+// + broadcasts the burn (real on-chain via wagmi, USDX-263; simulated on the mock
+// layer). Create errors (422 INVALID_BANK_ACCOUNT / INSUFFICIENT_BALANCE /
+// WALLET_BLACKLISTED / VALIDATION_ERROR, 503 REDEEM_DISABLED) surface inline.
 
 import { AlertTriangle } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";

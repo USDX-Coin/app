@@ -83,7 +83,9 @@ export function RedeemStatus() {
         </p>
       </div>
 
-      {env.useMock && (
+      {/* Payout is simulated in W3 even against the real backend (USDX-263), so
+          the notice tracks env.redeemSimulatedPayout, not just the mock layer. */}
+      {(env.useMock || env.redeemSimulatedPayout) && (
         <p className="rounded-lg bg-[#eef4fb] p-3 text-xs text-muted-foreground dark:bg-[#13243d]">
           {t("redeem.simulationNotice")}
         </p>

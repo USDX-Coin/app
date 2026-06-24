@@ -10,8 +10,8 @@
 //
 // The on-chain burn `redeem(redeemId, amountWei)` is signed from the user's own
 // wallet (not an API call); the backend's Redeem Event Scanner advances the
-// order. In W3 the burn is simulated (see lib/redeem/burn.ts) — the real
-// writeContract + real API land in INT-1 (USDX-249).
+// order. The real writeContract is wired in lib/redeem/burn.ts (USDX-263); the
+// mock layer simulates it when env.useMock is on.
 //
 // Errors the caller handles (redeem.yaml, week3.md § Endpoints Redeem):
 // - 403 EMAIL_NOT_VERIFIED / KYC_NOT_VERIFIED / ACCOUNT_SUSPENDED (gating)

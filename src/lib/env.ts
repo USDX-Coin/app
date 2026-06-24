@@ -32,4 +32,11 @@ export const env = {
       : explicitMock === "false"
         ? false
         : apiBaseUrl === "",
+  // W3: the redeem burn is real on-chain, but the IDR payout (disbursement) is
+  // still mocked even against the real backend (production is gated
+  // REDEEM_DISABLED). Drives the "Mode simulasi" notice on the redeem tracker
+  // regardless of `useMock`. Defaults on; set NEXT_PUBLIC_REDEEM_SIMULATED_PAYOUT
+  // to "false" once a real disbursement provider ships (week3.md § Status rilis
+  // W3 / § Status Tracker, USDX-263).
+  redeemSimulatedPayout: process.env.NEXT_PUBLIC_REDEEM_SIMULATED_PAYOUT !== "false",
 } as const;

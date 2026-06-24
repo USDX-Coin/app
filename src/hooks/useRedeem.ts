@@ -5,8 +5,8 @@
 // contextual wallet connect & precondition gate (network/balance/gas) + the
 // create-order mutation (POST /v2/redeem, sending the connected `userAddress`),
 // then hands the created order to the status tracker and runs the guarded burn.
-// The on-chain burn is simulated in W3 (lib/redeem/burn.ts); real burn + real API
-// land in INT-1 (USDX-249).
+// The on-chain burn is real via wagmi when env.useMock is off (USDX-263); the
+// mock layer simulates it offline (lib/redeem/burn.ts).
 
 import { useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
@@ -34,6 +34,8 @@ import {
   isRateLimited,
   isInsufficientBalance,
   isWalletBlacklisted,
+  isInvalidBankAccount,
+  isRedeemDisabled,
 } from "@/lib/api/errors";
 
 // Maps a create-order failure to an i18n key the review modal renders inline
@@ -49,9 +51,9 @@ function redeemErrorKey(error: unknown): string | null {
     // these before create, but surface the backend backstop inline too.
     if (isInsufficientBalance(error)) return "redeem.errInsufficientBalance";
     if (isWalletBlacklisted(error)) return "redeem.errWalletBlacklisted";
-    if (error.code === "INVALID_BANK_ACCOUNT") return "redeem.errBankAccount";
+    if (isInvalidBankAccount(error)) return "redeem.errBankAccount";
     if (isValidationError(error)) return "redeem.errValidation";
-    if (error.code === "REDEEM_DISABLED") return "redeem.errDisabled";
+    if (isRedeemDisabled(error)) return "redeem.errDisabled";
     if (error.status === 403) return "redeem.errGate"; // EMAIL/KYC/SUSPENDED gating
   }
   return "redeem.errGeneric";

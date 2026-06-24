@@ -85,6 +85,21 @@ export function isInvalidOrderState(error: unknown): boolean {
   return isApiError(error) && error.status === 409 && error.code === "INVALID_ORDER_STATE";
 }
 
+// 503 REDEEM_DISABLED — redeem gated off in this environment: no real
+// disbursement provider yet, so production refuses the order to avoid burning
+// USDX with no payout (week3.md § Environment gate). Mirror isMintDisabled —
+// surface "redeem belum dibuka", not a generic error.
+export function isRedeemDisabled(error: unknown): boolean {
+  return isApiError(error) && error.status === 503 && error.code === "REDEEM_DISABLED";
+}
+
+// 422 INVALID_BANK_ACCOUNT — the disbursement provider's account inquiry rejected
+// the destination at create (week3.md § Endpoints Redeem). Validation happens
+// before the burn (burn is irreversible); surface inline on the bank fields.
+export function isInvalidBankAccount(error: unknown): boolean {
+  return isApiError(error) && error.status === 422 && error.code === "INVALID_BANK_ACCOUNT";
+}
+
 // 401 INVALID_CREDENTIALS — generic "wrong password" (auth.yaml login /
 // changePasswordV2). For change-password this is the wrong *current* password,
 // surfaced inline rather than treated as an expired session.

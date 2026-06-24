@@ -27,6 +27,7 @@ import {
   REDEEM_FEE_PCT,
   DISBURSEMENT_FEE_FLAT_IDR,
   MIN_REDEEM_PAYOUT_IDR,
+  MAX_REDEEM_AMOUNT,
 } from "@/lib/constants";
 import {
   isApiError,
@@ -137,6 +138,20 @@ export function useRedeem() {
     store.setAmountCurrency(store.amountCurrency === "USD" ? "IDR" : "USD");
   }
 
+  // "Max" → redeem the full connected-wallet USDX balance (capped at the redeem
+  // max). The amount field follows the active denomination: USD = USDX directly,
+  // IDR = gross sale value (balance × sell rate, floored to whole rupiah).
+  function setMaxAmount() {
+    const balance = preconditions.balanceUsdx;
+    if (balance == null || balance <= 0) return;
+    const maxUsdx = Math.min(balance, MAX_REDEEM_AMOUNT);
+    if (store.amountCurrency === "USD") {
+      store.setAmount(String(maxUsdx));
+    } else if (effectiveSellRate) {
+      store.setAmount(String(Math.floor(maxUsdx * effectiveSellRate)));
+    }
+  }
+
   // Create the order → navigate to the tracker → sign + broadcast the burn (with
   // the guard double-burn state machine). The burn is fired (not awaited) so the
   // modal closes as soon as the order exists; the tracker polls and reflects
@@ -153,6 +168,7 @@ export function useRedeem() {
     // form fields
     amount: store.amount,
     setAmount: store.setAmount,
+    setMaxAmount,
     amountCurrency: store.amountCurrency,
     toggleCurrency,
     bankCode: store.bankCode,

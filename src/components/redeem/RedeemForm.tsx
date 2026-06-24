@@ -7,10 +7,10 @@
 // then the Ringkasan modal. KYC gate intercepts non-VERIFIED users (USDX-153).
 
 import { useState } from "react";
-import { ArrowUpDown, BookText } from "lucide-react";
+import { ArrowUpDown, BookText, Wallet } from "lucide-react";
 import { useRedeem } from "@/hooks/useRedeem";
 import { useKycGate } from "@/hooks/useKycGate";
-import { formatAmount, formatIDR } from "@/lib/utils";
+import { formatAmount, formatIDR, truncateAddress } from "@/lib/utils";
 import { getChainById } from "@/lib/chains";
 import { REDEEM_CHAIN_ID } from "@/lib/constants";
 import { useLang } from "@/providers/LanguageProvider";
@@ -32,6 +32,8 @@ function AmountBox({
   onChange,
   computed,
   ariaLabel,
+  onMax,
+  maxLabel,
 }: {
   label: string;
   chip: React.ReactNode;
@@ -40,10 +42,23 @@ function AmountBox({
   onChange: (value: string) => void;
   computed: string;
   ariaLabel: string;
+  onMax?: () => void;
+  maxLabel?: string;
 }) {
   return (
     <div className="flex flex-col gap-4 rounded-xl bg-muted p-4">
-      <p className="text-sm font-medium text-muted-foreground">{label}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-medium text-muted-foreground">{label}</p>
+        {isInput && onMax && (
+          <button
+            type="button"
+            onClick={onMax}
+            className="rounded-md bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/20"
+          >
+            {maxLabel}
+          </button>
+        )}
+      </div>
       <div className="flex items-center justify-between gap-2">
         {chip}
         {isInput ? (
@@ -77,6 +92,7 @@ export function RedeemForm() {
   const {
     amount,
     setAmount,
+    setMaxAmount,
     amountCurrency,
     toggleCurrency,
     bankCode,
@@ -99,7 +115,9 @@ export function RedeemForm() {
     belowMinPayout,
     isFormValid,
     isWalletConnected,
+    walletAddress,
     connectWallet,
+    balanceUsdx,
   } = useRedeem();
 
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -137,6 +155,9 @@ export function RedeemForm() {
   const idrDisplay = isRateLoading && amount ? "…" : grossIdr > 0 ? formatAmount(grossIdr) : "0";
   const isUsd = amountCurrency === "USD";
   const showBreakdown = amount !== "" && effectiveSellRate != null && amountUsdx > 0;
+  // Max fills the amount from the connected wallet's USDX balance (USDX-249).
+  const canMax = isWalletConnected && balanceUsdx != null && balanceUsdx > 0;
+  const onMax = canMax ? setMaxAmount : undefined;
 
   // Contextual connect: the first click opens the wallet connect (no global
   // button); once connected the button becomes "Redeem" and opens the Ringkasan.
@@ -180,6 +201,8 @@ export function RedeemForm() {
       onChange={onAmountChange}
       computed={usdxDisplay}
       ariaLabel={t("form.youWillRedeem")}
+      onMax={onMax}
+      maxLabel={t("common.max")}
     />
   );
 
@@ -193,12 +216,41 @@ export function RedeemForm() {
       onChange={onAmountChange}
       computed={idrDisplay}
       ariaLabel={t("redeem.grossIdr")}
+      onMax={onMax}
+      maxLabel={t("common.max")}
     />
   );
 
   return (
     <div className="flex w-full max-w-[500px] flex-col gap-6 rounded-xl border border-border bg-card p-5">
-      <h2 className="text-xl font-medium tracking-tight text-foreground">{t("title.redeem")}</h2>
+      {/* Title + contextual wallet control (USDX-249): a Connect button to the
+          right of the title until the user connects; once connected it shows the
+          address + live USDX balance. Balance is only read AFTER connect (the
+          on-chain read is gated on isConnected) — no global connect button. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-xl font-medium tracking-tight text-foreground">{t("title.redeem")}</h2>
+        {!isWalletConnected ? (
+          <button
+            type="button"
+            onClick={connectWallet}
+            className="flex h-9 shrink-0 items-center gap-2 rounded-lg bg-primary px-3 text-sm font-medium text-white transition-opacity hover:opacity-90"
+          >
+            <Wallet className="size-4" />
+            {t("redeem.connectWallet")}
+          </button>
+        ) : (
+          <div className="flex shrink-0 items-center gap-2 rounded-lg border border-border bg-muted px-3 py-1.5 text-sm">
+            <Wallet className="size-4 text-muted-foreground" />
+            <span className="font-medium text-foreground">
+              {walletAddress ? truncateAddress(walletAddress) : "—"}
+            </span>
+            <span className="text-muted-foreground">·</span>
+            <span className="font-semibold text-foreground">
+              {balanceUsdx != null ? `${formatAmount(balanceUsdx)} USDX` : "…"}
+            </span>
+          </div>
+        )}
+      </div>
 
       <div className="flex flex-col gap-4">
         {/* Amount boxes with center currency swap (USDX ↔ gross IDR). */}

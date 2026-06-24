@@ -4,6 +4,12 @@ import { createWrapper } from "../../helpers/test-utils";
 import { useRedeem } from "@/hooks/useRedeem";
 import { useRedeemStore } from "@/stores/redeemStore";
 
+// useRedeemBurn signs the burn via wagmi `useWriteContract`; there's no
+// WagmiProvider in jsdom, so stub it (the mock env path doesn't even call it).
+vi.mock("wagmi", () => ({
+  useWriteContract: () => ({ writeContractAsync: vi.fn().mockResolvedValue("0xhash") }),
+}));
+
 // The wallet is real (RainbowKit/wagmi) in the app, but there's no provider in
 // jsdom — stub the contextual-connect + precondition hooks. Form validity doesn't
 // depend on them. `canBurn: true` lets the submit test reach create.

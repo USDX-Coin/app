@@ -117,9 +117,16 @@ export interface CreateRedeemOrderRequest {
   // backend binds the order to it (user_address), pre-checks balance + blacklist,
   // and the scanner only accepts a Redeem event from this address.
   userAddress: string;
-  bankCode: string; // destination bank (provider-specific code)
-  bankAccountNumber: string;
-  bankAccountName: string;
+  // Bank destination — two-path (redeem.yaml CreateRedeemOrder, USDX-262/267). Send
+  // EXACTLY one path: `bankAccountId` (saved Bank Account Book entry — the backend
+  // resolves + decrypts the number/name server-side, since GET only returns masked)
+  // OR the manual trio below. `bankAccountId` is authoritative; `bankAccountNumber`
+  // must never accompany it (→ 422 VALIDATION_ERROR), and `bankCode`/`bankAccountName`
+  // sent alongside must match the entry. Omitted fields are dropped from the body.
+  bankAccountId?: string; // saved path — entry id (bank-accounts.yaml)
+  bankCode?: string; // manual path — destination bank (provider-specific code)
+  bankAccountNumber?: string; // manual path — account number (plaintext over TLS)
+  bankAccountName?: string; // manual path — holder name (plaintext over TLS)
 }
 
 // POST /api/v2/redeem/{id}/burn-tx body (redeem.yaml redeemV2BurnTx, USDX-259).

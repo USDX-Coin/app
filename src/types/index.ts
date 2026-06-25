@@ -179,6 +179,17 @@ export interface BankAccountEntry {
   createdAt: string;
 }
 
+// A saved Bank Account Book entry chosen as the redeem destination (USDX-267).
+// Snapshot of the picked BankAccountEntry: redeem create sends only `id` (as
+// `bankAccountId`, the saved path) while bankCode/masked/name drive the read-only
+// summary — the user never re-types the number (GET only ever returns it masked).
+export interface SelectedBankAccount {
+  id: string;
+  bankCode: string;
+  accountNumberMasked: string;
+  accountName: string;
+}
+
 // One payment channel offered at create-time (VA carries a bank list; QRIS does not).
 export interface MintChannelOption {
   channel: PaymentChannel;

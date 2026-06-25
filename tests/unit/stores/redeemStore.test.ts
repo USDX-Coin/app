@@ -50,10 +50,48 @@ describe("redeemStore", () => {
     test("initial state has empty form data", () => {
       const state = useRedeemStore.getState();
       expect(state.amount).toBe("");
+      expect(state.savedAccount).toBeNull();
       expect(state.bankCode).toBe("");
       expect(state.bankAccountNumber).toBe("");
       expect(state.bankAccountName).toBe("");
       expect(state.orderId).toBeNull();
+    });
+  });
+
+  describe("saved account (USDX-267)", () => {
+    const SAVED = {
+      id: "seed_bank_1",
+      bankCode: "014",
+      accountNumberMasked: "••••••3210",
+      accountName: "SINGGIH BRILIAN TARA",
+    };
+
+    test("selectSavedAccount stores the snapshot and clears manual fields", () => {
+      const s = useRedeemStore.getState();
+      s.setBankCode("008");
+      s.setBankAccountNumber("7788990011");
+      s.setBankAccountName("OLD NAME");
+      s.selectSavedAccount(SAVED);
+
+      const state = useRedeemStore.getState();
+      expect(state.savedAccount).toEqual(SAVED);
+      expect(state.bankCode).toBe("");
+      expect(state.bankAccountNumber).toBe("");
+      expect(state.bankAccountName).toBe("");
+    });
+
+    test("clearSavedAccount drops the saved reference (back to manual)", () => {
+      const s = useRedeemStore.getState();
+      s.selectSavedAccount(SAVED);
+      s.clearSavedAccount();
+      expect(useRedeemStore.getState().savedAccount).toBeNull();
+    });
+
+    test("reset clears the saved account", () => {
+      const s = useRedeemStore.getState();
+      s.selectSavedAccount(SAVED);
+      s.reset();
+      expect(useRedeemStore.getState().savedAccount).toBeNull();
     });
   });
 

@@ -890,6 +890,55 @@ function seedResumableRedeemOrder() {
 }
 seedResumableRedeemOrder();
 
+// Resolve the redeem destination from the two-path bank input (USDX-262/267),
+// mirroring the backend: a saved `bankAccountId` is resolved from the Bank Account
+// Book entry (the number/name decrypted server-side are authoritative — the FE
+// never re-sends the plaintext, GET only exposes masked); otherwise the manual
+// trio is used as-is. Throws the SoT 422s for an inconsistent / incomplete path.
+function resolveRedeemBankDestination(req: CreateRedeemOrderRequest): {
+  bankCode: string;
+  accountNumber: string; // plaintext (decrypt stand-in); never returned to the client
+  accountName: string;
+} {
+  if (req.bankAccountId) {
+    // Saved path: `bankAccountNumber` must NOT accompany `bankAccountId` (it's
+    // resolved from the entry) — inconsistent → 422 VALIDATION_ERROR.
+    if (req.bankAccountNumber) {
+      throw new ApiError(
+        422,
+        "VALIDATION_ERROR",
+        "Nomor rekening tidak boleh dikirim bersama rekening tersimpan",
+      );
+    }
+    const record = bankAccounts.get(req.bankAccountId);
+    // Entry not owned by the user / missing → 422 INVALID_BANK_ACCOUNT.
+    if (!record) {
+      throw new ApiError(422, "INVALID_BANK_ACCOUNT", "Rekening tujuan tidak valid atau tidak ditemukan");
+    }
+    // `bankCode`/`bankAccountName` sent alongside must match the entry (empty = OK).
+    if (
+      (req.bankCode && req.bankCode !== record.entry.bankCode) ||
+      (req.bankAccountName && req.bankAccountName !== record.entry.accountName)
+    ) {
+      throw new ApiError(422, "VALIDATION_ERROR", "Data rekening tidak konsisten dengan rekening tersimpan");
+    }
+    return {
+      bankCode: record.entry.bankCode,
+      accountNumber: record.accountNumber,
+      accountName: record.entry.accountName,
+    };
+  }
+  // Manual path: the full trio is required (exactly one path must be complete).
+  if (!req.bankCode || !req.bankAccountNumber || !req.bankAccountName) {
+    throw new ApiError(422, "VALIDATION_ERROR", "Rekening tujuan tidak lengkap");
+  }
+  return {
+    bankCode: req.bankCode,
+    accountNumber: req.bankAccountNumber,
+    accountName: req.bankAccountName,
+  };
+}
+
 export async function mockCreateRedeemOrder(
   req: CreateRedeemOrderRequest,
 ): Promise<RedeemOrderCreated> {
@@ -903,10 +952,15 @@ export async function mockCreateRedeemOrder(
     redeemFeePct: REDEEM_FEE_PCT,
     disbursementFeeFlatIdr: DISBURSEMENT_FEE_FLAT_IDR,
   });
-  // Reject precedence (week3.md § backend actions): wallet pre-check → inquiry
-  // rekening → min-payout. The amount is resolved first (above) because the
-  // pre-check needs amountUsdx, but that step is side-effect free.
+  // Reject precedence (week3.md § backend actions): resolve two-path rekening
+  // (input validation) → wallet pre-check → inquiry rekening → min-payout. The
+  // amount is resolved first (above) because the pre-check needs amountUsdx, but
+  // that step is side-effect free.
   //
+  // Two-path destination (USDX-262/267): saved `bankAccountId` resolves + decrypts
+  // from the entry, manual sends the trio. Throws 422 VALIDATION_ERROR (incomplete /
+  // inconsistent) or INVALID_BANK_ACCOUNT (entry not owned) before anything else.
+  const dest = resolveRedeemBankDestination(req);
   // Wallet pre-check (week3.md § Week 3 Addendum, USDX-259, best-effort): blacklist
   // then balance. The FE precondition gate normally blocks these before create;
   // this is the backend backstop.
@@ -919,7 +973,8 @@ export async function mockCreateRedeemOrder(
   }
   // Account inquiry (week3.md § Validasi rekening) runs before burn — invalid
   // rekening rejected up front so no USDX is burned without a valid payout target.
-  if (req.bankAccountNumber === MOCK_INVALID_BANK_ACCOUNT) {
+  // Checked against the resolved number so it covers both paths.
+  if (dest.accountNumber === MOCK_INVALID_BANK_ACCOUNT) {
     throw new ApiError(422, "INVALID_BANK_ACCOUNT", "Rekening tujuan tidak valid atau tidak ditemukan");
   }
   // Minimum payout floor checked from create (week3.md § Min payout) → reject
@@ -952,16 +1007,16 @@ export async function mockCreateRedeemOrder(
     disbursementFeeIdr: idr(b.disbursementFeeIdr),
     totalFeeIdr: idr(b.totalFeeIdr),
     netPayoutIdr: idr(b.netPayoutIdr),
-    bankCode: req.bankCode,
-    bankAccountNumberMasked: maskAccount(req.bankAccountNumber),
-    bankAccountName: req.bankAccountName,
+    bankCode: dest.bankCode,
+    bankAccountNumberMasked: maskAccount(dest.accountNumber),
+    bankAccountName: dest.accountName,
     status: "AWAITING_BURN",
     expiresAt: new Date(nowMs + MOCK_REDEEM_BURN_TTL_MS).toISOString(),
   };
   redeemOrders.set(id, {
     order,
     inputCurrency: req.amountCurrency,
-    bankAccountNumber: req.bankAccountNumber,
+    bankAccountNumber: dest.accountNumber,
     createdAtMs: nowMs,
     expiresAtMs: nowMs + MOCK_REDEEM_BURN_TTL_MS,
     burnSubmittedAtMs: null,

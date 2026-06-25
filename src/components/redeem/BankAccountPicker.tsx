@@ -5,12 +5,12 @@
 // picker: list saved payout accounts (GET /v2/bank-accounts), select one to apply
 // to the form, delete per-entry, and open the "Add Bank Account" modal.
 //
-// Applying a fill (USDX-261, Option B): selecting an EXISTING saved account fills
-// bank + holder name and passes the masked number as a hint — the plaintext is
-// never returned, so the user re-enters the full number (the redeem create needs
-// it). A just-ADDED account passes its plaintext number, so the form autofills it
-// fully. (A `bankAccountId` reference at redeem create — full autofill for saved
-// accounts too — is the follow-up to Option A.)
+// Two-path apply (USDX-267, week3.md § Form Redeem + § Bank Account Book):
+// - Selecting an EXISTING entry → "saved" fill: only `bankAccountId` is sent at
+//   redeem create (number/name resolved server-side) and the form shows a read-only
+//   summary — the plaintext is only ever returned masked, so it's never re-typed.
+// - A JUST-ADDED entry (modal) → "manual" fill: the user just typed the plaintext,
+//   so the form auto-fills the editable bank/number/name fields (manual path).
 
 import { useState } from "react";
 import { Check, Landmark, Loader2, Plus, Trash2, X } from "lucide-react";
@@ -20,12 +20,22 @@ import { AddBankAccountModal } from "./AddBankAccountModal";
 import { useBankAccounts, useDeleteBankAccount } from "@/hooks/useBankAccounts";
 import { getBankByCode } from "@/lib/banks";
 import { useLang } from "@/providers/LanguageProvider";
+import type { BankAccountEntry, SelectedBankAccount } from "@/types";
 
-export interface BankFill {
-  bankCode: string;
-  accountName: string;
-  accountNumber?: string; // plaintext — only for a just-added account
-  accountNumberMasked?: string; // display hint for an existing saved account
+// What the picker hands back to the form: an existing entry (saved path,
+// bankAccountId) or a just-added one with its plaintext number (manual path).
+export type BankFill =
+  | { mode: "saved"; account: SelectedBankAccount }
+  | { mode: "manual"; bankCode: string; accountNumber: string; accountName: string };
+
+// Map a Bank Account Book entry → the saved-account snapshot the form holds.
+function toSelected(entry: BankAccountEntry): SelectedBankAccount {
+  return {
+    id: entry.id,
+    bankCode: entry.bankCode,
+    accountNumberMasked: entry.accountNumberMasked,
+    accountName: entry.accountName,
+  };
 }
 
 interface BankAccountPickerProps {
@@ -74,11 +84,7 @@ export function BankAccountPicker({ open, onOpenChange, onApply }: BankAccountPi
                     <button
                       type="button"
                       onClick={() => {
-                        onApply({
-                          bankCode: entry.bankCode,
-                          accountName: entry.accountName,
-                          accountNumberMasked: entry.accountNumberMasked,
-                        });
+                        onApply({ mode: "saved", account: toSelected(entry) });
                         onOpenChange(false);
                       }}
                       className="flex min-w-0 flex-1 items-center gap-3 p-1 text-left"
@@ -155,12 +161,13 @@ export function BankAccountPicker({ open, onOpenChange, onApply }: BankAccountPi
           open={addOpen}
           onOpenChange={setAddOpen}
           onAdded={(entry, accountNumber) => {
-            // Just added → autofill the form fully (we have the plaintext number),
-            // and close the picker too.
+            // Just added → manual fill (we hold the plaintext the user typed), and
+            // close the picker too. Auto-fills the form's editable bank/number/name.
             onApply({
+              mode: "manual",
               bankCode: entry.bankCode,
-              accountName: entry.accountName,
               accountNumber,
+              accountName: entry.accountName,
             });
             onOpenChange(false);
           }}

@@ -7,11 +7,12 @@
 // then the Ringkasan modal. KYC gate intercepts non-VERIFIED users (USDX-153).
 
 import { useState } from "react";
-import { ArrowUpDown, BookText, Wallet } from "lucide-react";
+import { ArrowUpDown, BookText, Landmark, Wallet } from "lucide-react";
 import { useRedeem } from "@/hooks/useRedeem";
 import { useKycGate } from "@/hooks/useKycGate";
 import { formatAmount, formatIDR, truncateAddress } from "@/lib/utils";
 import { getChainById } from "@/lib/chains";
+import { getBankByCode } from "@/lib/banks";
 import { REDEEM_CHAIN_ID } from "@/lib/constants";
 import { useLang } from "@/providers/LanguageProvider";
 import { KycGateDialog } from "@/components/kyc/KycGateDialog";
@@ -101,6 +102,9 @@ export function RedeemForm() {
     setBankAccountNumber,
     bankAccountName,
     setBankAccountName,
+    savedAccount,
+    selectSavedAccount,
+    clearSavedAccount,
     amountUsdx,
     grossIdr,
     redeemFeeIdr,
@@ -122,34 +126,25 @@ export function RedeemForm() {
 
   const [reviewOpen, setReviewOpen] = useState(false);
   const [bankPickerOpen, setBankPickerOpen] = useState(false);
-  // Masked number of a selected saved account (USDX-261, Option B): shown as a hint
-  // while the real number field is empty, since the plaintext is never returned and
-  // the redeem create needs it re-entered. A just-added account fills the number
-  // directly, so no hint then.
-  const [savedMaskedHint, setSavedMaskedHint] = useState<string | null>(null);
   const gate = useKycGate();
   const selectedChain = getChainById(REDEEM_CHAIN_ID);
 
-  // Apply a saved/added bank account to the form (USDX-261). Bank + holder name
-  // always autofill; the number autofills only when we have the plaintext (a
-  // just-added account) — otherwise the masked hint prompts re-entry.
+  // Apply a picked bank account (USDX-267). An existing saved entry → saved path
+  // (bankAccountId + read-only summary, since only masked is ever returned). A
+  // just-added entry → manual path: auto-fill the editable fields with the plaintext
+  // the user just typed (week3.md § Bank Account Book "auto-isi bank + nomor + nama").
   function applyBankFill(fill: BankFill) {
-    setBankCode(fill.bankCode);
-    setBankAccountName(fill.accountName);
-    if (fill.accountNumber) {
-      setBankAccountNumber(fill.accountNumber);
-      setSavedMaskedHint(null);
+    if (fill.mode === "saved") {
+      selectSavedAccount(fill.account);
     } else {
-      setBankAccountNumber("");
-      setSavedMaskedHint(fill.accountNumberMasked ?? null);
+      clearSavedAccount();
+      setBankCode(fill.bankCode);
+      setBankAccountNumber(fill.accountNumber);
+      setBankAccountName(fill.accountName);
     }
   }
 
-  function onAccountNumberChange(value: string) {
-    setBankAccountNumber(value.replace(/[^0-9]/g, ""));
-    if (savedMaskedHint) setSavedMaskedHint(null); // user is entering the real number
-  }
-
+  const onAccountNumberChange = (value: string) => setBankAccountNumber(value.replace(/[^0-9]/g, ""));
   const onAmountChange = (value: string) => setAmount(value.replace(/[^0-9.]/g, ""));
   const usdxDisplay = isRateLoading && amount ? "…" : amountUsdx > 0 ? formatAmount(amountUsdx) : "0";
   const idrDisplay = isRateLoading && amount ? "…" : grossIdr > 0 ? formatAmount(grossIdr) : "0";
@@ -291,7 +286,10 @@ export function RedeemForm() {
           )}
         </div>
 
-        {/* Destination bank — saved bank-account book (USDX-261) or inline entry */}
+        {/* Destination bank (USDX-261/267) — saved bank-account book or manual entry.
+            Picking a saved account sends only `bankAccountId`: we show a read-only
+            summary (bank + masked number + name) and never ask for the number again.
+            "Change" clears the reference and returns to manual entry. */}
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-2">
             <p className="text-sm font-medium text-muted-foreground">{t("form.toThisBank")}</p>
@@ -304,38 +302,64 @@ export function RedeemForm() {
               {t("bankbook.choose")}
             </button>
           </div>
-          <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">{t("form.bank")}</span>
-            <BankSelect value={bankCode} onSelect={setBankCode} />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">{t("modal.accountNumber")}</span>
-            <input
-              inputMode="numeric"
-              placeholder={t("modal.accountNumberPh")}
-              value={bankAccountNumber}
-              onChange={(e) => onAccountNumberChange(e.target.value)}
-              aria-label={t("modal.accountNumber")}
-              className="rounded-md bg-muted p-3 text-sm text-foreground outline-none placeholder:text-muted-foreground"
-            />
-            {savedMaskedHint && !bankAccountNumber && (
-              <p className="text-xs text-muted-foreground">
-                {savedMaskedHint} — {t("bankbook.savedHint")}
-              </p>
-            )}
-            {accountNumberError && <p className="text-sm text-destructive">{accountNumberError}</p>}
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">{t("modal.holderName")}</span>
-            <input
-              placeholder={t("modal.holderNamePh")}
-              value={bankAccountName}
-              onChange={(e) => setBankAccountName(e.target.value)}
-              aria-label={t("modal.holderName")}
-              className="rounded-md bg-muted p-3 text-sm text-foreground outline-none placeholder:text-muted-foreground"
-            />
-            {accountNameError && <p className="text-sm text-destructive">{accountNameError}</p>}
-          </div>
+
+          {savedAccount ? (
+            <div className="flex items-center gap-3 rounded-xl bg-muted p-3">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-card text-muted-foreground">
+                <Landmark className="size-4" />
+              </span>
+              <div className="flex min-w-0 flex-1 flex-col">
+                <span className="flex items-center gap-2">
+                  <span className="truncate text-sm font-medium text-foreground">
+                    {getBankByCode(savedAccount.bankCode)?.name ?? savedAccount.bankCode}
+                  </span>
+                  <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                    {t("bankbook.savedBadge")}
+                  </span>
+                </span>
+                <span className="truncate text-xs text-muted-foreground">
+                  {savedAccount.accountNumberMasked} · {savedAccount.accountName}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={clearSavedAccount}
+                className="shrink-0 text-sm font-medium text-gold underline-offset-2 hover:underline"
+              >
+                {t("bankbook.change")}
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-col gap-1.5">
+                <span className="text-xs font-medium text-muted-foreground">{t("form.bank")}</span>
+                <BankSelect value={bankCode} onSelect={setBankCode} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <span className="text-xs font-medium text-muted-foreground">{t("modal.accountNumber")}</span>
+                <input
+                  inputMode="numeric"
+                  placeholder={t("modal.accountNumberPh")}
+                  value={bankAccountNumber}
+                  onChange={(e) => onAccountNumberChange(e.target.value)}
+                  aria-label={t("modal.accountNumber")}
+                  className="rounded-md bg-muted p-3 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                />
+                {accountNumberError && <p className="text-sm text-destructive">{accountNumberError}</p>}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <span className="text-xs font-medium text-muted-foreground">{t("modal.holderName")}</span>
+                <input
+                  placeholder={t("modal.holderNamePh")}
+                  value={bankAccountName}
+                  onChange={(e) => setBankAccountName(e.target.value)}
+                  aria-label={t("modal.holderName")}
+                  className="rounded-md bg-muted p-3 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                />
+                {accountNameError && <p className="text-sm text-destructive">{accountNameError}</p>}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Fee breakdown → net payout ("Anda akan terima") */}

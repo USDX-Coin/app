@@ -192,6 +192,57 @@ describe("mock redeem create — wallet pre-check (USDX-259)", () => {
   });
 });
 
+// USDX-267: two-path destination. A saved `bankAccountId` resolves the number/name
+// from the entry server-side (no plaintext re-sent); manual sends the trio. The
+// resolved snapshot must match the picked account — the bug this rework fixes.
+describe("mock redeem create — two-path destination (USDX-267)", () => {
+  // Seeded saved account (mock-api): id seed_bank_1 = BCA (014) 1234563210.
+  const SAVED_REDEEM = {
+    amount: "100",
+    amountCurrency: "USD" as const,
+    chain: "polygon",
+    userAddress: "0x000000C528aE908fB929a0898B65e913623c9aFf",
+    bankAccountId: "seed_bank_1",
+  };
+
+  describe("positive", () => {
+    test("saved path resolves the snapshot from the entry (masked + name match)", async () => {
+      const order = await mockCreateRedeemOrder(SAVED_REDEEM);
+      expect(order.bankCode).toBe("014");
+      expect(order.bankAccountNumberMasked).toBe("••••••3210");
+      expect(order.bankAccountName).toBe("SINGGIH BRILIAN TARA");
+      // The plaintext number is never echoed on the created order.
+      expect(JSON.stringify(order)).not.toContain("1234563210");
+    });
+  });
+
+  describe("negative", () => {
+    test("unknown/unowned bankAccountId → 422 INVALID_BANK_ACCOUNT", async () => {
+      await expect(
+        mockCreateRedeemOrder({ ...SAVED_REDEEM, bankAccountId: "bank_nope" }),
+      ).rejects.toMatchObject({ status: 422, code: "INVALID_BANK_ACCOUNT" });
+    });
+
+    test("bankAccountId + bankAccountNumber together → 422 VALIDATION_ERROR", async () => {
+      await expect(
+        mockCreateRedeemOrder({ ...SAVED_REDEEM, bankAccountNumber: "1234563210" }),
+      ).rejects.toMatchObject({ status: 422, code: "VALIDATION_ERROR" });
+    });
+
+    test("neither path complete → 422 VALIDATION_ERROR", async () => {
+      await expect(
+        mockCreateRedeemOrder({
+          amount: "100",
+          amountCurrency: "USD",
+          chain: "polygon",
+          userAddress: "0x000000C528aE908fB929a0898B65e913623c9aFf",
+          bankCode: "014", // missing number + name, no bankAccountId
+        }),
+      ).rejects.toMatchObject({ status: 422, code: "VALIDATION_ERROR" });
+    });
+  });
+});
+
 describe("mockReportBurnTx (USDX-259)", () => {
   const TX = "0x" + "ab".repeat(32);
 

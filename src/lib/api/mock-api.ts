@@ -40,6 +40,7 @@ import type {
 } from "@/types";
 import { ApiError, type Paginated } from "./client";
 import { validatePassword, validateAddress } from "@/lib/validations";
+import { getBankName } from "@/lib/banks";
 import { computeRedeemBreakdown } from "@/lib/redeem/fees";
 import {
   REDEEM_FEE_PCT,
@@ -538,14 +539,14 @@ export async function mockDeleteAddressBook(id: string): Promise<{ id: string }>
 }
 
 // ── Mock W3 consumer: Bank Account Book (USDX-261) ──────────────────────────
-// In-memory saved redeem payout accounts (per page load). Parity address book,
-// but the account is PII: the plaintext number is kept only to dedup (mirrors the
-// backend blind index) and is NEVER returned — the entry exposes a masked number.
-// Seeded so the redeem bank-book picker isn't empty in dev; seeds share the map so
-// the dup-check (409) and delete cover them too.
+// In-memory saved redeem payout accounts (per page load). Parity address book.
+// The account is PII (ciphertext at-rest server-side), but the owner sees their own
+// data — the entry returns the full number + a bankName resolved from bankCode
+// (un-mask 2026-06-25, USDX-269/270). Dedup (mirrors the backend blind index) reads
+// the number off the entry. Seeded so the picker isn't empty in dev; seeds share the
+// map so the dup-check (409) and delete cover them too.
 interface MockBankAccountRecord {
   entry: BankAccountEntry;
-  accountNumber: string; // plaintext, dedup only; never returned
 }
 
 function makeBankAccountRecord(
@@ -562,12 +563,12 @@ function makeBankAccountRecord(
       entry: {
         id,
         bankCode,
-        accountNumberMasked: maskAccount(accountNumber),
+        bankName: getBankName(bankCode),
+        accountNumber,
         accountName,
         label,
         createdAt,
       },
-      accountNumber,
     },
   ];
 }
@@ -601,7 +602,7 @@ export async function mockAddBankAccount(req: CreateBankAccountRequest): Promise
   }
   // Dedup per user via bank_code + account_number (mock stand-in for the blind index).
   const duplicate = [...bankAccounts.values()].some(
-    (r) => r.entry.bankCode === req.bankCode && r.accountNumber === accountNumber,
+    (r) => r.entry.bankCode === req.bankCode && r.entry.accountNumber === accountNumber,
   );
   if (duplicate) {
     throw new ApiError(409, "BANK_ACCOUNT_ALREADY_EXISTS", "Rekening sudah ada di daftar rekening Anda");
@@ -610,12 +611,13 @@ export async function mockAddBankAccount(req: CreateBankAccountRequest): Promise
   const entry: BankAccountEntry = {
     id,
     bankCode: req.bankCode,
-    accountNumberMasked: maskAccount(accountNumber),
+    bankName: getBankName(req.bankCode),
+    accountNumber,
     accountName,
     label: label === "" ? null : label,
     createdAt: new Date().toISOString(),
   };
-  bankAccounts.set(id, { entry, accountNumber });
+  bankAccounts.set(id, { entry });
   return entry;
 }
 
@@ -822,10 +824,6 @@ function randomHex(bytes: number): string {
   return hex;
 }
 
-function maskAccount(accountNumber: string): string {
-  return "••••••" + accountNumber.slice(-4);
-}
-
 // 6-decimal USDX → uint256 micro-units string ("100" → "100000000").
 function toUsdxWei(amountUsdx: number): string {
   return BigInt(Math.round(amountUsdx * 10 ** USDX_DECIMALS)).toString();
@@ -872,7 +870,8 @@ function seedResumableRedeemOrder() {
     totalFeeIdr: idr(b.totalFeeIdr),
     netPayoutIdr: idr(b.netPayoutIdr),
     bankCode: "014",
-    bankAccountNumberMasked: maskAccount("1234563210"),
+    bankName: getBankName("014"),
+    bankAccountNumber: "1234563210",
     bankAccountName: "Demo User",
     status: "AWAITING_BURN",
     expiresAt: new Date(expiresAtMs).toISOString(),
@@ -893,8 +892,8 @@ seedResumableRedeemOrder();
 // Resolve the redeem destination from the two-path bank input (USDX-262/267),
 // mirroring the backend: a saved `bankAccountId` is resolved from the Bank Account
 // Book entry (the number/name decrypted server-side are authoritative — the FE
-// never re-sends the plaintext, GET only exposes masked); otherwise the manual
-// trio is used as-is. Throws the SoT 422s for an inconsistent / incomplete path.
+// never re-sends the plaintext); otherwise the manual trio is used as-is. Throws
+// the SoT 422s for an inconsistent / incomplete path.
 function resolveRedeemBankDestination(req: CreateRedeemOrderRequest): {
   bankCode: string;
   accountNumber: string; // plaintext (decrypt stand-in); never returned to the client
@@ -924,7 +923,7 @@ function resolveRedeemBankDestination(req: CreateRedeemOrderRequest): {
     }
     return {
       bankCode: record.entry.bankCode,
-      accountNumber: record.accountNumber,
+      accountNumber: record.entry.accountNumber,
       accountName: record.entry.accountName,
     };
   }
@@ -1008,7 +1007,8 @@ export async function mockCreateRedeemOrder(
     totalFeeIdr: idr(b.totalFeeIdr),
     netPayoutIdr: idr(b.netPayoutIdr),
     bankCode: dest.bankCode,
-    bankAccountNumberMasked: maskAccount(dest.accountNumber),
+    bankName: getBankName(dest.bankCode),
+    bankAccountNumber: dest.accountNumber,
     bankAccountName: dest.accountName,
     status: "AWAITING_BURN",
     expiresAt: new Date(nowMs + MOCK_REDEEM_BURN_TTL_MS).toISOString(),

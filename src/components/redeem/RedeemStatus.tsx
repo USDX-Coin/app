@@ -170,7 +170,9 @@ export function RedeemStatus() {
         </div>
         <div className="flex items-center justify-between gap-3">
           <span className="text-muted-foreground">{t("sum.bankDestination")}</span>
-          <span className="font-medium text-foreground">{order.bankAccountNumberMasked}</span>
+          <span className="font-medium text-foreground">
+            {order.bankName} · {order.bankAccountNumber}
+          </span>
         </div>
         <div className="flex items-center justify-between gap-3">
           <span className="text-muted-foreground">{t("redeem.netPayout")}</span>

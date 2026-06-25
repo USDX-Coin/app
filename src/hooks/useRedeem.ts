@@ -22,6 +22,7 @@ import {
   validateBankAccountName,
 } from "@/lib/validations";
 import { parseAmount } from "@/lib/utils";
+import { getBankName } from "@/lib/banks";
 import {
   REDEEM_CHAIN_ID,
   REDEEM_FEE_PCT,
@@ -127,17 +128,20 @@ export function useRedeem() {
     breakdown.amountUsdx > 0 &&
     !belowMinPayout;
 
-  // Unified destination for the read-only summary + Ringkasan. Saved path uses the
-  // entry's masked number/name; manual path masks the typed number.
+  // Unified destination for the read-only summary + Ringkasan. Both paths render the
+  // full number + resolved bank name (un-mask 2026-06-25, USDX-270): saved path from
+  // the picked entry, manual path from the typed fields (bank name resolved locally).
   const destination = store.savedAccount
     ? {
         bankCode: store.savedAccount.bankCode,
-        accountNumberMasked: store.savedAccount.accountNumberMasked,
+        bankName: store.savedAccount.bankName,
+        accountNumber: store.savedAccount.accountNumber,
         accountName: store.savedAccount.accountName,
       }
     : {
         bankCode: store.bankCode,
-        accountNumberMasked: store.bankAccountNumber ? "••••" + store.bankAccountNumber.slice(-4) : "",
+        bankName: getBankName(store.bankCode),
+        accountNumber: store.bankAccountNumber,
         accountName: store.bankAccountName,
       };
 
@@ -208,7 +212,7 @@ export function useRedeem() {
     savedAccount: store.savedAccount,
     selectSavedAccount: store.selectSavedAccount,
     clearSavedAccount: store.clearSavedAccount,
-    destination, // unified display: { bankCode, accountNumberMasked, accountName }
+    destination, // unified display: { bankCode, bankName, accountNumber, accountName }
     reset: store.reset,
     // rate
     effectiveSellRate,

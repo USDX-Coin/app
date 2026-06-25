@@ -12,7 +12,6 @@ import { useRedeem } from "@/hooks/useRedeem";
 import { useKycGate } from "@/hooks/useKycGate";
 import { formatAmount, formatIDR, truncateAddress } from "@/lib/utils";
 import { getChainById } from "@/lib/chains";
-import { getBankByCode } from "@/lib/banks";
 import { REDEEM_CHAIN_ID } from "@/lib/constants";
 import { useLang } from "@/providers/LanguageProvider";
 import { KycGateDialog } from "@/components/kyc/KycGateDialog";
@@ -130,9 +129,9 @@ export function RedeemForm() {
   const selectedChain = getChainById(REDEEM_CHAIN_ID);
 
   // Apply a picked bank account (USDX-267). An existing saved entry → saved path
-  // (bankAccountId + read-only summary, since only masked is ever returned). A
-  // just-added entry → manual path: auto-fill the editable fields with the plaintext
-  // the user just typed (week3.md § Bank Account Book "auto-isi bank + nomor + nama").
+  // (bankAccountId + read-only summary; the number is resolved server-side from the
+  // entry). A just-added entry → manual path: auto-fill the editable fields with the
+  // plaintext the user just typed (week3.md § Bank Account Book "auto-isi bank + nomor + nama").
   function applyBankFill(fill: BankFill) {
     if (fill.mode === "saved") {
       selectSavedAccount(fill.account);
@@ -288,7 +287,7 @@ export function RedeemForm() {
 
         {/* Destination bank (USDX-261/267) — saved bank-account book or manual entry.
             Picking a saved account sends only `bankAccountId`: we show a read-only
-            summary (bank + masked number + name) and never ask for the number again.
+            summary (bank name + full number + holder) and never ask for the number again.
             "Change" clears the reference and returns to manual entry. */}
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-2">
@@ -311,14 +310,14 @@ export function RedeemForm() {
               <div className="flex min-w-0 flex-1 flex-col">
                 <span className="flex items-center gap-2">
                   <span className="truncate text-sm font-medium text-foreground">
-                    {getBankByCode(savedAccount.bankCode)?.name ?? savedAccount.bankCode}
+                    {savedAccount.bankName}
                   </span>
                   <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
                     {t("bankbook.savedBadge")}
                   </span>
                 </span>
                 <span className="truncate text-xs text-muted-foreground">
-                  {savedAccount.accountNumberMasked} · {savedAccount.accountName}
+                  {savedAccount.accountNumber} · {savedAccount.accountName}
                 </span>
               </div>
               <button

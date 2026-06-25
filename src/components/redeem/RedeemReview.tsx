@@ -14,7 +14,6 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useRedeem } from "@/hooks/useRedeem";
 import { formatAmount, formatIDR, truncateAddress } from "@/lib/utils";
 import { getChainById } from "@/lib/chains";
-import { getBankByCode } from "@/lib/banks";
 import { REDEEM_CHAIN_ID } from "@/lib/constants";
 import { useLang } from "@/providers/LanguageProvider";
 
@@ -54,9 +53,9 @@ export function RedeemReview({ open, onOpenChange }: RedeemReviewProps) {
   } = useRedeem();
 
   const selectedChain = getChainById(REDEEM_CHAIN_ID);
-  // Destination is two-path (USDX-267): the hook hands us the bank code + masked
-  // number + name for whichever path is active (saved entry or manual).
-  const bank = getBankByCode(destination.bankCode);
+  // Destination is two-path (USDX-267): the hook hands us the bank name + full
+  // number + holder name for whichever path is active (saved entry or manual).
+  // The owner sees their own number in full (un-mask 2026-06-25, USDX-270).
 
   function handleConfirm() {
     // On success the hook navigates to the tracker (this modal unmounts); on
@@ -79,9 +78,9 @@ export function RedeemReview({ open, onOpenChange }: RedeemReviewProps) {
             {selectedChain?.name}
           </Row>
           <Row label={t("sum.sourceWallet")}>{walletAddress ? truncateAddress(walletAddress) : "—"}</Row>
-          <Row label={t("sum.bankDestination")}>{bank?.name ?? destination.bankCode}</Row>
+          <Row label={t("sum.bankDestination")}>{destination.bankName}</Row>
           <Row label={t("sum.accountName")}>
-            {destination.accountName} · {destination.accountNumberMasked}
+            {destination.accountName} · {destination.accountNumber}
           </Row>
           <Row label={t("sum.exchangeRate")}>
             1 USDX ≈ {effectiveSellRate ? formatAmount(effectiveSellRate) : "—"} IDR

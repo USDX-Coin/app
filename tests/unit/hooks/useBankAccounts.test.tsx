@@ -25,7 +25,8 @@ import {
 const ENTRY = {
   id: "b1",
   bankCode: "014",
-  accountNumberMasked: "••••••3210",
+  bankName: "BCA",
+  accountNumber: "1234563210",
   accountName: "SINGGIH BRILIAN TARA",
   label: "BCA utama",
   createdAt: "2026-06-17T00:00:00Z",

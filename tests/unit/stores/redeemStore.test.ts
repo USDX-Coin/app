@@ -62,7 +62,8 @@ describe("redeemStore", () => {
     const SAVED = {
       id: "seed_bank_1",
       bankCode: "014",
-      accountNumberMasked: "••••••3210",
+      bankName: "BCA",
+      accountNumber: "1234563210",
       accountName: "SINGGIH BRILIAN TARA",
     };
 

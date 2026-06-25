@@ -173,7 +173,8 @@ describe("useRedeem", () => {
     const SAVED_ACCOUNT = {
       id: "seed_bank_1",
       bankCode: "014",
-      accountNumberMasked: "••••••3210",
+      bankName: "BCA",
+      accountNumber: "1234563210",
       accountName: "SINGGIH BRILIAN TARA",
     };
 
@@ -189,12 +190,13 @@ describe("useRedeem", () => {
         expect(result.current.isFormValid).toBe(true);
       });
 
-      test("destination mirrors the saved entry (masked + name)", () => {
+      test("destination mirrors the saved entry (full number + name)", () => {
         useRedeemStore.getState().selectSavedAccount(SAVED_ACCOUNT);
         const { result } = renderHook(() => useRedeem(), { wrapper: createWrapper() });
         expect(result.current.destination).toEqual({
           bankCode: "014",
-          accountNumberMasked: "••••••3210",
+          bankName: "BCA",
+          accountNumber: "1234563210",
           accountName: "SINGGIH BRILIAN TARA",
         });
       });

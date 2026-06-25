@@ -3,7 +3,7 @@ import { loginViaStorage, forceEnglish } from "../helpers/playwright-utils";
 
 // Bank Account Book on the redeem form (USDX-261, reworked USDX-267): selecting a
 // saved payout account shows a read-only summary and the redeem create sends
-// `bankAccountId` (no number re-entry — only masked is ever returned); a just-added
+// `bankAccountId` (no number re-entry — resolved server-side from the entry); a just-added
 // account auto-fills the manual fields (we hold the plaintext → manual path); dedup
 // 409, delete, and manual entry still works (bank book is optional). Mock layer.
 
@@ -27,10 +27,11 @@ test.describe("Redeem Bank Account Book", () => {
       await page.getByText("BCA utama").click();
 
       const form = page.locator("main");
-      // Read-only summary: bank + masked number + holder name + a "Saved account"
-      // badge. The Account Number input is gone — the user never re-types it.
+      // Read-only summary: bank name + full number + holder name + a "Saved account"
+      // badge (un-mask 2026-06-25). The Account Number input is gone — never re-typed.
       await expect(form.getByText("Saved account", { exact: true })).toBeVisible();
-      await expect(form.getByText(/3210/)).toBeVisible();
+      await expect(form.getByText("BCA", { exact: true })).toBeVisible();
+      await expect(form.getByText(/1234563210/)).toBeVisible();
       await expect(form.getByText("SINGGIH BRILIAN TARA")).toBeVisible();
       await expect(form.getByLabel("Account Number")).toHaveCount(0);
 

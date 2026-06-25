@@ -31,3 +31,10 @@ const BANK_MAP = new Map(BANKS.map((b) => [b.code, b]));
 export function getBankByCode(code: string): Bank | undefined {
   return BANK_MAP.get(code);
 }
+
+// Resolve a bankCode → display name, falling back to the raw code when unknown
+// (un-mask 2026-06-25, USDX-270 — mirrors the backend static-reference resolve so
+// the UI shows "BCA", not "014").
+export function getBankName(code: string): string {
+  return BANK_MAP.get(code)?.name ?? code;
+}

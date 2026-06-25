@@ -168,12 +168,14 @@ export interface AddressBookEntry {
 }
 
 // bank-accounts.yaml BankAccountEntry — a saved redeem payout bank account
-// (USDX-261). Parity with the address book, but the account is PII: the number is
-// only ever returned masked (4 digits), the name is shown to its owner.
+// (USDX-261). Parity with the address book; the account is PII (ciphertext at-rest),
+// but the owner sees their own data — the number is returned in full and the bank
+// name resolved from bankCode (un-mask 2026-06-25, USDX-269/270).
 export interface BankAccountEntry {
   id: string;
   bankCode: string;
-  accountNumberMasked: string; // last 4 digits; plaintext never returned
+  bankName: string; // resolved from bankCode; falls back to the code when unknown
+  accountNumber: string; // full number — owner sees their own data (un-mask 2026-06-25)
   accountName: string;
   label: string | null;
   createdAt: string;
@@ -181,12 +183,14 @@ export interface BankAccountEntry {
 
 // A saved Bank Account Book entry chosen as the redeem destination (USDX-267).
 // Snapshot of the picked BankAccountEntry: redeem create sends only `id` (as
-// `bankAccountId`, the saved path) while bankCode/masked/name drive the read-only
-// summary — the user never re-types the number (GET only ever returns it masked).
+// `bankAccountId`, the saved path) while bankCode/bankName/number/name drive the
+// read-only summary — the user never re-types the number (it's resolved server-side
+// from the entry; the owner sees it in full — un-mask 2026-06-25).
 export interface SelectedBankAccount {
   id: string;
   bankCode: string;
-  accountNumberMasked: string;
+  bankName: string;
+  accountNumber: string;
   accountName: string;
 }
 
@@ -256,7 +260,8 @@ export interface RedeemOrderCreated {
   totalFeeIdr: string; // redeemFeeIdr + disbursementFeeIdr
   netPayoutIdr: string; // grossIdr − totalFeeIdr (user receives; ≥ Rp 10.000, floor)
   bankCode: string;
-  bankAccountNumberMasked: string; // last 4 digits; plaintext never returned
+  bankName: string; // resolved from bankCode (un-mask 2026-06-25, USDX-269/270)
+  bankAccountNumber: string; // full number — owner sees their own data (un-mask 2026-06-25)
   bankAccountName: string; // user sees their own data
   status: RedeemStatus;
   expiresAt: string;

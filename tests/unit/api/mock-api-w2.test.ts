@@ -206,13 +206,13 @@ describe("mock redeem create — two-path destination (USDX-267)", () => {
   };
 
   describe("positive", () => {
-    test("saved path resolves the snapshot from the entry (masked + name match)", async () => {
+    test("saved path resolves the snapshot from the entry (full number + name match)", async () => {
       const order = await mockCreateRedeemOrder(SAVED_REDEEM);
       expect(order.bankCode).toBe("014");
-      expect(order.bankAccountNumberMasked).toBe("••••••3210");
+      expect(order.bankName).toBe("BCA");
+      // Owner sees their own data — the full number is rendered (un-mask 2026-06-25).
+      expect(order.bankAccountNumber).toBe("1234563210");
       expect(order.bankAccountName).toBe("SINGGIH BRILIAN TARA");
-      // The plaintext number is never echoed on the created order.
-      expect(JSON.stringify(order)).not.toContain("1234563210");
     });
   });
 
@@ -282,7 +282,7 @@ describe("mockReportBurnTx (USDX-259)", () => {
 });
 
 // USDX-261: Bank Account Book mock — saved redeem payout accounts. Parity with
-// the address-book mock, but the account number comes back masked only.
+// the address-book mock; the owner sees the full number + bankName (un-mask 2026-06-25).
 describe("mock bank account book (USDX-261)", () => {
   const VALID_BANK = {
     bankCode: "014",
@@ -292,19 +292,20 @@ describe("mock bank account book (USDX-261)", () => {
   };
 
   describe("positive", () => {
-    test("seeded accounts list back with a masked number (never plaintext)", async () => {
+    test("seeded accounts list back with the full number + bankName (un-mask)", async () => {
       const list = await mockListBankAccounts();
       expect(list.length).toBeGreaterThan(0);
       for (const e of list) {
-        expect(e.accountNumberMasked).toMatch(/^•+\d{4}$/);
-        // The plaintext number must never appear on the entry.
-        expect(JSON.stringify(e)).not.toContain("1234563210");
+        // Owner sees their own data — full number, no masking (un-mask 2026-06-25).
+        expect(e.accountNumber).toMatch(/^\d{6,20}$/);
+        expect(e.bankName).not.toBe("");
       }
     });
 
-    test("adds an entry and lists it back (masked)", async () => {
+    test("adds an entry and lists it back (full number + bankName)", async () => {
       const entry = await mockAddBankAccount(VALID_BANK);
-      expect(entry.accountNumberMasked).toBe("••••••8899");
+      expect(entry.accountNumber).toBe("5566778899");
+      expect(entry.bankName).toBe("BCA");
       expect(entry.accountName).toBe("DEMO HOLDER");
       expect(entry.label).toBe("Tabungan");
       const list = await mockListBankAccounts();

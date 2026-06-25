@@ -1,7 +1,8 @@
 // Bank Account Book API (consumer, Phase 2 Week 3 — USDX-261). Per-user saved
 // redeem payout bank accounts. Routes to the real backend (/api/v2/bank-accounts)
 // or the mock layer based on `env.useMock` (bank-accounts.yaml). Parity with the
-// address-book client, but the account is PII — the number comes back masked only.
+// address-book client; the account is PII (ciphertext at-rest), but the owner sees
+// their own data — GET returns the full number + bankName (un-mask 2026-06-25).
 //
 // Errors surfaced for callers to branch on:
 // - POST duplicate (bankCode + accountNumber) → 409 BANK_ACCOUNT_ALREADY_EXISTS

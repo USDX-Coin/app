@@ -44,7 +44,7 @@ test.describe("Redeem Flow", () => {
 
     // Saved-account path (USDX-267): pick a saved account → the create sends only
     // bankAccountId (no number re-entry) → mock resolves it → burn → payout.
-    test("saved-account path: pick saved → Ringkasan (masked) → burn → payout", async ({
+    test("saved-account path: pick saved → Ringkasan (full number) → burn → payout", async ({
       page,
     }) => {
       await page.goto("/redeem");
@@ -61,13 +61,15 @@ test.describe("Redeem Flow", () => {
       await expect(form.getByText("Saved account", { exact: true })).toBeVisible();
       await expect(form.getByLabel("Account Number")).toHaveCount(0);
 
-      // Connect → Ringkasan, which shows the resolved masked number + name.
+      // Connect → Ringkasan, which shows the resolved full number + name (un-mask).
       const redeem = page.getByRole("button", { name: "Redeem", exact: true });
       await redeem.click();
       await redeem.click();
       const dialog = page.getByRole("dialog").filter({ hasText: "Transaction Summary" });
       await expect(dialog).toBeVisible();
-      await expect(dialog.getByText(/3210/)).toBeVisible();
+      // Un-mask (USDX-270): the resolved bank name + full number, not "••••".
+      await expect(dialog.getByText("BCA", { exact: true })).toBeVisible();
+      await expect(dialog.getByText(/1234563210/)).toBeVisible();
       await expect(dialog.getByText("SINGGIH BRILIAN TARA")).toBeVisible();
 
       // Confirm & Burn → tracker reaches payout (mock resolved bankAccountId).

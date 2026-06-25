@@ -8,7 +8,7 @@
 // Two-path apply (USDX-267, week3.md § Form Redeem + § Bank Account Book):
 // - Selecting an EXISTING entry → "saved" fill: only `bankAccountId` is sent at
 //   redeem create (number/name resolved server-side) and the form shows a read-only
-//   summary — the plaintext is only ever returned masked, so it's never re-typed.
+//   summary — the number is never re-typed (the owner sees it in full, un-mask 2026-06-25).
 // - A JUST-ADDED entry (modal) → "manual" fill: the user just typed the plaintext,
 //   so the form auto-fills the editable bank/number/name fields (manual path).
 
@@ -18,7 +18,6 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { AddBankAccountModal } from "./AddBankAccountModal";
 import { useBankAccounts, useDeleteBankAccount } from "@/hooks/useBankAccounts";
-import { getBankByCode } from "@/lib/banks";
 import { useLang } from "@/providers/LanguageProvider";
 import type { BankAccountEntry, SelectedBankAccount } from "@/types";
 
@@ -33,7 +32,8 @@ function toSelected(entry: BankAccountEntry): SelectedBankAccount {
   return {
     id: entry.id,
     bankCode: entry.bankCode,
-    accountNumberMasked: entry.accountNumberMasked,
+    bankName: entry.bankName,
+    accountNumber: entry.accountNumber,
     accountName: entry.accountName,
   };
 }
@@ -75,7 +75,7 @@ export function BankAccountPicker({ open, onOpenChange, onApply }: BankAccountPi
           ) : entries && entries.length > 0 ? (
             <ul className="flex max-h-[320px] flex-col gap-1.5 overflow-y-auto">
               {entries.map((entry) => {
-                const bankName = getBankByCode(entry.bankCode)?.name ?? entry.bankCode;
+                const bankName = entry.bankName;
                 return (
                   <li
                     key={entry.id}
@@ -97,7 +97,7 @@ export function BankAccountPicker({ open, onOpenChange, onApply }: BankAccountPi
                           {entry.label || bankName}
                         </span>
                         <span className="truncate text-xs text-muted-foreground">
-                          {bankName} · {entry.accountNumberMasked} · {entry.accountName}
+                          {bankName} · {entry.accountNumber} · {entry.accountName}
                         </span>
                       </span>
                     </button>
@@ -160,13 +160,14 @@ export function BankAccountPicker({ open, onOpenChange, onApply }: BankAccountPi
         <AddBankAccountModal
           open={addOpen}
           onOpenChange={setAddOpen}
-          onAdded={(entry, accountNumber) => {
-            // Just added → manual fill (we hold the plaintext the user typed), and
-            // close the picker too. Auto-fills the form's editable bank/number/name.
+          onAdded={(entry) => {
+            // Just added → manual fill: the entry now carries the full number
+            // (un-mask 2026-06-25, USDX-270), so use it directly. Close the picker
+            // too; auto-fills the form's editable bank/number/name fields.
             onApply({
               mode: "manual",
               bankCode: entry.bankCode,
-              accountNumber,
+              accountNumber: entry.accountNumber,
               accountName: entry.accountName,
             });
             onOpenChange(false);

@@ -119,7 +119,7 @@ export interface CreateRedeemOrderRequest {
   userAddress: string;
   // Bank destination — two-path (redeem.yaml CreateRedeemOrder, USDX-262/267). Send
   // EXACTLY one path: `bankAccountId` (saved Bank Account Book entry — the backend
-  // resolves + decrypts the number/name server-side, since GET only returns masked)
+  // resolves + decrypts the number/name server-side, so the FE never re-sends the PII)
   // OR the manual trio below. `bankAccountId` is authoritative; `bankAccountNumber`
   // must never accompany it (→ 422 VALIDATION_ERROR), and `bankCode`/`bankAccountName`
   // sent alongside must match the entry. Omitted fields are dropped from the body.

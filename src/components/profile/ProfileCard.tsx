@@ -6,15 +6,17 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ChangePasswordModal } from "@/components/profile/ChangePasswordModal";
 import { useLang } from "@/providers/LanguageProvider";
+import { LANGUAGES } from "@/lib/i18n/dictionaries";
 import { formatDate } from "@/lib/utils";
-import { ShieldCheck, Mail, User, Calendar, BadgeCheck, Bell, Lock } from "lucide-react";
+import { ShieldCheck, Mail, User, Calendar, BadgeCheck, Globe, Lock } from "lucide-react";
 
 export function ProfileCard() {
   const user = useAuthStore((s) => s.user);
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
   const kycLabel = t(`profile.kyc.${user?.kycStatus ?? "UNVERIFIED"}`);
+  const activeLang = LANGUAGES.find((l) => l.value === lang) ?? LANGUAGES[0];
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
@@ -100,28 +102,23 @@ export function ProfileCard() {
         onOpenChange={setChangePasswordOpen}
       />
 
-      {/* Preferences */}
+      {/* Preferences — only the real, FE-backed control (USDX-177). Email
+          Notifications / Currency Display / Default Network were static mock
+          claims with no backing feature and were dropped; they return when a
+          user-preferences backend (Email Notif needs USDX-142) or a real local
+          pre-select ships. Language reflects the active LanguageProvider locale. */}
       <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
         <h2 className="text-base font-semibold mb-4 flex items-center gap-2">
-          <Bell className="h-4 w-4" />
-          Preferences
+          <Globe className="h-4 w-4" />
+          {t("profile.preferences.title")}
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="flex items-start gap-3">
+          <Globe className="h-4 w-4 text-muted-foreground mt-0.5" />
           <div>
-            <p className="text-xs text-muted-foreground">Email Notifications</p>
-            <p className="text-sm font-medium">Transaction alerts, promotions</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Default Network</p>
-            <p className="text-sm font-medium">Base</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Currency Display</p>
-            <p className="text-sm font-medium">USD ($)</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Language</p>
-            <p className="text-sm font-medium">English</p>
+            <p className="text-xs text-muted-foreground">
+              {t("profile.preferences.language")}
+            </p>
+            <p className="text-sm font-medium">{activeLang.label}</p>
           </div>
         </div>
       </div>

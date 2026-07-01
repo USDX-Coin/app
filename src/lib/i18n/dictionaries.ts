@@ -459,6 +459,9 @@ const en: Dict = {
   "profile.changePassword.submitting": "Updating...",
   "profile.changePassword.success": "Password updated successfully",
   "profile.changePassword.failed": "Could not change password",
+  // profile — preferences (USDX-177)
+  "profile.preferences.title": "Preferences",
+  "profile.preferences.language": "Language",
 };
 
 const id: Dict = {
@@ -907,6 +910,9 @@ const id: Dict = {
   "profile.changePassword.submitting": "Mengubah...",
   "profile.changePassword.success": "Password berhasil diubah",
   "profile.changePassword.failed": "Gagal mengubah password",
+  // profile — preferences (USDX-177)
+  "profile.preferences.title": "Preferensi",
+  "profile.preferences.language": "Bahasa",
 };
 
 export const dictionaries: Record<Lang, Dict> = { id, en };

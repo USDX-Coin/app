@@ -4,12 +4,21 @@ import { createWrapper } from "../../helpers/test-utils";
 import { useMint } from "@/hooks/useMint";
 import { useMintStore } from "@/stores/mintStore";
 import { useAuthStore } from "@/stores/authStore";
+import { mintCheckoutToken } from "@/lib/api/auth-api";
 
 const { pushMock } = vi.hoisted(() => ({ pushMock: vi.fn() }));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock, replace: vi.fn() }),
 }));
+
+// USDX-357: the checkout handoff token now comes from the backend, not the app's
+// stored session token. Mock it so the test controls the value and proves the app
+// never reaches into its own storage for the handoff.
+vi.mock("@/lib/api/auth-api", () => ({
+  mintCheckoutToken: vi.fn(),
+}));
+const mintCheckoutTokenMock = vi.mocked(mintCheckoutToken);
 
 const VALID_ADDRESS = "0x1234567890abcdef1234567890abcdef12345678";
 // mock rate: baseRate 16000 × (1 + 2.5%) = 16400
@@ -19,6 +28,8 @@ beforeEach(() => {
   useMintStore.getState().reset();
   useAuthStore.setState({ token: null });
   pushMock.mockReset();
+  mintCheckoutTokenMock.mockReset();
+  mintCheckoutTokenMock.mockResolvedValue("handoff-xyz");
 });
 
 describe("useMint", () => {
@@ -122,29 +133,53 @@ describe("useMint", () => {
   });
 
   describe("submit", () => {
-    test("submitMint creates the order and hands off to checkout with the bearer token in the URL hash (USDX-240)", async () => {
-      // useMint redirects via window.location.href to mint.usdx.co.id/checkout/{id}#token=<jwt>.
+    async function submitAndCaptureRedirect(): Promise<string> {
       const originalLocation = window.location;
       const locationStub = { href: "" } as Location;
       Object.defineProperty(window, "location", { configurable: true, value: locationStub });
-
       try {
-        useAuthStore.setState({ token: "tok/abc" });
         useMintStore.getState().setAmount("100");
         useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
         const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
-
         await waitFor(() => expect(result.current.isFormValid).toBe(true));
         await act(async () => {
           await result.current.submitMint();
         });
-
-        expect(locationStub.href).toContain("/checkout/mint_");
-        // Token di-handoff via URL hash, URL-encoded (USDX-240, supersede cookie).
-        expect(locationStub.href).toContain("#token=tok%2Fabc");
+        return locationStub.href;
       } finally {
         Object.defineProperty(window, "location", { configurable: true, value: originalLocation });
       }
+    }
+
+    describe("positive", () => {
+      test("hands off to checkout with a freshly-minted backend token in the URL hash (USDX-357)", async () => {
+        // The app-side session token must NOT be read from storage — the handoff token
+        // comes from POST /api/v2/auth/checkout-token instead (CLNT-12 fix).
+        useAuthStore.setState({ token: "app-session-tok" });
+        mintCheckoutTokenMock.mockResolvedValue("handoff/abc");
+
+        const href = await submitAndCaptureRedirect();
+
+        expect(href).toContain("/checkout/mint_");
+        // URL-encoded minted token (USDX-240 URL-hash handoff, USDX-357 token source).
+        expect(href).toContain("#token=handoff%2Fabc");
+        // The app's own stored session token is never leaked into the redirect.
+        expect(href).not.toContain("app-session-tok");
+        expect(mintCheckoutTokenMock).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe("edge cases", () => {
+      test("still redirects (without a token hash) when minting the handoff token fails", async () => {
+        // Graceful degradation: a failed mint must not strand the user — checkout will
+        // prompt its own login. Mirrors the old token-absent behaviour.
+        mintCheckoutTokenMock.mockRejectedValue(new Error("boom"));
+
+        const href = await submitAndCaptureRedirect();
+
+        expect(href).toContain("/checkout/mint_");
+        expect(href).not.toContain("#token=");
+      });
     });
   });
 });

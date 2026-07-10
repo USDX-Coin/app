@@ -10,9 +10,9 @@
 import { useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMintStore } from "@/stores/mintStore";
-import { useAuthStore } from "@/stores/authStore";
 import { useConsumerRate } from "@/hooks/useConsumerRate";
 import { createMintOrder } from "@/lib/api/mint-api";
+import { mintCheckoutToken } from "@/lib/api/auth-api";
 import { env } from "@/lib/env";
 import { validateAmount, validateAddress } from "@/lib/validations";
 import { parseAmount } from "@/lib/utils";
@@ -87,14 +87,21 @@ export function useMint() {
         amountCurrency: store.amountCurrency,
         chain: store.chainId,
       }),
-    onSuccess: (order) => {
+    onSuccess: async (order) => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       // Cross-origin handoff ke checkout own-hosted (repo `checkout`). location.href
       // (push, bukan replace) → tombol "Kembali" di checkout balik ke /mint. Auth =
-      // bearer JWT lewat URL hash `#token=` (USDX-240, supersede cookie); checkout
-      // capture token → sessionStorage → strip URL.
-      const token = useAuthStore.getState().token;
-      const hash = token ? `#token=${encodeURIComponent(token)}` : "";
+      // bearer lewat URL hash `#token=` (USDX-240); checkout capture token →
+      // sessionStorage → strip URL. USDX-357 (CLNT-12): token TIDAK lagi dibaca dari
+      // storage app — backend menerbitkan token handoff berumur pendek (~1 jam).
+      let hash = "";
+      try {
+        const handoffToken = await mintCheckoutToken();
+        hash = `#token=${encodeURIComponent(handoffToken)}`;
+      } catch {
+        // Gagal terbitkan token → tetap redirect; checkout minta login sendiri
+        // (graceful degradation, sama seperti perilaku token-absent sebelumnya).
+      }
       window.location.href = `${env.checkoutUrl}/checkout/${order.id}${hash}`;
     },
   });

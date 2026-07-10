@@ -24,6 +24,7 @@ import {
   mockChangePassword,
   mockGetMe,
   mockLogout,
+  mockMintCheckoutToken,
 } from "./mock-api";
 
 // openapi AuthTokenV2 — Better Auth issues a session via cookie or access token.
@@ -123,4 +124,18 @@ export async function changePassword(req: ChangePasswordRequest): Promise<void> 
 export async function logout(): Promise<void> {
   if (env.useMock) return mockLogout();
   await apiFetch<void>("/api/v2/auth/logout", { method: "POST" });
+}
+
+// Mint a short-lived (~1h) handoff token for the cross-origin checkout redirect
+// (auth.yaml § checkoutTokenV2, USDX-357). Called right before redirecting to
+// `mint.usdx.co.id/checkout/{id}#token=<token>`. The app no longer reads its own
+// session token from storage (CLNT-12) — the backend issues a fresh, separate session
+// that checkout consumes as a bearer (USDX-240 URL-hash handoff, mechanism unchanged).
+// Auth rides the session cookie / in-memory bearer; a valid session is required.
+export async function mintCheckoutToken(): Promise<string> {
+  if (env.useMock) return mockMintCheckoutToken();
+  const data = await apiFetch<{ token: string }>("/api/v2/auth/checkout-token", {
+    method: "POST",
+  });
+  return data.token;
 }

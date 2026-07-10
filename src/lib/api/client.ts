@@ -126,8 +126,11 @@ async function request(path: string, options: ApiFetchOptions = {}): Promise<unk
   const response = await fetch(`${env.apiBaseUrl}${path}`, {
     ...rest,
     headers: finalHeaders,
-    // Auth = bearer (Authorization header). Checkout handoff pindah ke JWT URL-hash
-    // (USDX-240), jadi tidak perlu `credentials: "include"` / cookie lintas-subdomain.
+    // USDX-357 (CLNT-12): primary auth is the httpOnly session cookie — `credentials:
+    // "include"` sends it cross-subdomain (`.usdx.co.id`). The Bearer header above is a
+    // fallback for cross-site previews (`*.netlify.app`) where the cookie isn't delivered;
+    // that token lives in-memory only, never in localStorage.
+    credentials: "include",
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 

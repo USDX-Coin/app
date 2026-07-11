@@ -270,12 +270,12 @@ export async function mockLogout(): Promise<void> {
   currentEmail = null;
 }
 
-// USDX-357: stand-in for the backend checkout handoff token. Returns an opaque
-// value distinct from any app session token so the mint→checkout redirect works
-// end-to-end in mock mode.
-export async function mockMintCheckoutToken(): Promise<string> {
+// USDX-378: stand-in for the backend one-time checkout handoff code. Returns an
+// opaque value distinct from any app session token so the mint→checkout redirect
+// (`#code=`) works end-to-end in mock mode.
+export async function mockMintCheckoutCode(): Promise<string> {
   await delay(100);
-  return "mock-checkout-handoff-token";
+  return "mock-checkout-handoff-code";
 }
 
 export async function mockGetMe(): Promise<User> {

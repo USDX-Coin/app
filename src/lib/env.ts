@@ -8,10 +8,11 @@
 //   base URL is configured (keeps `pnpm dev` and the test suite working offline).
 // - `checkoutUrl` — origin halaman checkout own-hosted (repo `checkout`,
 //   `mint.usdx.co.id`). Setelah `POST /v2/mint`, app redirect ke
-//   `${checkoutUrl}/checkout/{orderId}` (cross-subdomain; cookie sesi `.usdx.co.id`
-//   kebawa — USDX-222). Default = domain prod (sesuai SOT week2.md § Ringkasan);
-//   override per environment via `NEXT_PUBLIC_CHECKOUT_URL` (mis. dev → checkout dev)
-//   agar E2E lintas-domain (USDX-226) bisa.
+//   `${checkoutUrl}/checkout/{orderId}#code=<code>` — sesi di-handoff via **one-time
+//   code** di URL hash (USDX-378, WSTG-CLNT-12; supersede cross-subdomain cookie
+//   USDX-222 lalu bearer JWT `#token=` USDX-240). Default = domain prod (sesuai SOT
+//   week2.md § Ringkasan); override per environment via `NEXT_PUBLIC_CHECKOUT_URL`
+//   (mis. dev → checkout dev) agar E2E lintas-domain (USDX-226) bisa.
 //
 // Session transport is Bearer-token (matches back-office + openapi `bearerAuth`),
 // chosen over cross-site cookies because FE (Netlify) and API (Railway) are

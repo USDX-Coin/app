@@ -3,16 +3,18 @@
 // Mint form logic (USDX-201). Combines the mint store + live rate
 // (GET /v2/rate) + validation + the create-order mutation (POST /v2/mint).
 // On success it hands off (cross-origin redirect) to the own-hosted checkout repo
-// at `mint.usdx.co.id/checkout/{id}#token=<jwt>` — bearer JWT lewat URL hash (USDX-240,
-// supersede cross-subdomain cookie USDX-225/226). The Ringkasan (review) is a modal,
-// so there's no in-page step machine anymore — see mintStore.
+// at `mint.usdx.co.id/checkout/{id}#code=<code>` — a one-time authorization code in
+// the URL hash (USDX-378 · WSTG-CLNT-12; supersedes the `#token=` bearer-JWT handoff
+// USDX-240/USDX-357, which itself superseded the cross-subdomain cookie USDX-225/226).
+// The Ringkasan (review) is a modal, so there's no in-page step machine anymore —
+// see mintStore.
 
 import { useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMintStore } from "@/stores/mintStore";
 import { useConsumerRate } from "@/hooks/useConsumerRate";
 import { createMintOrder } from "@/lib/api/mint-api";
-import { mintCheckoutToken } from "@/lib/api/auth-api";
+import { mintCheckoutCode } from "@/lib/api/auth-api";
 import { env } from "@/lib/env";
 import { validateAmount, validateAddress } from "@/lib/validations";
 import { parseAmount } from "@/lib/utils";
@@ -91,15 +93,18 @@ export function useMint() {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       // Cross-origin handoff ke checkout own-hosted (repo `checkout`). location.href
       // (push, bukan replace) → tombol "Kembali" di checkout balik ke /mint. Auth =
-      // bearer lewat URL hash `#token=` (USDX-240); checkout capture token →
-      // sessionStorage → strip URL. USDX-357 (CLNT-12): token TIDAK lagi dibaca dari
-      // storage app — backend menerbitkan token handoff berumur pendek (~1 jam).
+      // one-time code lewat URL hash `#code=` (USDX-378, WSTG-CLNT-12): backend
+      // menerbitkan authorization code sekali-pakai (TTL 60 detik) via
+      // POST /api/v2/auth/checkout-token; checkout menukarnya (exchange) jadi sesi
+      // sendiri lalu strip URL. Token sesi app TIDAK dibaca dari storage untuk
+      // handoff (CLNT-12), dan URL tidak lagi membawa bearer 30-hari — replay dari
+      // history/screenshot mati karena code kedaluwarsa 60 detik & sekali-pakai.
       let hash = "";
       try {
-        const handoffToken = await mintCheckoutToken();
-        hash = `#token=${encodeURIComponent(handoffToken)}`;
+        const handoffCode = await mintCheckoutCode();
+        hash = `#code=${encodeURIComponent(handoffCode)}`;
       } catch {
-        // Gagal terbitkan token → tetap redirect; checkout minta login sendiri
+        // Gagal terbitkan code → tetap redirect; checkout minta login sendiri
         // (graceful degradation, sama seperti perilaku token-absent sebelumnya).
       }
       window.location.href = `${env.checkoutUrl}/checkout/${order.id}${hash}`;

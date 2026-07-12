@@ -2,10 +2,13 @@
 // Mirrors the back-office `apiFetch` so both consumer + backoffice share one
 // mental model:
 // - Prepends `env.apiBaseUrl` so requests hit the configured backend, not the FE origin.
-// - Attaches `Authorization: Bearer <token>` (openapi global `security: [bearerAuth]`).
-// - Auth is bearer-only (`Authorization: Bearer`); the own-hosted checkout
-//   (`mint.usdx.co.id`) gets its token via URL-hash handoff, not a cookie (USDX-240,
-//   supersede the cross-subdomain cookie USDX-222/226). No `credentials: "include"`.
+// - Primary auth is the httpOnly session cookie (`credentials: "include"`, sent
+//   cross-subdomain on `.usdx.co.id`); the `Authorization: Bearer <token>` header
+//   (openapi global `security: [bearerAuth]`) is an in-memory fallback for
+//   cross-site previews (`*.netlify.app`) where the cookie isn't delivered
+//   (USDX-357/CLNT-12). The own-hosted checkout (`mint.usdx.co.id`) gets its own
+//   session via a one-time-code URL-hash handoff (`#code=`), not this client
+//   (USDX-378; supersede the cross-subdomain cookie USDX-222/226).
 // - Unwraps the SoT `{ status, metadata, data }` envelope and returns `data`
 //   (`apiFetch`), or keeps `metadata` for paginated lists (`apiFetchPaginated`).
 // - Throws `ApiError` (SoT `ErrorResponse` shape) for non-2xx, parsing `Retry-After`.
@@ -126,8 +129,11 @@ async function request(path: string, options: ApiFetchOptions = {}): Promise<unk
   const response = await fetch(`${env.apiBaseUrl}${path}`, {
     ...rest,
     headers: finalHeaders,
-    // Auth = bearer (Authorization header). Checkout handoff pindah ke JWT URL-hash
-    // (USDX-240), jadi tidak perlu `credentials: "include"` / cookie lintas-subdomain.
+    // USDX-357 (CLNT-12): primary auth is the httpOnly session cookie — `credentials:
+    // "include"` sends it cross-subdomain (`.usdx.co.id`). The Bearer header above is a
+    // fallback for cross-site previews (`*.netlify.app`) where the cookie isn't delivered;
+    // that token lives in-memory only, never in localStorage.
+    credentials: "include",
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 

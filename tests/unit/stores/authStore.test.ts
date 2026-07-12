@@ -17,6 +17,7 @@ const mockUser: User = {
 
 describe("authStore", () => {
   beforeEach(() => {
+    localStorage.clear();
     useAuthStore.setState({
       user: null,
       token: null,
@@ -48,6 +49,36 @@ describe("authStore", () => {
       const state = useAuthStore.getState();
       expect(state.isAuthenticated).toBe(false);
       expect(state.user).toBeNull();
+    });
+  });
+
+  describe("persistence (CLNT-12, USDX-357)", () => {
+    test("the session token is NEVER written to localStorage", () => {
+      useAuthStore.getState().setAuth(mockUser, "secret-session-token");
+
+      const raw = localStorage.getItem("usdx-auth");
+      expect(raw).toBeTruthy();
+      const persisted = JSON.parse(raw as string) as {
+        state: { token?: unknown; user?: unknown; isAuthenticated?: unknown };
+      };
+      // Token stays in-memory only — a stolen localStorage snapshot yields no credential.
+      expect(persisted.state.token ?? null).toBeNull();
+      // Non-credential fields still persist so a reload doesn't flash the login screen.
+      expect(persisted.state.user).toBeTruthy();
+      expect(persisted.state.isAuthenticated).toBe(true);
+    });
+
+    test("the raw persisted blob does not contain the token string anywhere", () => {
+      useAuthStore.getState().setAuth(mockUser, "super-secret-abc123");
+      const raw = localStorage.getItem("usdx-auth") ?? "";
+      expect(raw).not.toContain("super-secret-abc123");
+    });
+
+    test("setAuth still exposes the token in-memory for same-tab bearer fallback", () => {
+      useAuthStore.getState().setAuth(mockUser, "in-mem-token");
+      // In-memory state keeps the token (cross-site preview bearer fallback); only
+      // persistence drops it.
+      expect(useAuthStore.getState().token).toBe("in-mem-token");
     });
   });
 

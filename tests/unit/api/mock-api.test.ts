@@ -7,7 +7,6 @@ import {
   mockCreateMint,
   mockCreateRedeem,
   mockGetBankAccounts,
-  mockGetWalletBalance,
 } from "@/lib/api/mock-api";
 
 describe("mockLogin", () => {
@@ -174,15 +173,6 @@ describe("mockGetBankAccounts", () => {
       for (const account of accounts) {
         expect(account.accountNumber).toContain("****");
       }
-    });
-  });
-});
-
-describe("mockGetWalletBalance", () => {
-  describe("positive", () => {
-    test("returns consistent balance", async () => {
-      const balance = await mockGetWalletBalance();
-      expect(balance).toBe(5000);
     });
   });
 });

@@ -239,8 +239,11 @@ export function RedeemForm() {
               {walletAddress ? truncateAddress(walletAddress) : "—"}
             </span>
             <span className="text-muted-foreground">·</span>
+            {/* Labelled for screen readers; an unknown balance shows "—", not a
+                number and not an endless ellipsis (USDX-396). */}
+            <span className="sr-only">{t("redeem.balanceLabel")}</span>
             <span className="font-semibold text-foreground">
-              {balanceUsdx != null ? `${formatAmount(balanceUsdx)} USDX` : "…"}
+              {balanceUsdx != null ? `${formatAmount(balanceUsdx)} USDX` : "—"}
             </span>
           </div>
         )}

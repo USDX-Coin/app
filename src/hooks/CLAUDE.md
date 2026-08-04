@@ -9,7 +9,7 @@ Significant reusable hooks that orchestrate state, validation, calculations, and
 | `useAuth` | `authStore` | `useMutation` (login, register) | Auth flow + router redirect |
 | `useMint` | `mintStore` | `useMutation` (createMint) | Mint form logic, validation, fee calc |
 | `useRedeem` | `redeemStore` | `useMutation` (createRedeem) | Redeem form logic, validation |
-| `useWalletBalance` | — | `useQuery` (walletBalance) | Mock wallet balance for connected address |
+| `useWalletBalance` | — | on-chain `balanceOf` (wagmi) | Real USDX balance of the connected wallet — the app's only balance surface API (USDX-396) |
 | `useTransactions` | — | `useQuery` (transactions) | Transaction history list |
 | `useChainSelector` | — | — | Chain search/filter state |
 

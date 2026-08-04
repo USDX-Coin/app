@@ -158,7 +158,10 @@ Test helpers in `tests/helpers/`:
 
 - All API calls are mocked (no real backend)
 - Smart contract interactions are simulated
-- RainbowKit wallet connection works but balance is mocked
+- RainbowKit wallet connection works; the USDX balance is read **on-chain for real**
+  (`balanceOf` on Polygon) via `hooks/useWalletBalance` — sidebar, Send and Bridge all
+  use it. Wallets are never auto-reconnected, so an unconnected/loading/failed read is
+  shown as "—" plus a reason, never as a number (USDX-396)
 - WalletConnect SSR produces `indexedDB` warnings (harmless)
 - KYC verification is UI-only (always shows "Verified")
 - Solana removed — EVM chains only (7 chains)

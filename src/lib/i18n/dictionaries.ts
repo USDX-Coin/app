@@ -6,6 +6,14 @@ const en: Dict = {
   // sidebar
   "sidebar.totalBalance": "Total Saldo",
   "sidebar.getUsdx": "Get USDX",
+  // balance states — shared by the sidebar card, Send and Bridge (USDX-396).
+  // Shown INSTEAD of a number whenever the real balance is not known.
+  // `connectPrompt` is sidebar copy only (plain text — the chrome carries no
+  // connect control); `connectWallet` labels the in-form contextual buttons.
+  "balance.connectPrompt": "Connect a wallet to see your balance",
+  "balance.connectWallet": "Connect wallet",
+  "balance.loading": "Loading balance…",
+  "balance.unavailable": "Balance unavailable",
   "sidebar.transaction": "Transaction",
   "sidebar.more": "More",
   "sidebar.selectedLanguage": "Selected Language",
@@ -467,6 +475,10 @@ const en: Dict = {
 const id: Dict = {
   "sidebar.totalBalance": "Total Saldo",
   "sidebar.getUsdx": "Dapatkan USDX",
+  "balance.connectPrompt": "Hubungkan wallet untuk melihat saldo",
+  "balance.connectWallet": "Hubungkan wallet",
+  "balance.loading": "Memuat saldo…",
+  "balance.unavailable": "Saldo tidak tersedia",
   "sidebar.transaction": "Transaksi",
   "sidebar.more": "Lainnya",
   "sidebar.selectedLanguage": "Bahasa",

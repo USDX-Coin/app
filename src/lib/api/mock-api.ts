@@ -437,10 +437,9 @@ export async function mockGetBankAccounts(): Promise<BankAccount[]> {
   ];
 }
 
-export async function mockGetWalletBalance(): Promise<number> {
-  await delay(300);
-  return 5000;
-}
+// `mockGetWalletBalance` removed in USDX-396: the wallet balance is read on-chain
+// (`balanceOf` via lib/redeem/wallet.ts), never from the mock backend — a mocked
+// balance is exactly the kind of invented number this app must not display.
 
 // ── Mock W2 consumer: rate / address book / mint v2 / history (USDX-205) ────
 // New-shape mocks matching the Week-2 OpenAPI contract (rate.yaml,

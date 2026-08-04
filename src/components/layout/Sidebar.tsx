@@ -19,7 +19,8 @@ import {
   Check,
   type LucideIcon,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatAmount } from "@/lib/utils";
+import { useWalletBalance } from "@/hooks/useWalletBalance";
 import { useAuthStore } from "@/stores/authStore";
 import { logout as revokeSession } from "@/lib/api/auth-api";
 import { useLang } from "@/providers/LanguageProvider";
@@ -53,8 +54,6 @@ const moreItems: NavItem[] = [
   { href: "/support", labelKey: "nav.support", icon: Headset },
   { href: "/settings", labelKey: "nav.settings", icon: Settings },
 ];
-
-const MOCK_BALANCE = { usdx: "240,000", usd: "240,000" };
 
 function NavLink({ item, active, onNavigate }: { item: NavItem; active: boolean; onNavigate?: () => void }) {
   const { t } = useLang();
@@ -118,6 +117,11 @@ export function Sidebar({
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const { t, lang, setLang } = useLang();
+  // Real on-chain USDX balance of the connected wallet (USDX-396). Wallets are
+  // connected contextually and never auto-reconnected (WalletProviders
+  // `reconnectOnMount={false}`), so "disconnected" is the normal first state —
+  // the card then offers a connect action instead of printing a number.
+  const balance = useWalletBalance();
   // users.name is null until KYC submit auto-sets it — fall back to email (USDX-153).
   const name = user?.name ?? user?.email ?? "";
   const currentLang = LANGUAGES.find((l) => l.value === lang) ?? LANGUAGES[0];
@@ -180,9 +184,33 @@ export function Sidebar({
         />
         <div className="relative flex flex-col gap-1">
           <p className="text-xs font-medium tracking-tight text-white/60">{t("sidebar.totalBalance")}</p>
-          <div className="flex flex-col">
-            <p className="text-base font-medium tracking-tight text-white">{MOCK_BALANCE.usdx} USDX</p>
-            <p className="text-[11px] text-white/60">≈ ${MOCK_BALANCE.usd}</p>
+          {/* Only the "ready" branch may print digits. Every other state prints
+              an em dash + why — never 0, never a stale number (USDX-396). */}
+          <div className="flex flex-col" aria-live="polite">
+            {balance.balanceUsdx != null && balance.balanceUsd != null ? (
+              <>
+                <p className="text-base font-medium tracking-tight text-white">
+                  {formatAmount(balance.balanceUsdx)} USDX
+                </p>
+                <p className="text-[11px] text-white/60">≈ ${formatAmount(balance.balanceUsd)}</p>
+              </>
+            ) : (
+              <>
+                <p className="text-base font-medium tracking-tight text-white">— USDX</p>
+                {/* Deliberately TEXT, not a button: connect stays contextual and
+                    the page chrome carries no global connect control (W2
+                    principle, asserted by redeem.spec.ts). The user connects in
+                    the flow that needs a wallet; the card just says why it has
+                    no number to show. */}
+                <p className="text-[11px] text-white/60">
+                  {balance.state === "disconnected"
+                    ? t("balance.connectPrompt")
+                    : balance.state === "loading"
+                      ? t("balance.loading")
+                      : t("balance.unavailable")}
+                </p>
+              </>
+            )}
           </div>
         </div>
         <button

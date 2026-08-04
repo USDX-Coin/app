@@ -8,9 +8,22 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useAuthStore } from "@/stores/authStore";
 
+function ShellSpinner() {
+  return (
+    <div className="flex h-screen items-center justify-center bg-background">
+      <Loader2 className="size-8 animate-spin text-primary" />
+    </div>
+  );
+}
+
+// Wraps the WHOLE dashboard shell, not just the page content (USDX-396): the
+// sidebar's balance card reads the connected wallet on-chain, so it needs the
+// wagmi/RainbowKit context too. Still dashboard-only and still `ssr: false`, so
+// auth pages keep their wallet-free bundle; `loading` keeps the same spinner the
+// hydration gate already shows instead of flashing an empty shell.
 const WalletProviders = dynamic(
   () => import("@/providers/WalletProviders").then((mod) => mod.WalletProviders),
-  { ssr: false }
+  { ssr: false, loading: () => <ShellSpinner /> }
 );
 
 export default function DashboardLayout({
@@ -36,13 +49,7 @@ export default function DashboardLayout({
     }
   }, [hydrated, router]);
 
-  if (!hydrated) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <Loader2 className="size-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  if (!hydrated) return <ShellSpinner />;
 
   if (!isAuthenticated) return null;
 
@@ -50,59 +57,59 @@ export default function DashboardLayout({
   const name = user?.name ?? user?.email ?? "";
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      {/* Desktop sidebar */}
-      {!desktopHidden && (
-        <aside className="hidden w-[272px] shrink-0 md:block">
-          <Sidebar onCollapse={() => setDesktopHidden(true)} />
-        </aside>
-      )}
+    <WalletProviders>
+      <div className="flex h-screen overflow-hidden bg-background">
+        {/* Desktop sidebar */}
+        {!desktopHidden && (
+          <aside className="hidden w-[272px] shrink-0 md:block">
+            <Sidebar onCollapse={() => setDesktopHidden(true)} />
+          </aside>
+        )}
 
-      {/* Floating reopen button when sidebar hidden (desktop) */}
-      {desktopHidden && (
-        <button
-          type="button"
-          aria-label="Show sidebar"
-          onClick={() => setDesktopHidden(false)}
-          className="absolute left-3 top-3 z-30 hidden rounded-md border border-border bg-card p-2 text-muted-foreground shadow-sm hover:text-foreground md:block"
-        >
-          <PanelLeft className="size-5" />
-        </button>
-      )}
-
-      {/* Mobile drawer */}
-      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="left" className="w-[300px] p-0">
-          <SheetTitle className="sr-only">Navigation</SheetTitle>
-          <Sidebar onNavigate={() => setMobileOpen(false)} />
-        </SheetContent>
-      </Sheet>
-
-      <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Mobile top bar */}
-        <header className="flex h-14 items-center justify-between border-b border-border bg-sidebar px-4 md:hidden">
-          <div className="flex items-center gap-2">
-            <img src="/image/usdx-logo.png" alt="USDX" className="size-7 rounded-full" />
-            <span className="max-w-[160px] truncate text-sm font-medium text-foreground">
-              {name}
-            </span>
-          </div>
+        {/* Floating reopen button when sidebar hidden (desktop) */}
+        {desktopHidden && (
           <button
             type="button"
-            aria-label="Open menu"
-            onClick={() => setMobileOpen(true)}
-            className="text-muted-foreground hover:text-foreground"
+            aria-label="Show sidebar"
+            onClick={() => setDesktopHidden(false)}
+            className="absolute left-3 top-3 z-30 hidden rounded-md border border-border bg-card p-2 text-muted-foreground shadow-sm hover:text-foreground md:block"
           >
-            <Menu className="size-5" />
+            <PanelLeft className="size-5" />
           </button>
-        </header>
+        )}
 
-        <main className="flex-1 overflow-hidden p-3 md:p-5">
-          <div className="h-full overflow-y-auto rounded-2xl bg-card p-5 md:p-6">
-            <WalletProviders>{children}</WalletProviders>
-          </div>
-        </main>
+        {/* Mobile drawer */}
+        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+          <SheetContent side="left" className="w-[300px] p-0">
+            <SheetTitle className="sr-only">Navigation</SheetTitle>
+            <Sidebar onNavigate={() => setMobileOpen(false)} />
+          </SheetContent>
+        </Sheet>
+
+        <div className="flex flex-1 flex-col overflow-hidden">
+          {/* Mobile top bar */}
+          <header className="flex h-14 items-center justify-between border-b border-border bg-sidebar px-4 md:hidden">
+            <div className="flex items-center gap-2">
+              <img src="/image/usdx-logo.png" alt="USDX" className="size-7 rounded-full" />
+              <span className="max-w-[160px] truncate text-sm font-medium text-foreground">
+                {name}
+              </span>
+            </div>
+            <button
+              type="button"
+              aria-label="Open menu"
+              onClick={() => setMobileOpen(true)}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <Menu className="size-5" />
+            </button>
+          </header>
+
+          <main className="flex-1 overflow-hidden p-3 md:p-5">
+            <div className="h-full overflow-y-auto rounded-2xl bg-card p-5 md:p-6">{children}</div>
+          </main>
+        </div>
       </div>
-    </div>
+    </WalletProviders>
   );
 }

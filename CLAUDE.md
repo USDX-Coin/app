@@ -97,9 +97,9 @@ Detailed skeleton components matching exact layout per feature. Used with condit
 All validators return `string | null` (error message or null for valid). Located in `src/lib/validations.ts`. EVM-only address validation (must start with `0x`). Hoisted regex at module level.
 
 ### Multi-Step Forms
-Mint and Redeem use step-based state machines:
-- Mint: `form` → `review` → `payment`
-- Redeem: `form` → `review` → `executing` → `success`
+Mint and Redeem keep their state in Zustand stores; the Ringkasan is a modal:
+- Mint: single form view → Ringkasan modal → cross-origin checkout handoff (USDX-201/225)
+- Redeem: `form` → `tracker`; Ringkasan modal over the form → create order → contextual wallet burn (simulated in W3) → status tracker polling (USDX-243)
 
 Step state lives in Zustand stores. Form data preserved when going back.
 
@@ -115,7 +115,7 @@ All backend calls go through `src/lib/api/mock-api.ts` with simulated delays. Re
 - `React.memo` on ChainSelector
 - `useMemo` for selectedChain in hooks, initials in Header
 - Query invalidation after mint/redeem mutations
-- Double-submission guard in executeRedeem
+- Redeem status tracker polling stops at terminal states (PAYOUT_COMPLETE / EXPIRED)
 
 ## Responsive Design
 
@@ -150,7 +150,7 @@ Test helpers in `tests/helpers/`:
 | `/forgot-password` | No | SC | Password reset |
 | `/mint` | Yes | SC | Mint USDX (default dashboard) |
 | `/redeem` | Yes | SC | Redeem USDX to bank |
-| `/transactions` | Yes | SC | Transaction history |
+| `/history` | Yes | SC | Transaction history (mint + redeem, W3) |
 | `/profile` | Yes | SC | User info + verification badge |
 | `/payment` | No* | CC | Mock payment gateway (*redirects to /mint without data) |
 
@@ -158,7 +158,47 @@ Test helpers in `tests/helpers/`:
 
 - All API calls are mocked (no real backend)
 - Smart contract interactions are simulated
-- RainbowKit wallet connection works but balance is mocked
+- RainbowKit wallet connection works; the USDX balance is read **on-chain for real**
+  (`balanceOf` on Polygon) via `hooks/useWalletBalance` — sidebar, Send and Bridge all
+  use it. Wallets are never auto-reconnected, so an unconnected/loading/failed read is
+  shown as "—" plus a reason, never as a number (USDX-396)
 - WalletConnect SSR produces `indexedDB` warnings (harmless)
 - KYC verification is UI-only (always shows "Verified")
 - Solana removed — EVM chains only (7 chains)
+- Validation messages (`validations.ts`) are English-only — they appear untranslated in the ID locale (UI chrome is i18n'd EN+ID, validation strings are not)
+
+
+# Source of Truth
+
+Folder `sot/` contains the project spec. Read before coding. Never edit `sot/`.
+
+**If spec is unclear — ask the PM, don't assume.**
+
+## Key files for this repo:
+
+- `sot/phase-2/week1.md` — **AKTIF (Week 1)**: auth flow (register/verify/login/forgot password), KYC INDIVIDUAL flow, FE deliverables, error codes per endpoint
+- `sot/phase-2/phase2.md` — Phase 2 overview: pages roadmap, mint/redeem/bridge flows (W2+)
+- `sot/conventions.md` — API response format, naming conventions, status enums
+- `sot/api/openapi.yaml` — API contract entry point (consumer endpoints `/api/v2/*`: `auth.yaml`, `kyc.yaml`, `storage.yaml`)
+
+## Critical rules:
+
+- **App SUDAH ADA — jangan scaffold ulang.** Next.js App Router + Tailwind v4 + shadcn/ui, UI mock sudah sesuai Figma. Scope Week 1 = ganti mock dengan real API + tambah halaman yang belum ada (lihat `sot/phase-2/week1.md` § Deliverables Week 1)
+- Ganti `src/lib/api/mock-api.ts` **bertahap** dengan real API client (`NEXT_PUBLIC_API_BASE_URL` → `/api/v2/*`) — jangan rewrite sekaligus
+- API responses follow `{ status, metadata, data, error }` format — see `sot/conventions.md`
+- Auth: Better Auth client **consumer audience** (session 30 hari sliding) — bukan audience backoffice
+- Error handling konsisten: 401 → clear session + redirect `/login`; 403 `EMAIL_NOT_VERIFIED` → banner verifikasi + tombol resend; 403 `KYC_NOT_VERIFIED` → lock CTA + arahkan ke `/kyc`; 429 → cooldown countdown
+- KYC upload via presigned URL: `POST /v2/storage/presigned-upload` → PUT file langsung ke bucket → `POST /v2/kyc` dengan objectKeys (lihat `sot/phase-2/week1.md` § Consumer App Flow)
+- KYC status enums: `UNVERIFIED | PENDING | VERIFIED | REJECTED` — CTA mint/redeem/bridge terkunci kalau bukan `VERIFIED`
+- SOT is authoritative — if your implementation differs from SOT, your code adjusts (not SOT)
+
+## PR Description
+
+Saat buat PR, generate description mengikuti format di `sot/templates/pr-template.md`. Ini wajib — PM review berdasarkan structure ini.
+
+Key points:
+- Selalu include "PM Action Items" section (bisa "None")
+- Selalu include "SoT Alignment" table — cross-check setiap field/endpoint vs SOT
+- Jika implement sesuatu yang TIDAK ada di SOT → masukkan ke "Known Drift > Needs PM Action" dengan category ❓ Decision
+- Jika ada AC yang belum bisa dicapai → mark ⏳ Deferred dengan reason
+- Jika ada action yang harus dilakukan SETELAH merge → masukkan "Post-Merge Actions"

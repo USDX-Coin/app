@@ -1,35 +1,47 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, waitFor } from "@testing-library/react";
 import { createWrapper } from "../../helpers/test-utils";
 import { useMint } from "@/hooks/useMint";
 import { useMintStore } from "@/stores/mintStore";
+import { useAuthStore } from "@/stores/authStore";
+import { mintCheckoutCode } from "@/lib/api/auth-api";
+
+const { pushMock } = vi.hoisted(() => ({ pushMock: vi.fn() }));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({
-    push: vi.fn(),
-    replace: vi.fn(),
-  }),
+  useRouter: () => ({ push: pushMock, replace: vi.fn() }),
 }));
+
+// USDX-378: the checkout handoff is a one-time code minted by the backend, not the
+// app's stored session token. Mock it so the test controls the value and proves the
+// app never reaches into its own storage for the handoff.
+vi.mock("@/lib/api/auth-api", () => ({
+  mintCheckoutCode: vi.fn(),
+}));
+const mintCheckoutCodeMock = vi.mocked(mintCheckoutCode);
+
+const VALID_ADDRESS = "0x1234567890abcdef1234567890abcdef12345678";
+// mock rate: baseRate 16000 × (1 + 2.5%) = 16400
+const EFFECTIVE_RATE = 16400;
 
 beforeEach(() => {
   useMintStore.getState().reset();
+  useAuthStore.setState({ token: null });
+  pushMock.mockReset();
+  mintCheckoutCodeMock.mockReset();
+  mintCheckoutCodeMock.mockResolvedValue("handoff-xyz");
 });
 
 describe("useMint", () => {
   describe("validation", () => {
     describe("positive", () => {
-      test("no errors when form is valid", () => {
+      test("no errors and form valid once the rate has loaded", async () => {
         useMintStore.getState().setAmount("100");
-        useMintStore
-          .getState()
-          .setDestinationAddress(
-            "0x1234567890abcdef1234567890abcdef12345678"
-          );
+        useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
 
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
-        });
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
 
+        await waitFor(() => expect(result.current.effectiveBuyRate).toBe(EFFECTIVE_RATE));
         expect(result.current.amountError).toBeNull();
         expect(result.current.addressError).toBeNull();
         expect(result.current.isFormValid).toBe(true);
@@ -37,197 +49,139 @@ describe("useMint", () => {
     });
 
     describe("negative", () => {
-      test("amountError for amount below minimum", () => {
+      test("amountError for USD amount below minimum (rate-independent)", () => {
         useMintStore.getState().setAmount("5");
-
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
-        });
-
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
         expect(result.current.amountError).toContain("Minimum");
       });
 
-      test("amountError for amount above maximum", () => {
+      test("amountError for USD amount above maximum", () => {
         useMintStore.getState().setAmount("2000000");
-
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
-        });
-
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
         expect(result.current.amountError).toContain("Maximum");
       });
 
       test("addressError for invalid EVM address", () => {
         useMintStore.getState().setDestinationAddress("0xinvalid");
-
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
-        });
-
-        expect(result.current.addressError).toBeTruthy();
-      });
-
-      test("addressError for invalid address", () => {
-        useMintStore.getState().setDestinationAddress("notanaddress");
-
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
-        });
-
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
         expect(result.current.addressError).toBeTruthy();
       });
     });
 
     describe("edge cases", () => {
-      test("no validation when fields are empty (lazy validation)", () => {
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
-        });
-
+      test("no validation when fields are empty (lazy)", () => {
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
         expect(result.current.amountError).toBeNull();
         expect(result.current.addressError).toBeNull();
         expect(result.current.isFormValid).toBe(false);
       });
 
-      test("validates exact boundary amount (10)", () => {
-        useMintStore.getState().setAmount("10");
-
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
-        });
-
-        expect(result.current.amountError).toBeNull();
+      test("form invalid until the rate is available", () => {
+        useMintStore.getState().setAmount("100");
+        useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+        // Synchronously (before the rate query resolves) the form can't be valid.
+        expect(result.current.effectiveBuyRate).toBeNull();
+        expect(result.current.isFormValid).toBe(false);
       });
     });
   });
 
   describe("calculations", () => {
     describe("positive", () => {
-      test("parsedAmount correctly parses string to number", () => {
-        useMintStore.getState().setAmount("1000");
-
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
-        });
-
-        expect(result.current.parsedAmount).toBe(1000);
+      test("USD input: amountUsdx = entered, subtotalIdr = entered × rate", async () => {
+        useMintStore.getState().setAmount("100");
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+        await waitFor(() => expect(result.current.effectiveBuyRate).toBe(EFFECTIVE_RATE));
+        expect(result.current.amountUsdx).toBe(100);
+        expect(result.current.subtotalIdr).toBe(100 * EFFECTIVE_RATE);
       });
 
-      test("fee is 0.7% of parsedAmount", () => {
-        useMintStore.getState().setAmount("1000");
-
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
-        });
-
-        expect(result.current.fee).toBeCloseTo(7, 2);
+      test("IDR input: amountUsdx = entered / rate, subtotalIdr = entered", async () => {
+        useMintStore.getState().setAmountCurrency("IDR");
+        useMintStore.getState().setAmount(String(100 * EFFECTIVE_RATE));
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+        await waitFor(() => expect(result.current.effectiveBuyRate).toBe(EFFECTIVE_RATE));
+        expect(result.current.amountUsdx).toBe(100);
+        expect(result.current.subtotalIdr).toBe(100 * EFFECTIVE_RATE);
       });
 
-      test("selectedChain matches chainId", () => {
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
-        });
-
-        expect(result.current.selectedChain?.id).toBe("base");
+      test("selectedChain is locked to Polygon", () => {
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+        expect(result.current.selectedChain?.id).toBe("polygon");
       });
     });
 
     describe("edge cases", () => {
-      test("calculations handle zero amount", () => {
+      test("zero amount yields zero derived amounts", async () => {
         useMintStore.getState().setAmount("0");
-
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
-        });
-
-        expect(result.current.parsedAmount).toBe(0);
-        expect(result.current.fee).toBe(0);
-      });
-
-      test("selectedChain undefined for invalid chainId", () => {
-        useMintStore.getState().setChainId("nonexistent");
-
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
-        });
-
-        expect(result.current.selectedChain).toBeUndefined();
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+        await waitFor(() => expect(result.current.effectiveBuyRate).toBe(EFFECTIVE_RATE));
+        expect(result.current.amountUsdx).toBe(0);
+        expect(result.current.subtotalIdr).toBe(0);
       });
     });
   });
 
-  describe("step machine", () => {
-    describe("positive", () => {
-      test("goToReview sets step to review when form valid", () => {
-        useMintStore.getState().setAmount("100");
-        useMintStore
-          .getState()
-          .setDestinationAddress(
-            "0x1234567890abcdef1234567890abcdef12345678"
-          );
-
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
-        });
-
-        act(() => {
-          result.current.goToReview();
-        });
-
-        expect(useMintStore.getState().step).toBe("review");
-      });
-
-      test("goBackToForm sets step to form", () => {
-        useMintStore.getState().setStep("review");
-
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
-        });
-
-        act(() => {
-          result.current.goBackToForm();
-        });
-
-        expect(useMintStore.getState().step).toBe("form");
-      });
+  describe("currency toggle", () => {
+    test("toggleCurrency switches USD <-> IDR", () => {
+      const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+      expect(result.current.amountCurrency).toBe("USD");
+      act(() => result.current.toggleCurrency());
+      expect(useMintStore.getState().amountCurrency).toBe("IDR");
     });
+  });
 
-    describe("negative", () => {
-      test("goToReview does nothing when form invalid", () => {
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
+  describe("submit", () => {
+    async function submitAndCaptureRedirect(): Promise<string> {
+      const originalLocation = window.location;
+      const locationStub = { href: "" } as Location;
+      Object.defineProperty(window, "location", { configurable: true, value: locationStub });
+      try {
+        useMintStore.getState().setAmount("100");
+        useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+        await waitFor(() => expect(result.current.isFormValid).toBe(true));
+        await act(async () => {
+          await result.current.submitMint();
         });
+        return locationStub.href;
+      } finally {
+        Object.defineProperty(window, "location", { configurable: true, value: originalLocation });
+      }
+    }
 
-        act(() => {
-          result.current.goToReview();
-        });
+    describe("positive", () => {
+      test("hands off to checkout with a freshly-minted one-time code in the URL hash (USDX-378)", async () => {
+        // The app-side session token must NOT be read from storage — the handoff code
+        // comes from POST /api/v2/auth/checkout-token instead (CLNT-12 fix), and the
+        // URL carries `#code=`, never a session token / `#token=`.
+        useAuthStore.setState({ token: "app-session-tok" });
+        mintCheckoutCodeMock.mockResolvedValue("handoff/abc");
 
-        expect(useMintStore.getState().step).toBe("form");
+        const href = await submitAndCaptureRedirect();
+
+        expect(href).toContain("/checkout/mint_");
+        // URL-encoded minted one-time code (USDX-378 URL-hash handoff).
+        expect(href).toContain("#code=handoff%2Fabc");
+        // No legacy `#token=` handoff, and the app's own stored session token is
+        // never leaked into the redirect.
+        expect(href).not.toContain("#token=");
+        expect(href).not.toContain("app-session-tok");
+        expect(mintCheckoutCodeMock).toHaveBeenCalledTimes(1);
       });
     });
 
     describe("edge cases", () => {
-      test("form data preserved after goBackToForm", () => {
-        useMintStore.getState().setAmount("500");
-        useMintStore
-          .getState()
-          .setDestinationAddress(
-            "0x1234567890abcdef1234567890abcdef12345678"
-          );
-        useMintStore.getState().setStep("review");
+      test("still redirects (without a code hash) when minting the handoff code fails", async () => {
+        // Graceful degradation: a failed mint must not strand the user — checkout will
+        // prompt its own login. Mirrors the old token-absent behaviour.
+        mintCheckoutCodeMock.mockRejectedValue(new Error("boom"));
 
-        const { result } = renderHook(() => useMint(), {
-          wrapper: createWrapper(),
-        });
+        const href = await submitAndCaptureRedirect();
 
-        act(() => {
-          result.current.goBackToForm();
-        });
-
-        expect(useMintStore.getState().amount).toBe("500");
-        expect(useMintStore.getState().destinationAddress).toBe(
-          "0x1234567890abcdef1234567890abcdef12345678"
-        );
+        expect(href).toContain("/checkout/mint_");
+        expect(href).not.toContain("#code=");
       });
     });
   });

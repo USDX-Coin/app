@@ -1,24 +1,22 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowDownToLine,
-  ArrowLeftRight,
-  ArrowUpRight,
-  Calendar,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Copy,
+  ExternalLink,
   History,
-  MoreHorizontal,
   RefreshCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTransactions } from "@/hooks/useTransactions";
-import { SUPPORTED_CHAINS } from "@/lib/chains";
-import { formatAmount, truncateAddress, cn } from "@/lib/utils";
+import { useRedeemStore } from "@/stores/redeemStore";
+import { getChainById } from "@/lib/chains";
+import { formatAmount, formatIDR, truncateAddress, cn } from "@/lib/utils";
 import { useLang } from "@/providers/LanguageProvider";
 import {
   Table,
@@ -29,23 +27,77 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TransactionListSkeleton } from "@/components/transactions/TransactionListSkeleton";
-import type { Transaction, TransactionStatus, TransactionType } from "@/types";
+import type {
+  ConsumerOrderType,
+  ConsumerTransaction,
+  MintOrderStatus,
+  MintPaymentStatus,
+  RedeemStatus,
+} from "@/types";
 
 const PAGE_SIZE = 10;
 
-const statusStyles: Record<TransactionStatus, string> = {
-  completed: "bg-success/15 text-success",
-  pending: "bg-warning/15 text-warning",
-  failed: "bg-destructive/15 text-destructive",
+// Badge per derived status. EXPIRED comes from `paymentStatus` (the order's
+// overall `status` is FAILED then), so we surface it as its own pill.
+type BadgeKey = MintOrderStatus | "EXPIRED";
+const statusStyles: Record<BadgeKey, string> = {
+  COMPLETED: "bg-success/15 text-success",
+  WAITING_FOR_PAYMENT: "bg-warning/15 text-warning",
+  WAITING_FOR_APPROVAL: "bg-sky-500/15 text-sky-600 dark:text-sky-400",
+  FAILED: "bg-destructive/15 text-destructive",
+  EXPIRED: "bg-muted text-muted-foreground",
+};
+const statusLabelKey: Record<BadgeKey, string> = {
+  COMPLETED: "tx.st.completed",
+  WAITING_FOR_PAYMENT: "tx.st.waitingPayment",
+  WAITING_FOR_APPROVAL: "tx.st.waitingApproval",
+  FAILED: "tx.st.failed",
+  EXPIRED: "tx.st.expired",
 };
 
-// Per-type icon + brand color (matches Figma: mint=green, redeem=amber, bridge=blue, send=red).
-const typeMeta: Record<TransactionType, { icon: typeof ArrowDownToLine; color: string; key: string }> = {
-  mint: { icon: ArrowDownToLine, color: "text-green-600 dark:text-green-500", key: "tx.minting" },
-  redeem: { icon: RefreshCcw, color: "text-amber-600 dark:text-amber-500", key: "tx.redeem" },
-  bridge: { icon: ArrowLeftRight, color: "text-sky-600 dark:text-sky-500", key: "tx.bridge" },
-  send: { icon: ArrowUpRight, color: "text-rose-600 dark:text-rose-500", key: "tx.send" },
+function badgeKey(status: MintOrderStatus, paymentStatus: MintPaymentStatus): BadgeKey {
+  return paymentStatus === "EXPIRED" ? "EXPIRED" : status;
+}
+
+// Per-type icon + brand color (matches Figma: mint=green, redeem=amber).
+const typeMeta: Record<ConsumerOrderType, { icon: typeof ArrowDownToLine; color: string; key: string }> = {
+  MINT: { icon: ArrowDownToLine, color: "text-green-600 dark:text-green-500", key: "tx.minting" },
+  REDEEM: { icon: RefreshCcw, color: "text-amber-600 dark:text-amber-500", key: "tx.redeem" },
 };
+
+// Redeem status badge (USDX-244). Reuses the redeem.status* labels (USDX-243).
+const redeemStatusStyles: Record<RedeemStatus, string> = {
+  AWAITING_BURN: "bg-warning/15 text-warning",
+  BURNED: "bg-sky-500/15 text-sky-600 dark:text-sky-400",
+  PROCESSING_PAYOUT: "bg-sky-500/15 text-sky-600 dark:text-sky-400",
+  PAYOUT_COMPLETE: "bg-success/15 text-success",
+  EXPIRED: "bg-muted text-muted-foreground",
+};
+const redeemStatusLabelKey: Record<RedeemStatus, string> = {
+  AWAITING_BURN: "redeem.statusAwaitingBurn",
+  BURNED: "redeem.statusBurned",
+  PROCESSING_PAYOUT: "redeem.statusProcessing",
+  PAYOUT_COMPLETE: "redeem.statusComplete",
+  EXPIRED: "redeem.statusExpired",
+};
+
+// Type-aware IDR values: the "Subtotal" column is the pre-fee value (mint
+// subtotal / redeem gross); the "Total" column is the settled value (mint total
+// paid / redeem net received).
+function subtotalValue(tx: ConsumerTransaction): string | null {
+  return tx.type === "REDEEM" ? tx.grossIdr : tx.subtotalIdr;
+}
+function totalValue(tx: ConsumerTransaction): string | null {
+  return tx.type === "REDEEM" ? tx.netPayoutIdr : tx.totalPayIdr;
+}
+
+// Block explorer tx link for the order's chain, or null when the chain has no
+// known explorer or the tx hasn't landed on-chain yet (txHash null).
+function explorerTxUrl(chain: string, txHash: string | null): string | null {
+  if (!txHash) return null;
+  const url = getChainById(chain)?.explorerUrl;
+  return url ? `${url}/tx/${txHash}` : null;
+}
 
 function formatDateTime(iso: string) {
   const d = new Date(iso);
@@ -53,7 +105,7 @@ function formatDateTime(iso: string) {
   const day = String(d.getDate()).padStart(2, "0");
   const hh = String(d.getHours()).padStart(2, "0");
   const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${mo} ${day},${d.getFullYear()} - ${hh}:${mm}`;
+  return `${mo} ${day}, ${d.getFullYear()} - ${hh}:${mm}`;
 }
 
 /** Page list with ellipsis: 1 2 3 … 8 9 10 */
@@ -64,33 +116,42 @@ function pageList(current: number, total: number): (number | "…")[] {
   return [1, "…", current - 1, current, current + 1, "…", total];
 }
 
+// UI filter value → API `type` param. Union mint + redeem (USDX-244).
+const typeParam: Record<string, ConsumerOrderType | undefined> = {
+  all: undefined,
+  mint: "MINT",
+  redeem: "REDEEM",
+};
+
 export function TransactionList() {
   const router = useRouter();
   const { t } = useLang();
-  const { data: transactions = [], isLoading } = useTransactions();
+  const resumeRedeem = useRedeemStore((s) => s.resumeOrder);
   const [typeFilter, setTypeFilter] = useState("all");
-  const [networkFilter, setNetworkFilter] = useState("all");
   const [page, setPage] = useState(1);
-  const [sort, setSort] = useState<{ key: "date" | "hash"; dir: "asc" | "desc" }>({
-    key: "date",
-    dir: "desc",
-  });
 
-  function toggleSort(key: "date" | "hash") {
-    setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
-    setPage(1);
+  // Resume an unburned redeem from history (USDX-259): load it into the tracker
+  // and navigate to /redeem. The `?order=` param makes resume deep-linkable and
+  // survive a full reload; the store update is the SPA fast-path.
+  function continueBurn(id: string) {
+    resumeRedeem(id);
+    router.push(`/redeem?order=${id}`);
   }
+
+  const { data, isLoading } = useTransactions({
+    page,
+    take: PAGE_SIZE,
+    type: typeParam[typeFilter],
+  });
+  const rows = data?.data ?? [];
+  const total = data?.metadata.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
 
   const typeOptions = [
     { value: "all", label: t("tx.allTransaction") },
     { value: "mint", label: t("tx.minting") },
     { value: "redeem", label: t("tx.redeem") },
-    { value: "bridge", label: t("tx.bridge") },
-    { value: "send", label: t("tx.send") },
-  ];
-  const networkOptions = [
-    { value: "all", label: t("tx.allNetwork") },
-    ...SUPPORTED_CHAINS.map((c) => ({ value: c.id, label: c.name })),
   ];
 
   function copy(text: string) {
@@ -98,36 +159,10 @@ export function TransactionList() {
     toast.success(t("toast.copied"));
   }
 
-  const filtered = useMemo(
-    () =>
-      transactions.filter((tx) => {
-        if (typeFilter !== "all" && tx.type !== typeFilter) return false;
-        if (networkFilter !== "all" && tx.chainId !== networkFilter) return false;
-        return true;
-      }),
-    [transactions, typeFilter, networkFilter]
-  );
-
-  const sorted = useMemo(() => {
-    const arr = [...filtered];
-    arr.sort((a, b) => {
-      const cmp =
-        sort.key === "date"
-          ? a.createdAt.localeCompare(b.createdAt)
-          : a.txHash.localeCompare(b.txHash);
-      return sort.dir === "asc" ? cmp : -cmp;
-    });
-    return arr;
-  }, [filtered, sort]);
-
-  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
-  const pageItems = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-
   if (isLoading) return <TransactionListSkeleton />;
 
-  function TypeCell({ tx }: { tx: Transaction }) {
-    const meta = typeMeta[tx.type];
+  function TypeCell({ type }: { type: ConsumerOrderType }) {
+    const meta = typeMeta[type];
     const Icon = meta.icon;
     return (
       <span className="flex items-center gap-2 text-foreground">
@@ -136,80 +171,120 @@ export function TransactionList() {
       </span>
     );
   }
-  function AmountCell({ tx }: { tx: Transaction }) {
+
+  function AmountCell({ amount }: { amount: string }) {
     return (
       <span className="flex items-center gap-1.5 font-medium text-foreground">
         <img src="/image/usdx-logo.png" alt="" className="size-4 rounded-full" />
-        {formatAmount(tx.amount)}
+        {formatAmount(Number(amount))}
       </span>
     );
   }
-  function StatusPill({ status }: { status: TransactionStatus }) {
+
+  function TxHashCell({ tx }: { tx: ConsumerTransaction }) {
+    const url = explorerTxUrl(tx.chain, tx.txHash);
+    if (!tx.txHash) return <span className="text-muted-foreground">—</span>;
     return (
-      <span className={cn("inline-flex rounded-md px-2 py-0.5 text-xs font-medium", statusStyles[status])}>
-        {t(`tx.${status}`)}
+      <span className="flex items-center gap-1.5 text-foreground">
+        {url ? (
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 text-primary hover:underline"
+          >
+            {truncateAddress(tx.txHash, 6)}
+            <ExternalLink className="size-3.5" />
+          </a>
+        ) : (
+          truncateAddress(tx.txHash, 6)
+        )}
+        <button
+          onClick={() => copy(tx.txHash!)}
+          className="text-muted-foreground hover:text-foreground"
+          aria-label={t("common.copy")}
+        >
+          <Copy className="size-3.5" />
+        </button>
       </span>
     );
+  }
+
+  function StatusPill({ tx }: { tx: ConsumerTransaction }) {
+    const cls = "inline-flex rounded-md px-2 py-0.5 text-xs font-medium";
+    if (tx.type === "REDEEM") {
+      const status = tx.status as RedeemStatus;
+      return <span className={cn(cls, redeemStatusStyles[status])}>{t(redeemStatusLabelKey[status])}</span>;
+    }
+    const key = badgeKey(tx.status as MintOrderStatus, tx.paymentStatus ?? "REQUESTED");
+    return <span className={cn(cls, statusStyles[key])}>{t(statusLabelKey[key])}</span>;
+  }
+
+  function chainLabel(chain: string) {
+    return getChainById(chain)?.name ?? chain;
+  }
+
+  function idrOrDash(value: string | null) {
+    return value == null ? "—" : formatIDR(Number(value));
   }
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Filters */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <button className="flex h-10 items-center gap-2 rounded-md border border-border px-3 text-sm text-foreground">
-          <Calendar className="size-4 text-muted-foreground" />
-          02 - 30 April 2026
-        </button>
-        <div className="flex gap-3">
-          <FilterSelect value={typeFilter} onChange={(v) => { setTypeFilter(v); setPage(1); }} options={typeOptions} />
-          <FilterSelect value={networkFilter} onChange={(v) => { setNetworkFilter(v); setPage(1); }} options={networkOptions} />
-        </div>
+      {/* Filter (type) — Polygon-only in W2, so no network filter. */}
+      <div className="flex justify-end">
+        <FilterSelect
+          value={typeFilter}
+          onChange={(v) => {
+            setTypeFilter(v);
+            setPage(1);
+          }}
+          options={typeOptions}
+        />
       </div>
 
-      {filtered.length === 0 ? (
+      {rows.length === 0 ? (
         <EmptyState onMint={() => router.push("/mint")} t={t} />
       ) : (
         <>
           {/* Desktop table */}
-          <div className="hidden overflow-hidden rounded-xl border border-border md:block">
+          <div className="hidden overflow-x-auto rounded-xl border border-border md:block">
             <Table>
               <TableHeader>
                 <TableRow className="border-border bg-muted/40 hover:bg-muted/40">
-                  <TableHead className="text-muted-foreground">
-                    <button onClick={() => toggleSort("date")} className="flex items-center gap-1 hover:text-foreground">
-                      {t("tx.dateTime")} <ChevronsUpDownSmall />
-                    </button>
-                  </TableHead>
-                  <TableHead className="text-muted-foreground">
-                    <button onClick={() => toggleSort("hash")} className="flex items-center gap-1 hover:text-foreground">
-                      {t("tx.txHash")} <ChevronsUpDownSmall />
-                    </button>
-                  </TableHead>
+                  <TableHead className="text-muted-foreground">{t("tx.dateTime")}</TableHead>
                   <TableHead className="text-muted-foreground">{t("tx.transaction")}</TableHead>
                   <TableHead className="text-muted-foreground">{t("tx.amount")}</TableHead>
+                  <TableHead className="text-muted-foreground">{t("tx.subtotal")}</TableHead>
+                  <TableHead className="text-muted-foreground">{t("tx.totalPay")}</TableHead>
+                  <TableHead className="text-muted-foreground">{t("tx.rate")}</TableHead>
+                  <TableHead className="text-muted-foreground">{t("tx.chain")}</TableHead>
+                  <TableHead className="text-muted-foreground">{t("tx.txHash")}</TableHead>
                   <TableHead className="text-muted-foreground">{t("tx.status")}</TableHead>
-                  <TableHead className="w-10" />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {pageItems.map((tx) => (
+                {rows.map((tx) => (
                   <TableRow key={tx.id} className="border-border">
-                    <TableCell className="text-muted-foreground">{formatDateTime(tx.createdAt)}</TableCell>
+                    <TableCell className="whitespace-nowrap text-muted-foreground">{formatDateTime(tx.createdAt)}</TableCell>
+                    <TableCell><TypeCell type={tx.type} /></TableCell>
+                    <TableCell><AmountCell amount={tx.amount} /></TableCell>
+                    <TableCell className="whitespace-nowrap text-foreground">{idrOrDash(subtotalValue(tx))}</TableCell>
+                    <TableCell className="whitespace-nowrap text-foreground">{idrOrDash(totalValue(tx))}</TableCell>
+                    <TableCell className="whitespace-nowrap text-muted-foreground">{idrOrDash(tx.effectiveRate)}</TableCell>
+                    <TableCell className="text-foreground">{chainLabel(tx.chain)}</TableCell>
+                    <TableCell><TxHashCell tx={tx} /></TableCell>
                     <TableCell>
-                      <span className="flex items-center gap-1.5 text-foreground">
-                        {truncateAddress(tx.txHash, 6)}
-                        <button onClick={() => copy(tx.txHash)} className="text-muted-foreground hover:text-foreground">
-                          <Copy className="size-3.5" />
-                        </button>
-                      </span>
-                    </TableCell>
-                    <TableCell><TypeCell tx={tx} /></TableCell>
-                    <TableCell><AmountCell tx={tx} /></TableCell>
-                    <TableCell><StatusPill status={tx.status} /></TableCell>
-                    <TableCell>
-                      <button aria-label="Actions" className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
-                        <MoreHorizontal className="size-4" />
-                      </button>
+                      <div className="flex flex-col items-start gap-1">
+                        <StatusPill tx={tx} />
+                        {tx.type === "REDEEM" && tx.status === "AWAITING_BURN" && (
+                          <button
+                            onClick={() => continueBurn(tx.id)}
+                            className="text-xs font-medium text-primary hover:underline"
+                          >
+                            {t("redeem.resume")}
+                          </button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -219,81 +294,85 @@ export function TransactionList() {
 
           {/* Mobile cards */}
           <div className="flex flex-col gap-3 md:hidden">
-            {pageItems.map((tx) => (
+            {rows.map((tx) => (
               <div key={tx.id} className="flex flex-col gap-3 rounded-xl border border-border p-4">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">{formatDateTime(tx.createdAt)}</span>
-                  <TypeCell tx={tx} />
+                  <StatusPill tx={tx} />
                 </div>
+                <div className="flex items-center justify-between">
+                  <TypeCell type={tx.type} />
+                  <AmountCell amount={tx.amount} />
+                </div>
+                <CardRow label={t("tx.subtotal")} value={idrOrDash(subtotalValue(tx))} />
+                <CardRow label={t("tx.totalPay")} value={idrOrDash(totalValue(tx))} />
+                <CardRow label={t("tx.rate")} value={idrOrDash(tx.effectiveRate)} />
+                <CardRow label={t("tx.chain")} value={chainLabel(tx.chain)} />
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">{t("tx.txHash")}</span>
-                  <span className="flex items-center gap-1.5 text-foreground">
-                    {truncateAddress(tx.txHash, 6)}
-                    <button onClick={() => copy(tx.txHash)} className="text-muted-foreground"><Copy className="size-3.5" /></button>
-                  </span>
+                  <TxHashCell tx={tx} />
                 </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">{t("tx.amount")}</span>
-                  <AmountCell tx={tx} />
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">{t("tx.status")}</span>
-                  <StatusPill status={tx.status} />
-                </div>
-                <button className="mt-1 flex h-9 items-center justify-center rounded-md border border-border text-sm font-medium text-foreground transition-colors hover:bg-accent">
-                  {t("tx.viewDetails")}
-                </button>
+                {tx.type === "REDEEM" && tx.status === "AWAITING_BURN" && (
+                  <button
+                    onClick={() => continueBurn(tx.id)}
+                    className="brand-gradient mt-1 flex h-9 items-center justify-center rounded-lg text-sm font-medium text-white"
+                  >
+                    {t("redeem.resume")}
+                  </button>
+                )}
               </div>
             ))}
           </div>
 
           {/* Pagination */}
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-              className="flex items-center gap-1 rounded-md border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40"
-            >
-              <ChevronLeft className="size-4" /> {t("tx.previous")}
-            </button>
-            <div className="hidden items-center gap-1 sm:flex">
-              {pageList(currentPage, totalPages).map((p, i) =>
-                p === "…" ? (
-                  <span key={`e${i}`} className="flex size-8 items-center justify-center text-sm text-muted-foreground">…</span>
-                ) : (
-                  <button
-                    key={p}
-                    onClick={() => setPage(p)}
-                    className={cn(
-                      "flex size-8 items-center justify-center rounded-full text-sm transition-colors",
-                      p === currentPage ? "brand-gradient text-white" : "text-foreground hover:bg-accent"
-                    )}
-                  >
-                    {p}
-                  </button>
-                )
-              )}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="flex items-center gap-1 rounded-md border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40"
+              >
+                <ChevronLeft className="size-4" /> {t("tx.previous")}
+              </button>
+              <div className="hidden items-center gap-1 sm:flex">
+                {pageList(currentPage, totalPages).map((p, i) =>
+                  p === "…" ? (
+                    <span key={`e${i}`} className="flex size-8 items-center justify-center text-sm text-muted-foreground">…</span>
+                  ) : (
+                    <button
+                      key={p}
+                      onClick={() => setPage(p)}
+                      className={cn(
+                        "flex size-8 items-center justify-center rounded-full text-sm transition-colors",
+                        p === currentPage ? "brand-gradient text-white" : "text-foreground hover:bg-accent"
+                      )}
+                    >
+                      {p}
+                    </button>
+                  )
+                )}
+              </div>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="flex items-center gap-1 rounded-md border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40"
+              >
+                {t("tx.next")} <ChevronRight className="size-4" />
+              </button>
             </div>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-              className="flex items-center gap-1 rounded-md border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent disabled:opacity-40"
-            >
-              {t("tx.next")} <ChevronRight className="size-4" />
-            </button>
-          </div>
+          )}
         </>
       )}
     </div>
   );
 }
 
-function ChevronsUpDownSmall() {
+function CardRow({ label, value }: { label: string; value: string }) {
   return (
-    <span className="flex flex-col text-muted-foreground/60">
-      <ChevronDown className="size-3 -rotate-180" />
-      <ChevronDown className="-mt-1 size-3" />
-    </span>
+    <div className="flex items-center justify-between text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="text-foreground">{value}</span>
+    </div>
   );
 }
 
@@ -319,7 +398,7 @@ function FilterSelect({
 }: {
   value: string;
   onChange: (v: string) => void;
-  options: { value: string; label: string }[];
+  options: { value: string; label: string; disabled?: boolean }[];
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -334,7 +413,7 @@ function FilterSelect({
   }, []);
 
   return (
-    <div ref={ref} className="relative w-40">
+    <div ref={ref} className="relative w-44">
       <button
         onClick={() => setOpen((p) => !p)}
         className="flex h-10 w-full items-center justify-between rounded-md border border-border px-3 text-sm text-foreground transition-colors hover:bg-accent"
@@ -347,10 +426,18 @@ function FilterSelect({
           {options.map((opt) => (
             <button
               key={opt.value}
-              onClick={() => { onChange(opt.value); setOpen(false); }}
+              disabled={opt.disabled}
+              onClick={() => {
+                if (opt.disabled) return;
+                onChange(opt.value);
+                setOpen(false);
+              }}
               className={cn(
-                "flex w-full items-center px-3 py-2 text-left text-sm transition-colors hover:bg-accent",
-                value === opt.value && "font-medium text-primary"
+                "flex w-full items-center px-3 py-2 text-left text-sm transition-colors",
+                opt.disabled
+                  ? "cursor-not-allowed text-muted-foreground/50"
+                  : "hover:bg-accent",
+                value === opt.value && !opt.disabled && "font-medium text-primary"
               )}
             >
               {opt.label}

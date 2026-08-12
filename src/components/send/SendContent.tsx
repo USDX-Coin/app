@@ -8,12 +8,14 @@ import { TokenButton } from "@/components/shared/TokenButton";
 import { NetworkTokenModal } from "@/components/shared/NetworkTokenModal";
 import { ConfirmationCard } from "@/components/shared/ConfirmationCard";
 import { StatusCard } from "@/components/shared/StatusCard";
+import { KycGateDialog } from "@/components/kyc/KycGateDialog";
+import { useKycGate } from "@/hooks/useKycGate";
+import { useWalletBalance } from "@/hooks/useWalletBalance";
 import { getChainById } from "@/lib/chains";
 import { validateAddress } from "@/lib/validations";
 import { formatAmount, truncateAddress } from "@/lib/utils";
 import { useLang } from "@/providers/LanguageProvider";
 
-const BALANCE = 999105.89;
 type Step = "form" | "confirmation" | "status";
 
 export function SendContent() {
@@ -25,6 +27,11 @@ export function SendContent() {
   const [address, setAddress] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [result, setResult] = useState<{ id: string; createdAt: string } | null>(null);
+  const gate = useKycGate();
+  // Real on-chain USDX balance (USDX-396). `balanceUsdx` is non-null only when it
+  // is actually known, so "Max" cannot fill an invented amount.
+  const balance = useWalletBalance();
+  const canMax = balance.balanceUsdx != null && balance.balanceUsdx > 0;
 
   const chain = getChainById(chainId);
   const addressError = address ? validateAddress(address) : null;
@@ -80,7 +87,7 @@ export function SendContent() {
             primaryLabel={t("btn.backToSend")}
             onPrimary={restart}
             secondaryLabel={t("btn.viewHistory")}
-            onSecondary={() => router.push("/transactions")}
+            onSecondary={() => router.push("/history")}
           />
         )}
 
@@ -93,8 +100,17 @@ export function SendContent() {
                   <p className="text-sm font-medium text-muted-foreground">{t("form.youWillSend")}</p>
                   <div className="flex items-center gap-2 text-sm">
                     <Wallet className="size-[18px] text-muted-foreground" />
-                    <span className="text-muted-foreground">{formatAmount(BALANCE)}</span>
-                    <button type="button" onClick={() => setAmount(String(BALANCE))} className="font-semibold text-gold underline-offset-2 hover:underline">{t("common.max")}</button>
+                    {balance.balanceUsdx != null ? (
+                      <>
+                        <span className="text-muted-foreground">{formatAmount(balance.balanceUsdx)}</span>
+                        <button type="button" disabled={!canMax} onClick={() => setAmount(String(balance.balanceUsdx))} className="font-semibold text-gold underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50">{t("common.max")}</button>
+                      </>
+                    ) : balance.state === "disconnected" ? (
+                      <button type="button" onClick={balance.connect} className="font-semibold text-gold underline-offset-2 hover:underline">{t("balance.connectWallet")}</button>
+                    ) : (
+                      /* Unknown balance → no number and no usable Max (USDX-396). */
+                      <span className="text-muted-foreground">{balance.state === "loading" ? t("balance.loading") : t("balance.unavailable")}</span>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center justify-between gap-2">
@@ -115,9 +131,10 @@ export function SendContent() {
                 {addressError && <p className="text-sm text-destructive">{addressError}</p>}
               </div>
             </div>
-            <button type="button" disabled={!isValid} onClick={() => setStep("confirmation")} className="brand-gradient flex h-[42px] items-center justify-center rounded-lg text-sm font-medium text-white transition-opacity disabled:opacity-50">
+            <button type="button" disabled={gate.verified && !isValid} onClick={() => gate.guard(() => setStep("confirmation"))} className="brand-gradient flex h-[42px] items-center justify-center rounded-lg text-sm font-medium text-white transition-opacity disabled:opacity-50">
               {t("btn.send")}
             </button>
+            <KycGateDialog open={gate.open} onOpenChange={gate.setOpen} status={gate.status} rejectionReason={gate.rejectionReason} />
             <NetworkTokenModal open={modalOpen} onOpenChange={setModalOpen} title={t("modal.sendFrom")} selectedChainId={chainId} onSelectChain={setChainId} />
           </div>
         )}

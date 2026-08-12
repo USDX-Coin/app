@@ -1,0 +1,13 @@
+# Security headers untuk halaman `app` (Netlify). USDX-362 (residual WSTG-CLNT-09/14):
+# helmet backend (USDX-352) HANYA memasang header di respons API — halaman HTML SPA ini
+# dilayani Netlify, jadi butuh header sendiri. Tanpa ini, halaman app rentan clickjacking
+# (di-frame) + MIME-sniffing. `app` adalah aplikasi top-level (bukan di-iframe) → DENY framing.
+# Hanya blok [[headers]] (additive) — build/plugin tetap dari Netlify UI, tak dioverride.
+# Selaras precedent checkout/back-office.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    Content-Security-Policy = "frame-ancestors 'none';"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"

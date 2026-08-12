@@ -19,7 +19,13 @@
 
 ## Root Layout
 
-`layout.tsx` wraps everything with `<Providers>` (Wagmi, QueryClient, RainbowKit, Toaster).
+`layout.tsx` wraps everything with `<Providers>` (ThemeProvider, LanguageProvider,
+QueryClient, `ApiClientBridge`, Toaster). Wallet libs (Wagmi/RainbowKit) are **not**
+loaded at the root — `WalletProviders` is dashboard-only and dynamically imported
+(`ssr: false`). Since USDX-396 it wraps the **whole dashboard shell**, not just the
+page content, because the sidebar balance card reads the connected wallet on-chain.
+There is still **no global connect-wallet button**: connect stays contextual (the
+redeem form, the sidebar balance card, the Send/Bridge balance row).
 
 ## Home Page
 

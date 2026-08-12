@@ -1,77 +1,149 @@
 "use client";
 
+// Mint form logic (USDX-201). Combines the mint store + live rate
+// (GET /v2/rate) + validation + the create-order mutation (POST /v2/mint).
+// On success it hands off (cross-origin redirect) to the own-hosted checkout repo
+// at `mint.usdx.co.id/checkout/{id}#code=<code>` — a one-time authorization code in
+// the URL hash (USDX-378 · WSTG-CLNT-12; supersedes the `#token=` bearer-JWT handoff
+// USDX-240/USDX-357, which itself superseded the cross-subdomain cookie USDX-225/226).
+// The Ringkasan (review) is a modal, so there's no in-page step machine anymore —
+// see mintStore.
+
 import { useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMintStore } from "@/stores/mintStore";
-import { mockCreateMint } from "@/lib/api/mock-api";
+import { useConsumerRate } from "@/hooks/useConsumerRate";
+import { createMintOrder } from "@/lib/api/mint-api";
+import { mintCheckoutCode } from "@/lib/api/auth-api";
+import { env } from "@/lib/env";
 import { validateAmount, validateAddress } from "@/lib/validations";
 import { parseAmount } from "@/lib/utils";
-import { MINTING_FEE_PERCENT, USD_TO_IDR_RATE } from "@/lib/constants";
 import { getChainById } from "@/lib/chains";
+import { isApiError, isValidationError, isRateLimited } from "@/lib/api/errors";
+
+// Maps a create-order failure to an i18n key the review modal renders inline
+// (week2.md § Endpoints Mint error codes).
+function mintErrorKey(error: unknown): string | null {
+  if (!error) return null;
+  // 429 RATE_LIMITED is surfaced globally as a toast (Providers query/mutation
+  // cache, USDX-252) — suppress the inline modal error (would read as a generic
+  // failure); the user can retry once the throttle clears.
+  if (isRateLimited(error)) return null;
+  if (isApiError(error)) {
+    if (error.code === "RECIPIENT_BLACKLISTED") return "mint.errBlacklisted";
+    if (isValidationError(error)) return "mint.errValidation";
+    if (error.code === "MINT_DISABLED") return "mint.errDisabled";
+    if (error.status === 403) return "mint.errGate"; // EMAIL/KYC/SUSPENDED gating
+  }
+  return "mint.errGeneric";
+}
 
 export function useMint() {
   const store = useMintStore();
   const queryClient = useQueryClient();
+  const rateQuery = useConsumerRate();
 
-  const amountError = store.amount ? validateAmount(store.amount, "mint") : null;
+  const effectiveBuyRate = rateQuery.data ? Number(rateQuery.data.effectiveBuyRate) : null;
+  const enteredAmount = parseAmount(store.amount);
+
+  // Derive the USDX amount + IDR subtotal from the entered currency + live rate.
+  // "Anda akan bayar" = subtotal (before fee; fee is shown at checkout).
+  const { amountUsdx, subtotalIdr } = useMemo(() => {
+    if (!effectiveBuyRate || enteredAmount <= 0) return { amountUsdx: 0, subtotalIdr: 0 };
+    return store.amountCurrency === "USD"
+      ? { amountUsdx: enteredAmount, subtotalIdr: enteredAmount * effectiveBuyRate }
+      : { amountUsdx: enteredAmount / effectiveBuyRate, subtotalIdr: enteredAmount };
+  }, [enteredAmount, store.amountCurrency, effectiveBuyRate]);
+
+  // Validate the USDX amount against the mint min/max. A USD input is itself the
+  // USDX amount; an IDR input needs the rate to convert first (skip until loaded).
+  const amountError = !store.amount
+    ? null
+    : store.amountCurrency === "USD"
+      ? validateAmount(store.amount, "mint")
+      : effectiveBuyRate
+        ? validateAmount(String(amountUsdx), "mint")
+        : null;
+
   const addressError = store.destinationAddress
     ? validateAddress(store.destinationAddress)
     : null;
 
-  const parsedAmount = parseAmount(store.amount);
-  // Mint USDX, pay in IDR (per Figma).
-  const paymentAmountIdr = parsedAmount * USD_TO_IDR_RATE;
-  const fee = parsedAmount * MINTING_FEE_PERCENT;
-  const receiveAmount = parsedAmount;
   const selectedChain = useMemo(() => getChainById(store.chainId), [store.chainId]);
 
   const isFormValid =
     store.amount !== "" &&
     store.destinationAddress !== "" &&
     !amountError &&
-    !addressError;
+    !addressError &&
+    effectiveBuyRate != null &&
+    amountUsdx > 0;
 
-  const createMintMutation = useMutation({
+  const createMutation = useMutation({
     mutationFn: () =>
-      mockCreateMint({
-        chainId: store.chainId,
-        amount: parsedAmount,
-        destinationAddress: store.destinationAddress,
+      createMintOrder({
+        userAddress: store.destinationAddress.trim(),
+        // Backend interprets `amount` by `amountCurrency`: USD = USDX amount,
+        // IDR = subtotal (mint value). Pass the raw input either way.
+        amount: store.amount.trim(),
+        amountCurrency: store.amountCurrency,
+        chain: store.chainId,
       }),
-    onSuccess: () => {
+    onSuccess: async (order) => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      // Cross-origin handoff ke checkout own-hosted (repo `checkout`). location.href
+      // (push, bukan replace) → tombol "Kembali" di checkout balik ke /mint. Auth =
+      // one-time code lewat URL hash `#code=` (USDX-378, WSTG-CLNT-12): backend
+      // menerbitkan authorization code sekali-pakai (TTL 60 detik) via
+      // POST /api/v2/auth/checkout-token; checkout menukarnya (exchange) jadi sesi
+      // sendiri lalu strip URL. Token sesi app TIDAK dibaca dari storage untuk
+      // handoff (CLNT-12), dan URL tidak lagi membawa bearer 30-hari — replay dari
+      // history/screenshot mati karena code kedaluwarsa 60 detik & sekali-pakai.
+      let hash = "";
+      try {
+        const handoffCode = await mintCheckoutCode();
+        hash = `#code=${encodeURIComponent(handoffCode)}`;
+      } catch {
+        // Gagal terbitkan code → tetap redirect; checkout minta login sendiri
+        // (graceful degradation, sama seperti perilaku token-absent sebelumnya).
+      }
+      window.location.href = `${env.checkoutUrl}/checkout/${order.id}${hash}`;
     },
   });
 
-  function goToConfirmation() {
-    if (isFormValid) store.setStep("confirmation");
-  }
-
-  function backToForm() {
-    store.setStep("form");
-  }
-
-  async function proceedPayment() {
-    const order = await createMintMutation.mutateAsync();
-    store.setResult(order);
-    store.setStep("status");
+  function toggleCurrency() {
+    store.setAmountCurrency(store.amountCurrency === "USD" ? "IDR" : "USD");
   }
 
   return {
-    ...store,
+    // form fields
+    amount: store.amount,
+    setAmount: store.setAmount,
+    amountCurrency: store.amountCurrency,
+    setAmountCurrency: store.setAmountCurrency,
+    toggleCurrency,
+    destinationAddress: store.destinationAddress,
+    setDestinationAddress: store.setDestinationAddress,
+    chainId: store.chainId,
+    selectedChain,
+    reset: store.reset,
+    // rate
+    rate: rateQuery.data ?? null,
+    effectiveBuyRate,
+    isRateLoading: rateQuery.isLoading,
+    isRateError: rateQuery.isError,
+    // derived amounts
+    enteredAmount,
+    amountUsdx,
+    subtotalIdr,
+    // validation
     amountError,
     addressError,
-    parsedAmount,
-    paymentAmountIdr,
-    exchangeRateIdr: USD_TO_IDR_RATE,
-    fee,
-    receiveAmount,
-    selectedChain,
     isFormValid,
-    goToConfirmation,
-    backToForm,
-    proceedPayment,
-    isCreating: createMintMutation.isPending,
-    mintOrder: createMintMutation.data,
+    // submit (create order → redirect to checkout)
+    submitMint: () => createMutation.mutateAsync(),
+    isCreating: createMutation.isPending,
+    createErrorKey: mintErrorKey(createMutation.error),
+    resetCreateError: createMutation.reset,
   };
 }

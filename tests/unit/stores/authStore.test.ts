@@ -4,14 +4,20 @@ import type { User } from "@/types";
 
 const mockUser: User = {
   id: "usr_1",
-  fullName: "Test User",
+  name: "Test User",
   email: "test@example.com",
-  isVerified: true,
+  phone: "+628123456789",
+  entityType: "INDIVIDUAL",
+  kycStatus: "VERIFIED",
+  suspended: false,
+  emailVerifiedAt: "2026-01-01T00:00:00Z",
   createdAt: "2026-01-01T00:00:00Z",
+  updatedAt: "2026-01-01T00:00:00Z",
 };
 
 describe("authStore", () => {
   beforeEach(() => {
+    localStorage.clear();
     useAuthStore.setState({
       user: null,
       token: null,
@@ -46,6 +52,36 @@ describe("authStore", () => {
     });
   });
 
+  describe("persistence (CLNT-12, USDX-357)", () => {
+    test("the session token is NEVER written to localStorage", () => {
+      useAuthStore.getState().setAuth(mockUser, "secret-session-token");
+
+      const raw = localStorage.getItem("usdx-auth");
+      expect(raw).toBeTruthy();
+      const persisted = JSON.parse(raw as string) as {
+        state: { token?: unknown; user?: unknown; isAuthenticated?: unknown };
+      };
+      // Token stays in-memory only — a stolen localStorage snapshot yields no credential.
+      expect(persisted.state.token ?? null).toBeNull();
+      // Non-credential fields still persist so a reload doesn't flash the login screen.
+      expect(persisted.state.user).toBeTruthy();
+      expect(persisted.state.isAuthenticated).toBe(true);
+    });
+
+    test("the raw persisted blob does not contain the token string anywhere", () => {
+      useAuthStore.getState().setAuth(mockUser, "super-secret-abc123");
+      const raw = localStorage.getItem("usdx-auth") ?? "";
+      expect(raw).not.toContain("super-secret-abc123");
+    });
+
+    test("setAuth still exposes the token in-memory for same-tab bearer fallback", () => {
+      useAuthStore.getState().setAuth(mockUser, "in-mem-token");
+      // In-memory state keeps the token (cross-site preview bearer fallback); only
+      // persistence drops it.
+      expect(useAuthStore.getState().token).toBe("in-mem-token");
+    });
+  });
+
   describe("edge cases", () => {
     test("double logout does not error", () => {
       useAuthStore.getState().logout();
@@ -55,9 +91,9 @@ describe("authStore", () => {
 
     test("setAuth overwrites previous auth", () => {
       useAuthStore.getState().setAuth(mockUser, "token-1");
-      const newUser = { ...mockUser, id: "usr_2", fullName: "New User" };
+      const newUser = { ...mockUser, id: "usr_2", name: "New User" };
       useAuthStore.getState().setAuth(newUser, "token-2");
-      expect(useAuthStore.getState().user?.fullName).toBe("New User");
+      expect(useAuthStore.getState().user?.name).toBe("New User");
       expect(useAuthStore.getState().token).toBe("token-2");
     });
   });

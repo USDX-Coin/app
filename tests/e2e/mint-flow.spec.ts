@@ -1,82 +1,69 @@
 import { test, expect } from "@playwright/test";
-import { clearAuth } from "../helpers/playwright-utils";
+import { clearAuth, forceEnglish } from "../helpers/playwright-utils";
+
+const VALID_ADDRESS = "0xabcdef1234567890abcdef1234567890abcdef12";
 
 async function login(page: import("@playwright/test").Page) {
+  await forceEnglish(page);
   await page.goto("/login");
   await clearAuth(page);
   await page.goto("/login");
-  await expect(page.getByText("Welcome Back")).toBeVisible({ timeout: 15000 });
-  await page.getByPlaceholder("Email").fill("demo@usdx.com");
-  await page.getByPlaceholder("Password").fill("Demo1234");
+  await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible({ timeout: 15000 });
+  await page.getByPlaceholder("you@email.com").fill("demo@usdx.com");
+  await page.getByPlaceholder("••••••••").fill("Demo1234");
   await page.getByRole("button", { name: "Login" }).click();
-  await expect(page.getByText("You will mint")).toBeVisible({
-    timeout: 30000,
-  });
+  await expect(page.getByText("You will mint")).toBeVisible({ timeout: 30000 });
 }
 
 test.describe("Mint Flow", () => {
   test.describe("positive", () => {
-    test("complete mint flow: form -> review -> payment -> success", async ({
+    test("complete mint flow: form -> Ringkasan modal -> redirect handoff to checkout", async ({
       page,
     }) => {
       await login(page);
 
-      // Fill mint form
-      await page.getByPlaceholder("Amount").first().fill("250");
-      await page
-        .getByPlaceholder("Destination Address")
-        .fill("0xabcdef1234567890abcdef1234567890abcdef12");
-      await page.getByRole("button", { name: "Review Mint" }).click();
+      // Checkout lives in a separate repo/origin (mint.usdx.co.id) — stub it so the
+      // cross-origin handoff lands on a controllable page, not the real site.
+      await page.route("https://mint.usdx.co.id/**", (route) =>
+        route.fulfill({ status: 200, contentType: "text/html", body: "<h1>checkout</h1>" }),
+      );
 
-      // Verify review panel
-      await expect(page.getByText("Mint Detail")).toBeVisible();
-      await expect(page.getByText("250 USDX")).toBeVisible();
+      // Fill mint form
+      await page.getByPlaceholder("0", { exact: true }).fill("250");
+      await page.getByPlaceholder("Select destination address").fill(VALID_ADDRESS);
+      await page.getByRole("button", { name: "Mint", exact: true }).click();
+
+      // Ringkasan (review) modal
+      await expect(page.getByText("Transaction Summary")).toBeVisible();
+      await expect(page.getByText("250 USDX").first()).toBeVisible();
       await expect(page.getByText("0xabcd...ef12")).toBeVisible();
 
-      // Proceed to payment
+      // Proceed -> creates the order (POST /v2/mint) -> hands off (cross-origin) to
+      // mint.usdx.co.id/checkout/{orderId} (USDX-225).
       await page.getByRole("button", { name: "Proceed Payment" }).click();
-      await expect(page.getByText("Payment Gateway")).toBeVisible({
-        timeout: 15000,
-      });
-      await expect(page.getByText("$250", { exact: true }).first()).toBeVisible();
-
-      // Pay
-      await page.getByRole("button", { name: /Pay/ }).click();
-      await expect(page.getByText("Payment Successful")).toBeVisible({
-        timeout: 15000,
-      });
-
-      // Go back to mint
-      await page.getByRole("button", { name: "Back to Mint" }).click();
-      await expect(page.getByText("You will mint")).toBeVisible({
-        timeout: 15000,
-      });
+      await page.waitForURL(/^https:\/\/mint\.usdx\.co\.id\/checkout\/mint_/, { timeout: 15000 });
     });
   });
 
   test.describe("negative", () => {
     test("cannot proceed with invalid form", async ({ page }) => {
       await login(page);
-      await expect(
-        page.getByRole("button", { name: "Review Mint" })
-      ).toBeDisabled();
+      await expect(page.getByRole("button", { name: "Mint", exact: true })).toBeDisabled();
     });
   });
 
   test.describe("edge cases", () => {
-    test("can change amount after review", async ({ page }) => {
+    test("can cancel the Ringkasan modal and change amount", async ({ page }) => {
       await login(page);
-      await page.getByPlaceholder("Amount").first().fill("100");
-      await page
-        .getByPlaceholder("Destination Address")
-        .fill("0xabcdef1234567890abcdef1234567890abcdef12");
-      await page.getByRole("button", { name: "Review Mint" }).click();
-      await expect(page.getByText("Mint Detail")).toBeVisible();
+      await page.getByPlaceholder("0", { exact: true }).fill("100");
+      await page.getByPlaceholder("Select destination address").fill(VALID_ADDRESS);
+      await page.getByRole("button", { name: "Mint", exact: true }).click();
+      await expect(page.getByText("Transaction Summary")).toBeVisible();
 
-      // Click Change Amount
-      await page.getByRole("button", { name: "Change Amount" }).click();
-      // Review panel should disappear
-      await expect(page.getByText("Mint Detail")).not.toBeVisible();
+      // Cancel closes the modal, form stays
+      await page.getByRole("button", { name: "Cancel" }).click();
+      await expect(page.getByText("Transaction Summary")).not.toBeVisible();
+      await expect(page.getByText("You will mint")).toBeVisible();
     });
   });
 });

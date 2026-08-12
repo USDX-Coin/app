@@ -2,11 +2,11 @@ import { describe, test, expect } from "vitest";
 import {
   mockLogin,
   mockRegister,
+  mockChangePassword,
   mockGetTransactions,
   mockCreateMint,
   mockCreateRedeem,
   mockGetBankAccounts,
-  mockGetWalletBalance,
 } from "@/lib/api/mock-api";
 
 describe("mockLogin", () => {
@@ -47,15 +47,18 @@ describe("mockLogin", () => {
 
 describe("mockRegister", () => {
   describe("positive", () => {
-    test("creates new user and returns auth response", async () => {
+    test("registers a new account and returns the email (no session yet)", async () => {
+      const email = `test-${Date.now()}@test.com`;
       const result = await mockRegister({
-        fullName: "Test User",
-        email: `test-${Date.now()}@test.com`,
+        email,
         password: "TestPass1",
+        confirmPassword: "TestPass1",
+        phone: "081234567890",
+        entityType: "INDIVIDUAL",
+        agreeToS: true,
       });
-      expect(result.user).toBeDefined();
-      expect(result.user.fullName).toBe("Test User");
-      expect(result.token).toContain("mock-jwt-token");
+      // Register no longer auto-logs in — user must verify email first.
+      expect(result.email).toBe(email);
     });
   });
 
@@ -63,9 +66,12 @@ describe("mockRegister", () => {
     test("throws error for duplicate email", async () => {
       await expect(
         mockRegister({
-          fullName: "Dup",
           email: "demo@usdx.com",
           password: "Pass1234",
+          confirmPassword: "Pass1234",
+          phone: "081234567890",
+          entityType: "INDIVIDUAL",
+          agreeToS: true,
         })
       ).rejects.toThrow("Email already registered");
     });
@@ -141,14 +147,14 @@ describe("mockGetTransactions", () => {
     test("returns array of transactions", async () => {
       const txs = await mockGetTransactions();
       expect(Array.isArray(txs)).toBe(true);
-      expect(txs.length).toBe(10);
+      expect(txs.length).toBe(96);
     });
 
     test("each transaction has required fields", async () => {
       const txs = await mockGetTransactions();
       for (const tx of txs) {
         expect(tx.id).toBeTruthy();
-        expect(["mint", "redeem"]).toContain(tx.type);
+        expect(["mint", "redeem", "bridge", "send"]).toContain(tx.type);
         expect(tx.amount).toBeGreaterThan(0);
         expect(tx.chainId).toBeTruthy();
         expect(["completed", "pending", "failed"]).toContain(tx.status);
@@ -171,11 +177,75 @@ describe("mockGetBankAccounts", () => {
   });
 });
 
-describe("mockGetWalletBalance", () => {
+describe("mockChangePassword", () => {
   describe("positive", () => {
-    test("returns consistent balance", async () => {
-      const balance = await mockGetWalletBalance();
-      expect(balance).toBe(5000);
+    test("changes the password when current is correct; new password then logs in", async () => {
+      await expect(
+        mockChangePassword({
+          currentPassword: "Demo1234",
+          newPassword: "NewPass1",
+          confirmNewPassword: "NewPass1",
+        }),
+      ).resolves.toBeUndefined();
+
+      const result = await mockLogin({ email: "demo@usdx.com", password: "NewPass1" });
+      expect(result.user.email).toBe("demo@usdx.com");
+
+      // Restore the demo secret so other suites keep working (module-scope state).
+      await mockChangePassword({
+        currentPassword: "NewPass1",
+        newPassword: "Demo1234",
+        confirmNewPassword: "Demo1234",
+      });
+    });
+  });
+
+  describe("negative", () => {
+    test("throws 401 INVALID_CREDENTIALS for a wrong current password", async () => {
+      await expect(
+        mockChangePassword({
+          currentPassword: "WrongPass1",
+          newPassword: "NewPass1",
+          confirmNewPassword: "NewPass1",
+        }),
+      ).rejects.toMatchObject({ status: 401, code: "INVALID_CREDENTIALS" });
+    });
+
+    test("throws 400 WEAK_PASSWORD for a new password below policy", async () => {
+      await expect(
+        mockChangePassword({
+          currentPassword: "Demo1234",
+          newPassword: "weak",
+          confirmNewPassword: "weak",
+        }),
+      ).rejects.toMatchObject({ status: 400, code: "WEAK_PASSWORD" });
+    });
+
+    test("throws 400 PASSWORD_MISMATCH when confirmation differs", async () => {
+      await expect(
+        mockChangePassword({
+          currentPassword: "Demo1234",
+          newPassword: "NewPass1",
+          confirmNewPassword: "NewPass2",
+        }),
+      ).rejects.toMatchObject({ status: 400, code: "PASSWORD_MISMATCH" });
+    });
+  });
+
+  describe("edge cases", () => {
+    test("honors the usdx-mock-retry-after 429 seam (USDX-167)", async () => {
+      localStorage.setItem("usdx-mock-retry-after", "300");
+      try {
+        await expect(
+          mockChangePassword({
+            currentPassword: "Demo1234",
+            newPassword: "NewPass1",
+            confirmNewPassword: "NewPass1",
+          }),
+        ).rejects.toMatchObject({ status: 429, retryAfterSeconds: 300 });
+      } finally {
+        localStorage.removeItem("usdx-mock-retry-after");
+      }
     });
   });
 });

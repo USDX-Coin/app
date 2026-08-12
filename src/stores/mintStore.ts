@@ -1,35 +1,34 @@
 import { create } from "zustand";
-import type { MintStep, MintOrder } from "@/types";
-import { DEFAULT_CHAIN_ID } from "@/lib/chains";
+import type { AmountCurrency } from "@/types";
+import { MINT_CHAIN_ID } from "@/lib/constants";
 
+// Mint form state (USDX-201). The review (Ringkasan) is now a modal and the
+// post-create flow hands off (cross-origin) to the own-hosted checkout repo
+// (mint.usdx.co.id, USDX-225), so the old form→confirmation→status machine is gone.
+// `chainId` is fixed to Polygon in Phase 2 (week2.md § Chain) — kept in state so
+// the create request carries it, but there's no chain picker in the UI.
 interface MintState {
-  step: MintStep;
   chainId: string;
   amount: string;
+  amountCurrency: AmountCurrency; // currency the user typed the amount in
   destinationAddress: string;
-  result: MintOrder | null;
-  setStep: (step: MintStep) => void;
-  setChainId: (chainId: string) => void;
   setAmount: (amount: string) => void;
+  setAmountCurrency: (currency: AmountCurrency) => void;
   setDestinationAddress: (address: string) => void;
-  setResult: (result: MintOrder) => void;
   reset: () => void;
 }
 
 const initialState = {
-  step: "form" as MintStep,
-  chainId: DEFAULT_CHAIN_ID,
+  chainId: MINT_CHAIN_ID,
   amount: "",
+  amountCurrency: "USD" as AmountCurrency,
   destinationAddress: "",
-  result: null as MintOrder | null,
 };
 
 export const useMintStore = create<MintState>()((set) => ({
   ...initialState,
-  setStep: (step) => set({ step }),
-  setChainId: (chainId) => set({ chainId }),
   setAmount: (amount) => set({ amount }),
+  setAmountCurrency: (amountCurrency) => set({ amountCurrency }),
   setDestinationAddress: (address) => set({ destinationAddress: address }),
-  setResult: (result) => set({ result }),
   reset: () => set(initialState),
 }));

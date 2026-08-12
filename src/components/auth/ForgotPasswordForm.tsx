@@ -7,13 +7,25 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { validateEmail } from "@/lib/validations";
 import { FieldError } from "@/components/ui/field-error";
+import { useAuth } from "@/hooks/useAuth";
+import { useCooldown, DEFAULT_COOLDOWN_SECONDS } from "@/hooks/useCooldown";
+import { useLang } from "@/providers/LanguageProvider";
+import { getErrorMessage, getRateLimitSeconds, isValidationError } from "@/lib/api/errors";
+import { formatDuration } from "@/lib/utils";
+import { toast } from "sonner";
 
 export function ForgotPasswordForm() {
+  const { t, lang } = useLang();
+  const { forgotPassword, forgotPasswordLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const cooldown = useCooldown();
 
-  function handleSubmit(e: React.FormEvent) {
+  // {email} slot lets each language place the address naturally in the sentence.
+  const [checkBefore, checkAfter] = t("auth.forgot.checkBody").split("{email}");
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const emailErr = validateEmail(email);
     if (emailErr) {
@@ -21,7 +33,26 @@ export function ForgotPasswordForm() {
       return;
     }
     setError("");
-    setSubmitted(true);
+    try {
+      // Backend returns a generic 200 even for unknown emails (avoid enumeration),
+      // so we always advance to the check-email screen on success.
+      await forgotPassword({ email });
+      setSubmitted(true);
+    } catch (err) {
+      const retryAfter = getRateLimitSeconds(err);
+      if (retryAfter !== null) {
+        cooldown.start(retryAfter > 0 ? retryAfter : DEFAULT_COOLDOWN_SECONDS);
+        toast.error(t("auth.forgot.tooMany"));
+        return;
+      }
+      // 422 VALIDATION_ERROR (invalid email body) → inline on the field, not a
+      // toast (USDX-214; client-side email validation usually catches it first).
+      if (isValidationError(err)) {
+        setError(getErrorMessage(err, t("auth.forgot.failed")));
+        return;
+      }
+      toast.error(getErrorMessage(err, t("auth.forgot.failed")));
+    }
   }
 
   if (submitted) {
@@ -32,13 +63,15 @@ export function ForgotPasswordForm() {
             <span className="text-3xl">✉</span>
           </div>
         </div>
-        <h1 className="text-2xl font-bold text-primary mb-2">Check Your Email</h1>
+        <h1 className="text-2xl font-bold text-primary mb-2">{t("auth.forgot.checkTitle")}</h1>
         <p className="text-sm text-muted-foreground mb-6">
-          We&apos;ve sent a password reset link to <strong>{email}</strong>
+          {checkBefore}
+          <strong>{email}</strong>
+          {checkAfter}
         </p>
         <Link href="/login">
           <Button variant="outline" className="w-full">
-            Back to Login
+            {t("auth.backToLogin")}
           </Button>
         </Link>
       </div>
@@ -47,18 +80,16 @@ export function ForgotPasswordForm() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-primary mb-1">Forgot Password</h1>
-      <p className="text-sm text-muted-foreground mb-8">
-        Enter your email and we&apos;ll send you a reset link.
-      </p>
+      <h1 className="text-2xl font-bold text-primary mb-1">{t("auth.forgot.title")}</h1>
+      <p className="text-sm text-muted-foreground mb-8">{t("auth.forgot.subtitle")}</p>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <Label htmlFor="email">Email Address</Label>
+          <Label htmlFor="email">{t("auth.email")}</Label>
           <Input
             id="email"
             type="email"
-            placeholder="Enter your email"
+            placeholder={t("auth.forgot.emailPh")}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="mt-1.5 bg-transparent dark:bg-transparent"
@@ -67,15 +98,23 @@ export function ForgotPasswordForm() {
           <FieldError message={error || undefined} />
         </div>
 
-        <Button type="submit" className="w-full bg-linear-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary-700">
-          Send Reset Link
+        <Button
+          type="submit"
+          disabled={forgotPasswordLoading || cooldown.active}
+          className="w-full bg-linear-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary-700"
+        >
+          {cooldown.active
+            ? t("auth.tryAgainIn", { duration: formatDuration(cooldown.remaining, lang) })
+            : forgotPasswordLoading
+              ? t("auth.forgot.sending")
+              : t("auth.forgot.submit")}
         </Button>
       </form>
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
-        Remember your password?{" "}
+        {t("auth.forgot.remember")}{" "}
         <Link href="/login" className="text-primary underline">
-          Login
+          {t("auth.forgot.loginLink")}
         </Link>
       </p>
     </div>

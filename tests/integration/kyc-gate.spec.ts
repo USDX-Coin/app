@@ -7,9 +7,10 @@ import {
 } from "../helpers/playwright-utils";
 
 // USDX-153: KYC status tracker on /mint (dashboard home) + transaction action
-// gate. Pages stay fully explorable; the primary action (mint/redeem/bridge/
-// send) opens a per-status dialog until kyc_status = VERIFIED. Status is seeded
-// through the mock seam (usdx-mock-kyc-status) + the persisted auth user.
+// gate. Pages stay fully explorable; the primary action (mint/redeem) opens a
+// per-status dialog until kyc_status = VERIFIED. Status is seeded through the
+// mock seam (usdx-mock-kyc-status) + the persisted auth user. Bridge/Send are
+// ComingSoon-gated, so they have no primary action to gate.
 
 const VALID_ADDRESS = "0xabcdef1234567890abcdef1234567890abcdef12";
 type Status = "UNVERIFIED" | "PENDING" | "VERIFIED" | "REJECTED";
@@ -125,26 +126,34 @@ test.describe("Transaction Action Gate", () => {
       await expect(page).toHaveURL(/\/kyc$/);
     });
 
-    test("redeem, bridge, and send actions are gated too", async ({ page }) => {
+    test("redeem action is gated too", async ({ page }) => {
       await gotoWithStatus(page, "UNVERIFIED", "/redeem");
       await page
         .getByRole("button", { name: "Redeem", exact: true })
         .click({ timeout: 15000 });
       await expect(dialog(page)).toContainText("Complete KYC first");
-      await page.keyboard.press("Escape");
+    });
 
-      await page.goto("/bridge");
-      await page
-        .getByRole("button", { name: "Bridge", exact: true })
-        .click({ timeout: 15000 });
-      await expect(dialog(page)).toContainText("Complete KYC first");
-      await page.keyboard.press("Escape");
+    // Bridge and Send are gated behind ComingSoon until their backends exist —
+    // the old forms faked success locally without any API call.
+    test("bridge and send render ComingSoon instead of the fake forms", async ({
+      page,
+    }) => {
+      await gotoWithStatus(page, "VERIFIED", "/bridge");
+      await expect(
+        page.getByText("Coming soon", { exact: true })
+      ).toBeVisible({ timeout: 15000 });
+      await expect(
+        page.getByRole("button", { name: "Bridge", exact: true })
+      ).toHaveCount(0);
 
       await page.goto("/send");
-      await page
-        .getByRole("button", { name: "Send", exact: true })
-        .click({ timeout: 15000 });
-      await expect(dialog(page)).toContainText("Complete KYC first");
+      await expect(
+        page.getByText("Coming soon", { exact: true })
+      ).toBeVisible({ timeout: 15000 });
+      await expect(
+        page.getByRole("button", { name: "Send", exact: true })
+      ).toHaveCount(0);
     });
   });
 

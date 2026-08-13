@@ -25,7 +25,7 @@ tests/
     profile.spec.ts     # User info display
   e2e/                  # Playwright — full user flows
     auth-flow.spec.ts   # Register -> logout -> login
-    mint-flow.spec.ts   # Login -> mint -> review -> payment -> success
+    mint-flow.spec.ts   # Login -> mint -> review -> cross-origin checkout handoff
     redeem-flow.spec.ts # Login -> redeem -> connect wallet prompt
 ```
 

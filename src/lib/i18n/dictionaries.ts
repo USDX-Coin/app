@@ -190,6 +190,8 @@ const en: Dict = {
   "soon.help": "Help center is coming soon.",
   "soon.support": "Support is coming soon.",
   "soon.settings": "Settings are coming soon.",
+  "soon.bridge": "Bridging between networks is coming soon.",
+  "soon.send": "Sending USDX to another address is coming soon.",
   // toast
   "toast.bridgeSubmitted": "Bridge request submitted",
   "toast.sendSubmitted": "Send request submitted",
@@ -647,6 +649,8 @@ const id: Dict = {
   "soon.help": "Pusat bantuan segera hadir.",
   "soon.support": "Dukungan segera hadir.",
   "soon.settings": "Pengaturan segera hadir.",
+  "soon.bridge": "Bridge antar jaringan segera hadir.",
+  "soon.send": "Kirim USDX ke alamat lain segera hadir.",
   "toast.bridgeSubmitted": "Permintaan bridge terkirim",
   "toast.sendSubmitted": "Permintaan kirim terkirim",
   "toast.redeemSubmitted": "Permintaan redeem terkirim",

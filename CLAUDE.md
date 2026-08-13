@@ -151,8 +151,8 @@ Test helpers in `tests/helpers/`:
 | `/redeem` | Yes | SC | Redeem USDX to bank |
 | `/history` | Yes | SC | Transaction history (mint + redeem, W3) |
 | `/profile` | Yes | SC | User info + verification badge |
-| `/bridge` | Yes | SC | ComingSoon (gated — no bridge backend yet) |
-| `/send` | Yes | SC | ComingSoon (gated — no send backend yet) |
+| `/bridge` | Yes | SC | ComingSoon (gated — no bridge backend yet; sidebar teaser) |
+| `/send` | Yes | SC | ComingSoon (gated — no send backend yet; sidebar teaser) |
 
 ## Known Limitations
 
@@ -165,8 +165,10 @@ Test helpers in `tests/helpers/`:
   simulated even against the real backend (`redeemSimulatedPayout`, USDX-263) —
   the tracker shows a "Mode simulasi" notice
 - Bridge and Send are **ComingSoon-gated**: their old UIs faked success locally
-  (`bridge_/send_<timestamp>`, no API call), so the routes now render `ComingSoon`
-  and the sidebar hides both items. The form components still exist under
+  (`bridge_/send_<timestamp>`, no API call), so the routes now render `ComingSoon`.
+  The sidebar **keeps both items visible** as promotion teasers (PM, 13 Aug) —
+  icon + a `nav.soon` pill ("Coming Soon" / "Segera Hadir"), clicking lands on
+  the ComingSoon page. The form components still exist under
   `components/bridge/` and `components/send/` but are unreferenced
 - The `/payment` mock gateway route was deleted (it faked "Payment Successful" with a
   `setTimeout`); the real mint flow uses the cross-origin checkout handoff

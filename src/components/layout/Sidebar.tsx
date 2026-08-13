@@ -5,6 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Coins,
   ArrowDownToLine,
+  ArrowLeftRight,
+  ArrowUp,
   History,
   CircleHelp,
   Headset,
@@ -17,6 +19,7 @@ import {
   Check,
   type LucideIcon,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { cn, formatAmount } from "@/lib/utils";
 import { useWalletBalance } from "@/hooks/useWalletBalance";
 import { useAuthStore } from "@/stores/authStore";
@@ -35,14 +38,20 @@ interface NavItem {
   href: string;
   labelKey: string;
   icon: LucideIcon;
+  /** Renders a "Coming Soon" pill; the route serves `ComingSoon`, not a form. */
+  comingSoon?: boolean;
 }
 
-// Bridge and Send are hidden until their backends exist — the old UIs faked
-// success locally (bridge_/send_<timestamp>, no API call), which real KYC'd
-// users could mistake for actual transfers. Routes stay but render ComingSoon.
+// Bridge and Send have no backend yet — their old UIs faked success locally
+// (bridge_/send_<timestamp>, no API call), so the routes render ComingSoon.
+// The nav items stay VISIBLE on purpose (PM decision, 13 Aug): they promote the
+// upcoming features. The pill is what keeps that honest — it announces the
+// teaser before the click, so nobody lands on ComingSoon expecting a transfer.
 const transactionItems: NavItem[] = [
   { href: "/mint", labelKey: "nav.mint", icon: Coins },
   { href: "/redeem", labelKey: "nav.redeem", icon: ArrowDownToLine },
+  { href: "/bridge", labelKey: "nav.bridge", icon: ArrowLeftRight, comingSoon: true },
+  { href: "/send", labelKey: "nav.send", icon: ArrowUp, comingSoon: true },
 ];
 
 // /kyc is intentionally not a nav item (USDX-153): users reach it via the status
@@ -70,6 +79,23 @@ function NavLink({ item, active, onNavigate }: { item: NavItem; active: boolean;
     >
       <Icon className="size-[18px] shrink-0" />
       <span>{t(item.labelKey)}</span>
+      {item.comingSoon && (
+        // A plain <span> (shadcn Badge renders one), so the link keeps exactly
+        // one tab stop and the pill text joins its accessible name —
+        // "Bridge Coming Soon, link". Colors follow the row's own state so the
+        // pill stays legible on the brand gradient when the route is active.
+        <Badge
+          variant="outline"
+          className={cn(
+            "ml-auto px-1.5 py-0 text-[10px] leading-[18px]",
+            active
+              ? "border-white/50 bg-white/15 text-white"
+              : "border-border bg-muted text-sidebar-muted"
+          )}
+        >
+          {t("nav.soon")}
+        </Badge>
+      )}
     </Link>
   );
 }

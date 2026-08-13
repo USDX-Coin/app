@@ -28,6 +28,10 @@ const en: Dict = {
   "nav.help": "Help",
   "nav.support": "Support",
   "nav.settings": "Settings",
+  // Sidebar pill on nav items whose route serves ComingSoon (Bridge, Send).
+  // Title-cased on purpose: it is a chrome micro-label, not the sentence-cased
+  // `common.comingSoon` line the ComingSoon page prints.
+  "nav.soon": "Coming Soon",
   // breadcrumb / titles
   "crumb.transaction": "Transaction",
   "crumb.confirmation": "Confirmation",
@@ -494,6 +498,7 @@ const id: Dict = {
   "nav.help": "Bantuan",
   "nav.support": "Dukungan",
   "nav.settings": "Pengaturan",
+  "nav.soon": "Segera Hadir",
   "crumb.transaction": "Transaksi",
   "crumb.confirmation": "Konfirmasi",
   "crumb.status": "Status",

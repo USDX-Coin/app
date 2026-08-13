@@ -135,24 +135,28 @@ test.describe("Transaction Action Gate", () => {
     });
 
     // Bridge and Send are gated behind ComingSoon until their backends exist —
-    // the old forms faked success locally without any API call.
+    // the old forms faked success locally without any API call. Scoped to
+    // <main>: the sidebar keeps both items as "Coming Soon" teasers, so the
+    // phrase also appears in the page chrome (see sidebar-nav.spec.ts).
     test("bridge and send render ComingSoon instead of the fake forms", async ({
       page,
     }) => {
+      const main = page.getByRole("main");
+
       await gotoWithStatus(page, "VERIFIED", "/bridge");
       await expect(
-        page.getByText("Coming soon", { exact: true })
+        main.getByText("Coming soon", { exact: true })
       ).toBeVisible({ timeout: 15000 });
       await expect(
-        page.getByRole("button", { name: "Bridge", exact: true })
+        main.getByRole("button", { name: "Bridge", exact: true })
       ).toHaveCount(0);
 
       await page.goto("/send");
       await expect(
-        page.getByText("Coming soon", { exact: true })
+        main.getByText("Coming soon", { exact: true })
       ).toBeVisible({ timeout: 15000 });
       await expect(
-        page.getByRole("button", { name: "Send", exact: true })
+        main.getByRole("button", { name: "Send", exact: true })
       ).toHaveCount(0);
     });
   });

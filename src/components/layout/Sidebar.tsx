@@ -5,8 +5,6 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Coins,
   ArrowDownToLine,
-  ArrowLeftRight,
-  ArrowUp,
   History,
   CircleHelp,
   Headset,
@@ -39,11 +37,12 @@ interface NavItem {
   icon: LucideIcon;
 }
 
+// Bridge and Send are hidden until their backends exist — the old UIs faked
+// success locally (bridge_/send_<timestamp>, no API call), which real KYC'd
+// users could mistake for actual transfers. Routes stay but render ComingSoon.
 const transactionItems: NavItem[] = [
   { href: "/mint", labelKey: "nav.mint", icon: Coins },
   { href: "/redeem", labelKey: "nav.redeem", icon: ArrowDownToLine },
-  { href: "/bridge", labelKey: "nav.bridge", icon: ArrowLeftRight },
-  { href: "/send", labelKey: "nav.send", icon: ArrowUp },
 ];
 
 // /kyc is intentionally not a nav item (USDX-153): users reach it via the status
@@ -215,6 +214,10 @@ export function Sidebar({
         </div>
         <button
           type="button"
+          onClick={() => {
+            router.push("/mint");
+            onNavigate?.();
+          }}
           className="brand-dark-gradient relative flex h-[38px] w-full items-center justify-center rounded-lg px-4 text-sm font-medium text-white"
         >
           {t("sidebar.getUsdx")}

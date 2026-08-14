@@ -86,6 +86,21 @@ Pages are Server Components that render Client Component wrappers:
 - `WalletProviders.tsx`: RainbowKit + Wagmi (dashboard layout only)
 - Auth pages don't load wallet JavaScript (~250KB savings)
 
+### Dashboard Shell Layout
+`(dashboard)/layout.tsx` owns the **single** scroll area — the rounded card. The
+page padding lives on an inner `flex min-h-full flex-col px-5 pt-5 pb-8 …`
+wrapper, never on the scroller itself, so long pages keep their bottom padding
+and short pages don't get a phantom scrollbar. Rules for page roots:
+- Grow with content — use `flex-1`, never `h-full` (a fixed-height page box
+  unsticks the header and swallows the bottom padding)
+- Self-centering roots (`mx-auto max-w-*`) also need `w-full`: they are flex
+  items, and auto cross-margins cancel the default stretch
+- The page heading is the **first** element in the root and carries
+  `PAGE_HEADING_STICKY` (`components/shared/PageHeader.tsx`) so it stays pinned
+  while the body scrolls under it. `PageHeader` already includes it
+- Rows that center a card horizontally need `items-start`, otherwise the default
+  `stretch` pulls the card down to the bottom of the page
+
 ### Error Boundaries
 Per-route `error.tsx` files in each dashboard route. Uses Next.js App Router convention with `reset()` callback.
 

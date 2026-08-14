@@ -10,10 +10,12 @@ import { MintForm } from "@/components/mint/MintForm";
 
 export function MintPageContent() {
   return (
-    <div className="flex h-full flex-col gap-2">
+    <div className="flex flex-1 flex-col gap-2">
       <PageHeader crumbs={["crumb.transaction", "nav.mint"]} title="title.mint" />
       <KycStatusSection />
-      <div className="flex flex-1 justify-center pt-8">
+      {/* `items-start`: this row only centers horizontally — without it the
+          default `stretch` pulls the form card down to the bottom of the card. */}
+      <div className="flex flex-1 items-start justify-center pt-8">
         <MintForm />
       </div>
     </div>

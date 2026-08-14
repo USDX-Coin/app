@@ -5,9 +5,10 @@ import { useAuthStore } from "@/stores/authStore";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ChangePasswordModal } from "@/components/profile/ChangePasswordModal";
+import { PAGE_HEADING_STICKY } from "@/components/shared/PageHeader";
 import { useLang } from "@/providers/LanguageProvider";
 import { LANGUAGES } from "@/lib/i18n/dictionaries";
-import { formatDate } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import { ShieldCheck, Mail, User, Calendar, BadgeCheck, Globe, Lock } from "lucide-react";
 
 export function ProfileCard() {
@@ -19,8 +20,13 @@ export function ProfileCard() {
   const activeLang = LANGUAGES.find((l) => l.value === lang) ?? LANGUAGES[0];
 
   return (
-    <div className="max-w-3xl mx-auto space-y-4">
-      <h1 className="text-2xl font-bold text-primary">{t("profile.title")}</h1>
+    // `w-full`: the page root is a flex item of the dashboard scroll wrapper and
+    // `mx-auto` cancels the default stretch, so the column would otherwise
+    // shrink to its content width.
+    <div className="w-full max-w-3xl mx-auto space-y-4">
+      <h1 className={cn(PAGE_HEADING_STICKY, "text-2xl font-bold text-primary")}>
+        {t("profile.title")}
+      </h1>
 
       {/* Personal Information */}
       <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">

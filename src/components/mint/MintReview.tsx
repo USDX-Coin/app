@@ -5,6 +5,11 @@
 // POST /v2/mint (create) then the hook hands off (cross-origin) to the checkout
 // repo at mint.usdx.co.id (USDX-225). Create errors (422 RECIPIENT_BLACKLISTED /
 // VALIDATION_ERROR, 503 MINT_DISABLED) surface inline.
+//
+// Confirm is gated on `isSubmitting` = creating OR handing off, not on
+// `isCreating` alone: the mutation settles back to idle while the cross-origin
+// navigation is still in flight, and a second click in that gap buys the same mint
+// twice. The gate is store-backed, so it survives closing and reopening the modal.
 
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useMint } from "@/hooks/useMint";
@@ -34,7 +39,7 @@ export function MintReview({ open, onOpenChange }: MintReviewProps) {
     subtotalIdr,
     effectiveBuyRate,
     submitMint,
-    isCreating,
+    isSubmitting,
     createErrorKey,
   } = useMint();
 
@@ -44,8 +49,15 @@ export function MintReview({ open, onOpenChange }: MintReviewProps) {
     submitMint().catch(() => {});
   }
 
+  // Escape / outside-click must not dismiss the modal mid-handoff — the order is
+  // already created and the page is leaving; let the redirect finish.
+  function handleOpenChange(next: boolean) {
+    if (!next && isSubmitting) return;
+    onOpenChange(next);
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[460px]">
         <DialogTitle className="text-base font-medium text-foreground">{t("sum.title")}</DialogTitle>
 
@@ -86,7 +98,7 @@ export function MintReview({ open, onOpenChange }: MintReviewProps) {
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            disabled={isCreating}
+            disabled={isSubmitting}
             className="flex h-[42px] flex-1 items-center justify-center rounded-lg border border-border text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50"
           >
             {t("common.cancel")}
@@ -94,10 +106,10 @@ export function MintReview({ open, onOpenChange }: MintReviewProps) {
           <button
             type="button"
             onClick={handleProceed}
-            disabled={isCreating}
+            disabled={isSubmitting}
             className="brand-gradient flex h-[42px] flex-1 items-center justify-center rounded-lg text-sm font-medium text-white transition-opacity disabled:opacity-50"
           >
-            {isCreating ? t("common.processing") : t("btn.proceedPayment")}
+            {isSubmitting ? t("common.processing") : t("btn.proceedPayment")}
           </button>
         </div>
       </DialogContent>

@@ -68,6 +68,14 @@ beforeEach(() => {
 ## Key Notes
 
 - Integration/E2E use **production build** (`pnpm build && pnpm start`) for speed
+- **bfcache specs** (`integration/mint-handoff-return.spec.ts`) need two launch
+  overrides, both already in that file: `ignoreDefaultArgs:
+  ["--disable-back-forward-cache"]` (Playwright disables bfcache by default) and
+  `channel: "chromium"` (the default `chrome-headless-shell` never restores from
+  bfcache — verified by probe). A back-navigation that restores from bfcache fires
+  no `load` event, so use `goBack({ waitUntil: "commit" })`. Any spec asserting a
+  restore must also assert `pageshow.persisted`, otherwise a silent fresh load
+  makes it pass while testing nothing
 - Unit tests mock all data — no network, no DOM rendering for store tests
 - Playwright tests use `{ timeout: 15000 }` on key assertions for SSR hydration
 - `type="email"` inputs have native browser validation — test with valid-format emails

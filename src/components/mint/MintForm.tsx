@@ -77,9 +77,12 @@ export function MintForm() {
     addressError,
     isFormValid,
     selectedChain,
+    // Ringkasan visibility is store state, not component state: the
+    // post-handoff reset has to be able to close it from outside React.
+    reviewOpen,
+    setReviewOpen,
   } = useMint();
 
-  const [reviewOpen, setReviewOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const gate = useKycGate();

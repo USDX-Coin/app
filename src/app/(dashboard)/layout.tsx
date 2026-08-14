@@ -105,8 +105,29 @@ export default function DashboardLayout({
             </button>
           </header>
 
+          {/*
+            One scroll area for every dashboard page (the card), with the page
+            padding on the INNER wrapper instead of the scroller:
+
+            - `min-h-full` + border-box → the wrapper is exactly the card height
+              when the page is short (no phantom scrollbar) and GROWS past it when
+              the page is long. Growing is what keeps a `sticky top-0` page header
+              pinned over the whole scroll range — with a fixed-height (`h-full`)
+              page box the header would slide out after one viewport.
+            - `pb-8 md:pb-10` lives on this in-flow wrapper, so the last element of
+              a long page always keeps its breathing room. Bottom padding on the
+              scroll container itself is not reliably added to the scrollable
+              overflow, which is why the Redeem button used to touch the edge.
+            - `flex flex-col` gives pages a fill-the-card slot via `flex-1`
+              (ComingSoon centers in it). Page roots that self-center with
+              `mx-auto` need `w-full`, since auto cross-margins cancel stretch.
+          */}
           <main className="flex-1 overflow-hidden p-3 md:p-5">
-            <div className="h-full overflow-y-auto rounded-2xl bg-card p-5 md:p-6">{children}</div>
+            <div className="h-full overflow-y-auto rounded-2xl bg-card">
+              <div className="flex min-h-full flex-col px-5 pt-5 pb-8 md:px-6 md:pt-6 md:pb-10">
+                {children}
+              </div>
+            </div>
           </main>
         </div>
       </div>

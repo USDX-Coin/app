@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { FieldError } from "@/components/ui/field-error";
+import { PAGE_HEADING_STICKY } from "@/components/shared/PageHeader";
 import { KycStatusBanner } from "./KycStatusBanner";
 import { useSession } from "@/hooks/useSession";
 import { useKyc, type KycDocState } from "@/hooks/useKyc";
@@ -113,8 +114,10 @@ export function KycPageContent() {
   // requireEmailVerified — Phase 1 users migrate via Forgot password.
   if (user && !isEmailVerified(user)) {
     return (
-      <div className="mx-auto max-w-xl">
-        <h1 className="text-2xl font-semibold text-foreground">{t("kyc.title")}</h1>
+      <div className="mx-auto w-full max-w-xl">
+        <h1 className={cn(PAGE_HEADING_STICKY, "text-2xl font-semibold text-foreground")}>
+          {t("kyc.title")}
+        </h1>
         <div
           role="alert"
           className="mt-6 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200"
@@ -155,8 +158,11 @@ export function KycPageContent() {
     uploadsReady;
 
   return (
-    <div className="mx-auto max-w-xl space-y-6">
-      <div>
+    // `w-full`: flex item of the dashboard scroll wrapper — `mx-auto` cancels the
+    // default stretch, so the column would otherwise shrink to its content width.
+    <div className="mx-auto w-full max-w-xl space-y-6">
+      {/* Sticky so the long KYC form scrolls under its own title. */}
+      <div className={PAGE_HEADING_STICKY}>
         <h1 className="text-2xl font-semibold text-foreground">{t("kyc.title")}</h1>
         <p className="mt-1 text-sm text-muted-foreground">{t("kyc.subtitle")}</p>
       </div>

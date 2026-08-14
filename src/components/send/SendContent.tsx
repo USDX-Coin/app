@@ -62,9 +62,11 @@ export function SendContent() {
   ];
 
   return (
-    <div className="flex h-full flex-col gap-2">
+    <div className="flex flex-1 flex-col gap-2">
       <PageHeader crumbs={HEADERS[step].crumbs} title={HEADERS[step].title} />
-      <div className="flex flex-1 justify-center pt-8">
+      {/* `items-start`: horizontal centering only — `stretch` would pull the
+          card down to the bottom of the page. */}
+      <div className="flex flex-1 items-start justify-center pt-8">
         {step === "confirmation" && (
           <ConfirmationCard
             rows={rows}

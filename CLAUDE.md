@@ -117,6 +117,15 @@ Mint and Redeem keep their state in Zustand stores; the Ringkasan is a modal:
 
 Step state lives in Zustand stores. Form data preserved when going back.
 
+**Coming back from the mint handoff**: `/mint` leaves the origin entirely, so the
+Back button hands the user a page restored from the browser's back-forward cache —
+modal open, form filled, buttons live — for an order that may already be paid.
+`hooks/useMintHandoffReset` (mounted by `MintPageContent`) wipes that state on
+`pageshow`/`persisted` when `mintStore.handoffPending` is set, and the same flag
+keeps the confirm button disabled for the whole cross-origin navigation. Untouched
+input (tab switch, Back from anywhere else) is deliberately left alone. Redeem never
+leaves the origin, so it needs none of this.
+
 ### Mock API
 All backend calls go through `src/lib/api/mock-api.ts` with simulated delays. Replace with real API client when backend is ready.
 

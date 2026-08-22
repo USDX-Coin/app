@@ -133,7 +133,13 @@ describe("useMint", () => {
   });
 
   describe("submit", () => {
-    async function submitAndCaptureRedirect(): Promise<string> {
+    // Returns the redirect target plus the live hook result, so a test can assert
+    // what the page looks like *after* the handoff was fired (the browser is still
+    // navigating at that point — jsdom just records the href).
+    async function submitAndCaptureRedirect(): Promise<{
+      href: string;
+      result: { current: ReturnType<typeof useMint> };
+    }> {
       const originalLocation = window.location;
       const locationStub = { href: "" } as Location;
       Object.defineProperty(window, "location", { configurable: true, value: locationStub });
@@ -145,7 +151,7 @@ describe("useMint", () => {
         await act(async () => {
           await result.current.submitMint();
         });
-        return locationStub.href;
+        return { href: locationStub.href, result };
       } finally {
         Object.defineProperty(window, "location", { configurable: true, value: originalLocation });
       }
@@ -159,7 +165,7 @@ describe("useMint", () => {
         useAuthStore.setState({ token: "app-session-tok" });
         mintCheckoutCodeMock.mockResolvedValue("handoff/abc");
 
-        const href = await submitAndCaptureRedirect();
+        const { href } = await submitAndCaptureRedirect();
 
         expect(href).toContain("/checkout/mint_");
         // URL-encoded minted one-time code (USDX-378 URL-hash handoff).
@@ -178,10 +184,64 @@ describe("useMint", () => {
         // prompt its own login. Mirrors the old token-absent behaviour.
         mintCheckoutCodeMock.mockRejectedValue(new Error("boom"));
 
-        const href = await submitAndCaptureRedirect();
+        const { href } = await submitAndCaptureRedirect();
 
         expect(href).toContain("/checkout/mint_");
         expect(href).not.toContain("#code=");
+      });
+    });
+  });
+
+  // Handoff latch. The order is created and the browser is on its way to checkout —
+  // a cross-origin load that takes as long as it takes. The create mutation is
+  // already back to idle by then, so `isCreating` alone would re-enable "Lanjut
+  // Pembayaran" mid-navigation and a second click would buy the same mint twice.
+  describe("handoff latch", () => {
+    async function submit(): Promise<{ current: ReturnType<typeof useMint> }> {
+      const originalLocation = window.location;
+      Object.defineProperty(window, "location", {
+        configurable: true,
+        value: { href: "" } as Location,
+      });
+      try {
+        useMintStore.getState().setAmount("100");
+        useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+        await waitFor(() => expect(result.current.isFormValid).toBe(true));
+        await act(async () => {
+          await result.current.submitMint();
+        });
+        return result;
+      } finally {
+        Object.defineProperty(window, "location", { configurable: true, value: originalLocation });
+      }
+    }
+
+    describe("positive", () => {
+      test("stays engaged after the create mutation settles, so confirm cannot fire twice", async () => {
+        const result = await submit();
+
+        await waitFor(() => expect(result.current.isCreating).toBe(false));
+        expect(useMintStore.getState().handoffPending).toBe(true);
+        expect(result.current.isHandingOff).toBe(true);
+        expect(result.current.isSubmitting).toBe(true);
+      });
+    });
+
+    describe("edge cases", () => {
+      test("engages even when minting the handoff code fails (still redirects)", async () => {
+        mintCheckoutCodeMock.mockRejectedValue(new Error("boom"));
+
+        const result = await submit();
+
+        expect(useMintStore.getState().handoffPending).toBe(true);
+        expect(result.current.isSubmitting).toBe(true);
+      });
+
+      test("is not engaged before a submit — the confirm button starts live", () => {
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+        expect(result.current.isHandingOff).toBe(false);
+        expect(result.current.isSubmitting).toBe(false);
       });
     });
   });

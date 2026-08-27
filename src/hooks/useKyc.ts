@@ -9,6 +9,7 @@ import {
   uploadToPresignedUrl,
 } from "@/lib/api/kyc-api";
 import type { SubmitKycRequest, PresignedDocKind } from "@/lib/api/types";
+import { toCddPayload } from "@/lib/kyc/cdd";
 
 // Shared with useKycGate so the gate and the /kyc page read the same cache entry.
 export const KYC_STATUS_KEY = ["kyc", "me"] as const;
@@ -44,7 +45,13 @@ export interface KycSubmitInput {
   identityNumber: string;
   addressLine1: string;
   addressLine2?: string | null;
+  // CDD block (USDX-545) — already narrowed + normalised by `toCddPayload`, so the
+  // hook only forwards it. Kept as one nested object rather than seven loose
+  // params so the caller cannot forward a half-validated CDD form.
+  cdd: CddPayload;
 }
+
+export type CddPayload = ReturnType<typeof toCddPayload>;
 
 // KYC status + submission flow (USDX-152). Files upload EAGERLY on selection
 // (presign → PUT to bucket → keep objectKey in state, per the ticket's per-file
@@ -130,6 +137,10 @@ export function useKyc() {
         addressLine2: input.addressLine2 ?? null,
         ktpObjectKey: docs.ktp.objectKey!,
         selfieObjectKey: docs.selfie.objectKey!,
+        // CDD (USDX-545). Spread, not re-listed field by field: the payload
+        // builder is the only place allowed to decide the wire keys, so a rename
+        // there cannot silently leave a stale duplicate here.
+        ...input.cdd,
       };
       return submitKyc(payload);
     },

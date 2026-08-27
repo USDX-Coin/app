@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { FieldError } from "@/components/ui/field-error";
 import { PAGE_HEADING_STICKY } from "@/components/shared/PageHeader";
 import { KycStatusBanner } from "./KycStatusBanner";
+import { KycCddFields } from "./KycCddFields";
 import { useSession } from "@/hooks/useSession";
 import { useKyc, type KycDocState } from "@/hooks/useKyc";
 import { useAuthStore } from "@/stores/authStore";
@@ -17,6 +18,12 @@ import { useLang } from "@/providers/LanguageProvider";
 import { isEmailVerified } from "@/lib/auth/guards";
 import { getErrorMessage, isApiError } from "@/lib/api/errors";
 import type { PresignedDocKind } from "@/lib/api/types";
+import {
+  EMPTY_CDD_FORM,
+  toCddPayload,
+  validateCdd,
+  type CddFormState,
+} from "@/lib/kyc/cdd";
 import { toast } from "sonner";
 
 const EMPTY_FORM = {
@@ -33,6 +40,15 @@ const EMPTY_FORM = {
 // preview + loading, submit disabled until every field and both photos are in,
 // REJECTED → "Submit Ulang" reactivates the form (unlimited resubmit per
 // sot/phase-2/week1.md § Status Flow).
+//
+// USDX-545 adds the CDD block (occupation, source of funds, annual income,
+// transaction purpose, PEP, NPWP) as a SECTION of this same single-step form.
+//
+// OPEN (PM): customers already VERIFIED have no CDD on record and this page hides
+// the form for them entirely (`showForm` excludes VERIFIED), so nothing here
+// silently forces them to re-submit. Whether their gap is left alone, collected at
+// the next transaction, or filled via a campaign is a PM/compliance decision — do
+// not resolve it by quietly re-opening the form for VERIFIED users.
 export function KycPageContent() {
   useSession(); // refresh user (emailVerifiedAt / kycStatus) from /api/v2/auth/me
   const user = useAuthStore((s) => s.user);
@@ -51,6 +67,9 @@ export function KycPageContent() {
   } = useKyc();
 
   const [form, setForm] = useState(EMPTY_FORM);
+  // CDD half of the same form. Separate state object because it has its own
+  // value types (enums + boolean), not just strings.
+  const [cdd, setCdd] = useState<CddFormState>(EMPTY_CDD_FORM);
   const [errors, setErrors] = useState<Record<string, string | undefined>>({});
   // REJECTED state renders the banner only until the user opts into resubmitting.
   const [resubmitting, setResubmitting] = useState(false);
@@ -61,8 +80,15 @@ export function KycPageContent() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  function setCddField<K extends keyof CddFormState>(key: K, value: CddFormState[K]) {
+    setCdd((prev) => ({ ...prev, [key]: value }));
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // Each CDD key maps to its OWN message naming that field ("Pekerjaan wajib
+    // dipilih"), never one generic "please complete the form" — USDX-545 AC.
+    const cddErrors = validateCdd(cdd);
     const nextErrors: Record<string, string | undefined> = {
       firstName: form.firstName.trim() ? undefined : t("kyc.err.firstName"),
       lastName: form.lastName.trim() ? undefined : t("kyc.err.lastName"),
@@ -72,6 +98,11 @@ export function KycPageContent() {
       addressLine1: form.addressLine1.trim() ? undefined : t("kyc.err.address"),
       ktp: docs.ktp.objectKey ? undefined : t("kyc.err.ktp"),
       selfie: docs.selfie.objectKey ? undefined : t("kyc.err.selfie"),
+      occupation: cddErrors.occupation && t(cddErrors.occupation),
+      sourceOfFunds: cddErrors.sourceOfFunds && t(cddErrors.sourceOfFunds),
+      annualIncomeRange: cddErrors.annualIncomeRange && t(cddErrors.annualIncomeRange),
+      transactionPurpose: cddErrors.transactionPurpose && t(cddErrors.transactionPurpose),
+      pepRelation: cddErrors.pepRelation && t(cddErrors.pepRelation),
     };
     setErrors(nextErrors);
     if (Object.values(nextErrors).some(Boolean)) return;
@@ -85,9 +116,11 @@ export function KycPageContent() {
         identityNumber: form.identityNumber,
         addressLine1: form.addressLine1.trim(),
         addressLine2: form.addressLine2.trim() || null,
+        cdd: toCddPayload(cdd),
       });
       setResubmitting(false);
       setForm(EMPTY_FORM);
+      setCdd(EMPTY_CDD_FORM);
       clearUploads();
       toast.success(t("kyc.submitted"));
     } catch (err) {
@@ -148,6 +181,11 @@ export function KycPageContent() {
     status.status === "PENDING" ||
     (status.status === "REJECTED" && resubmitting);
 
+  // Unchanged from USDX-152: the identity block + both photos gate the button.
+  // The CDD block is deliberately NOT part of this gate — a disabled button can
+  // only say "something is missing", and USDX-545 requires an error that NAMES the
+  // missing field. CDD is therefore checked on submit, where it can produce one
+  // message per field.
   const allFilled =
     form.firstName.trim() !== "" &&
     form.lastName.trim() !== "" &&
@@ -282,6 +320,8 @@ export function KycPageContent() {
                 className="mt-1.5"
               />
             </div>
+
+            <KycCddFields form={cdd} errors={errors} onChange={setCddField} />
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <DocField

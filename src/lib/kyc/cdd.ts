@@ -141,7 +141,9 @@ export const CDD_ERROR_KEYS: Record<CddErrorField, string> = {
 export function validateCdd(form: CddFormState): Partial<Record<CddErrorField, string>> {
   const errors: Partial<Record<CddErrorField, string>> = {};
 
-  for (const field of ["occupation", "sourceOfFunds", "annualIncomeRange", "transactionPurpose"] as const) {
+  // Derived from CDD_OPTIONS rather than a second hand-written list, so a new
+  // dropdown cannot be added to the form and silently skip validation.
+  for (const field of Object.keys(CDD_OPTIONS) as CddSelectField[]) {
     if (!isCddOption(field, form[field])) errors[field] = CDD_ERROR_KEYS[field];
   }
   if (form.pepStatus && !form.pepRelation.trim()) {

@@ -7,12 +7,14 @@ import { toCddPayload, EMPTY_CDD_FORM, type CddFormState } from "@/lib/kyc/cdd";
 // layer so this exercises the hook's payload assembly, not the network.
 const statusMock = vi.fn();
 const submitMock = vi.fn();
+const submitCddMock = vi.fn();
 const presignMock = vi.fn();
 const uploadMock = vi.fn();
 
 vi.mock("@/lib/api/kyc-api", () => ({
   getMyKycStatus: () => statusMock(),
   submitKyc: (req: unknown) => submitMock(req),
+  submitKycCdd: (req: unknown) => submitCddMock(req),
   requestPresignedUpload: (req: unknown) => presignMock(req),
   uploadToPresignedUrl: (result: unknown, file: unknown) => uploadMock(result, file),
 }));
@@ -38,6 +40,7 @@ const CDD: CddFormState = {
 };
 
 const PENDING = { status: "PENDING" as const };
+const VERIFIED_WITH_CDD = { status: "VERIFIED" as const, cddComplete: true };
 
 function pngFile() {
   return new File([new Uint8Array([1, 2, 3])], "photo.png", { type: "image/png" });
@@ -57,6 +60,7 @@ async function withUploads(result: { current: ReturnType<typeof useKyc> }) {
 beforeEach(() => {
   statusMock.mockReset().mockResolvedValue({ status: "UNVERIFIED" });
   submitMock.mockReset().mockResolvedValue(PENDING);
+  submitCddMock.mockReset().mockResolvedValue(VERIFIED_WITH_CDD);
   presignMock
     .mockReset()
     .mockImplementation((req: { docKind: string }) =>
@@ -180,6 +184,152 @@ describe("useKyc submit", () => {
             npwp: "NPWPSENTINEL-1234",
           }),
         });
+      });
+
+      const dump = [localStorage, sessionStorage]
+        .flatMap((store) => Object.keys(store).map((k) => `${k}=${store.getItem(k)}`))
+        .join("|");
+      expect(dump).not.toContain("PEPSENTINEL");
+      expect(dump).not.toContain("NPWPSENTINEL");
+    });
+  });
+});
+
+// USDX-545, Wisnu 27 Aug 2026 — CDD top-up for an ALREADY-VERIFIED customer. The
+// whole risk of this flow is a status regression, so most of these tests assert
+// what must NOT happen.
+describe("useKyc submitCdd (VERIFIED top-up)", () => {
+  describe("positive", () => {
+    test("sends exactly the seven CDD fields to the CDD endpoint", async () => {
+      statusMock.mockResolvedValue({ status: "VERIFIED", cddComplete: false });
+      const { result } = renderHook(() => useKyc(), { wrapper: createWrapper() });
+
+      await act(async () => {
+        await result.current.submitCdd(toCddPayload(CDD));
+      });
+
+      expect(submitCddMock).toHaveBeenCalledTimes(1);
+      expect(submitCddMock.mock.calls[0][0]).toEqual({
+        occupation: "SELF_EMPLOYED",
+        sourceOfFunds: "BUSINESS",
+        annualIncomeRange: "FROM_500M_TO_1B",
+        transactionPurpose: "REMITTANCE",
+        pepStatus: false,
+        pepRelation: null,
+        npwp: null,
+      });
+    });
+
+    test("needs no document upload — identity was accepted long ago", async () => {
+      statusMock.mockResolvedValue({ status: "VERIFIED", cddComplete: false });
+      const { result } = renderHook(() => useKyc(), { wrapper: createWrapper() });
+      expect(result.current.uploadsReady).toBe(false);
+
+      await act(async () => {
+        await result.current.submitCdd(toCddPayload(CDD));
+      });
+
+      expect(submitCddMock).toHaveBeenCalledTimes(1);
+      expect(presignMock).not.toHaveBeenCalled();
+      expect(uploadMock).not.toHaveBeenCalled();
+    });
+
+    test("refetches the KYC status so the top-up form disappears once saved", async () => {
+      statusMock
+        .mockResolvedValueOnce({ status: "VERIFIED", cddComplete: false })
+        .mockResolvedValue({ status: "VERIFIED", cddComplete: true });
+      const { result } = renderHook(() => useKyc(), { wrapper: createWrapper() });
+      await waitFor(() => expect(result.current.status?.cddComplete).toBe(false));
+
+      await act(async () => {
+        await result.current.submitCdd(toCddPayload(CDD));
+      });
+
+      await waitFor(() => expect(result.current.status?.cddComplete).toBe(true));
+      expect(result.current.status?.status).toBe("VERIFIED");
+    });
+  });
+
+  describe("negative", () => {
+    test("NEVER calls the full KYC submit — that endpoint sets status to PENDING", async () => {
+      statusMock.mockResolvedValue({ status: "VERIFIED", cddComplete: false });
+      const { result } = renderHook(() => useKyc(), { wrapper: createWrapper() });
+
+      await act(async () => {
+        await result.current.submitCdd(toCddPayload(CDD));
+      });
+
+      expect(submitMock).not.toHaveBeenCalled();
+    });
+
+    test("a retracted PEP declaration is not sent on the top-up path either", async () => {
+      statusMock.mockResolvedValue({ status: "VERIFIED", cddComplete: false });
+      const { result } = renderHook(() => useKyc(), { wrapper: createWrapper() });
+
+      await act(async () => {
+        await result.current.submitCdd(
+          toCddPayload({ ...CDD, pepStatus: false, pepRelation: "Ayah - anggota DPRD" }),
+        );
+      });
+
+      expect(JSON.stringify(submitCddMock.mock.calls[0][0])).not.toContain("anggota DPRD");
+    });
+
+    test("a failed top-up surfaces the error and still never touches the full submit", async () => {
+      statusMock.mockResolvedValue({ status: "VERIFIED", cddComplete: false });
+      submitCddMock.mockRejectedValueOnce(new Error("boom"));
+      const { result } = renderHook(() => useKyc(), { wrapper: createWrapper() });
+
+      await expect(
+        act(async () => {
+          await result.current.submitCdd(toCddPayload(CDD));
+        }),
+      ).rejects.toThrow("boom");
+      expect(submitMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("edge cases", () => {
+    test("the request body carries no identity field and no object key", async () => {
+      statusMock.mockResolvedValue({ status: "VERIFIED", cddComplete: false });
+      const { result } = renderHook(() => useKyc(), { wrapper: createWrapper() });
+      await withUploads(result); // even with documents staged, they must not ride along
+
+      await act(async () => {
+        await result.current.submitCdd(toCddPayload(CDD));
+      });
+
+      const body = submitCddMock.mock.calls[0][0] as Record<string, unknown>;
+      for (const forbidden of [
+        "firstName",
+        "lastName",
+        "dob",
+        "birthPlace",
+        "identityNumber",
+        "identityType",
+        "addressLine1",
+        "ktpObjectKey",
+        "selfieObjectKey",
+        "status",
+        "submissionCount",
+      ]) {
+        expect(body, `top-up body must not carry ${forbidden}`).not.toHaveProperty(forbidden);
+      }
+    });
+
+    test("top-up PII is not written to web storage", async () => {
+      statusMock.mockResolvedValue({ status: "VERIFIED", cddComplete: false });
+      const { result } = renderHook(() => useKyc(), { wrapper: createWrapper() });
+
+      await act(async () => {
+        await result.current.submitCdd(
+          toCddPayload({
+            ...CDD,
+            pepStatus: true,
+            pepRelation: "PEPSENTINEL-relation",
+            npwp: "NPWPSENTINEL-1234",
+          }),
+        );
       });
 
       const dump = [localStorage, sessionStorage]

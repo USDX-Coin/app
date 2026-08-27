@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getMyKycStatus,
   submitKyc,
+  submitKycCdd,
   requestPresignedUpload,
   uploadToPresignedUrl,
 } from "@/lib/api/kyc-api";
@@ -151,6 +152,16 @@ export function useKyc() {
     },
   });
 
+  // CDD-only top-up for an already-VERIFIED customer (USDX-545). Separate
+  // mutation, separate endpoint — see submitKycCdd. Deliberately does NOT
+  // invalidate ["session","me"]: that query exists to re-read `users.kyc_status`,
+  // and this call must not change it. Invalidating it would only invite the
+  // assumption that it might.
+  const submitCddMutation = useMutation({
+    mutationFn: (cdd: CddPayload) => submitKycCdd(cdd),
+    onSuccess: () => refreshStatus(),
+  });
+
   const uploadsReady = !!docs.ktp.objectKey && !!docs.selfie.objectKey;
   const uploadsBusy = docs.ktp.uploading || docs.selfie.uploading;
 
@@ -166,5 +177,7 @@ export function useKyc() {
     submit: submitMutation.mutateAsync,
     submitting: submitMutation.isPending,
     submitError: submitMutation.error,
+    submitCdd: submitCddMutation.mutateAsync,
+    submittingCdd: submitCddMutation.isPending,
   };
 }

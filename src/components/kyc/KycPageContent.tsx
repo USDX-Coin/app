@@ -11,6 +11,7 @@ import { FieldError } from "@/components/ui/field-error";
 import { PAGE_HEADING_STICKY } from "@/components/shared/PageHeader";
 import { KycStatusBanner } from "./KycStatusBanner";
 import { KycCddFields } from "./KycCddFields";
+import { KycCddTopUp } from "./KycCddTopUp";
 import { useSession } from "@/hooks/useSession";
 import { useKyc, type KycDocState } from "@/hooks/useKyc";
 import { useAuthStore } from "@/stores/authStore";
@@ -22,8 +23,10 @@ import {
   EMPTY_CDD_FORM,
   toCddPayload,
   validateCdd,
+  type CddErrorField,
   type CddFormState,
 } from "@/lib/kyc/cdd";
+import { kycFormMode } from "@/lib/kyc/form-mode";
 import { toast } from "sonner";
 
 const EMPTY_FORM = {
@@ -44,11 +47,13 @@ const EMPTY_FORM = {
 // USDX-545 adds the CDD block (occupation, source of funds, annual income,
 // transaction purpose, PEP, NPWP) as a SECTION of this same single-step form.
 //
-// OPEN (PM): customers already VERIFIED have no CDD on record and this page hides
-// the form for them entirely (`showForm` excludes VERIFIED), so nothing here
-// silently forces them to re-submit. Whether their gap is left alone, collected at
-// the next transaction, or filled via a campaign is a PM/compliance decision — do
-// not resolve it by quietly re-opening the form for VERIFIED users.
+// RESOLVED 27 Aug 2026 (Wisnu): a customer who is ALREADY VERIFIED but has no CDD
+// on record is notified and allowed to complete it — not gated at transaction
+// time, not left alone. They get `KycCddTopUp`: the seven CDD fields only, submitted
+// through a separate endpoint that leaves their VERIFIED status alone. Which of the
+// two forms (if either) a customer sees lives in `lib/kyc/form-mode.ts` — the rule
+// "VERIFIED never gets the full form" is load-bearing, because the full form's
+// submit sets status back to PENDING.
 export function KycPageContent() {
   useSession(); // refresh user (emailVerifiedAt / kycStatus) from /api/v2/auth/me
   const user = useAuthStore((s) => s.user);
@@ -64,6 +69,8 @@ export function KycPageContent() {
     uploadsBusy,
     submit,
     submitting,
+    submitCdd,
+    submittingCdd,
   } = useKyc();
 
   const [form, setForm] = useState(EMPTY_FORM);
@@ -84,11 +91,39 @@ export function KycPageContent() {
     setCdd((prev) => ({ ...prev, [key]: value }));
   }
 
+  // Each CDD key maps to its OWN message naming that field ("Pekerjaan wajib
+  // dipilih"), never one generic "please complete the form" — USDX-545 AC. Shared
+  // by both submit paths so the two can never disagree about what is required.
+  function cddErrorMessages(): Record<CddErrorField, string | undefined> {
+    const cddErrors = validateCdd(cdd);
+    return {
+      occupation: cddErrors.occupation && t(cddErrors.occupation),
+      sourceOfFunds: cddErrors.sourceOfFunds && t(cddErrors.sourceOfFunds),
+      annualIncomeRange: cddErrors.annualIncomeRange && t(cddErrors.annualIncomeRange),
+      transactionPurpose: cddErrors.transactionPurpose && t(cddErrors.transactionPurpose),
+      pepRelation: cddErrors.pepRelation && t(cddErrors.pepRelation),
+    };
+  }
+
+  // CDD-only top-up (already-VERIFIED customer). Calls `submitCdd`, NEVER
+  // `submit` — the latter would move a verified customer back to PENDING.
+  async function handleCddTopUpSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const nextErrors = cddErrorMessages();
+    setErrors(nextErrors);
+    if (Object.values(nextErrors).some(Boolean)) return;
+
+    try {
+      await submitCdd(toCddPayload(cdd));
+      setCdd(EMPTY_CDD_FORM);
+      toast.success(t("kyc.cdd.topup.saved"));
+    } catch (err) {
+      toast.error(getErrorMessage(err, t("kyc.cdd.topup.failed")));
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // Each CDD key maps to its OWN message naming that field ("Pekerjaan wajib
-    // dipilih"), never one generic "please complete the form" — USDX-545 AC.
-    const cddErrors = validateCdd(cdd);
     const nextErrors: Record<string, string | undefined> = {
       firstName: form.firstName.trim() ? undefined : t("kyc.err.firstName"),
       lastName: form.lastName.trim() ? undefined : t("kyc.err.lastName"),
@@ -98,11 +133,7 @@ export function KycPageContent() {
       addressLine1: form.addressLine1.trim() ? undefined : t("kyc.err.address"),
       ktp: docs.ktp.objectKey ? undefined : t("kyc.err.ktp"),
       selfie: docs.selfie.objectKey ? undefined : t("kyc.err.selfie"),
-      occupation: cddErrors.occupation && t(cddErrors.occupation),
-      sourceOfFunds: cddErrors.sourceOfFunds && t(cddErrors.sourceOfFunds),
-      annualIncomeRange: cddErrors.annualIncomeRange && t(cddErrors.annualIncomeRange),
-      transactionPurpose: cddErrors.transactionPurpose && t(cddErrors.transactionPurpose),
-      pepRelation: cddErrors.pepRelation && t(cddErrors.pepRelation),
+      ...cddErrorMessages(),
     };
     setErrors(nextErrors);
     if (Object.values(nextErrors).some(Boolean)) return;
@@ -173,13 +204,12 @@ export function KycPageContent() {
     );
   }
 
-  // Form visibility per state (USDX-152): UNVERIFIED active; PENDING visible but
-  // disabled; REJECTED hidden until "Submit Ulang"; VERIFIED hidden.
+  // Form visibility per state (USDX-152 + USDX-545): UNVERIFIED active; PENDING
+  // visible but disabled; REJECTED hidden until "Submit Ulang"; VERIFIED gets the
+  // CDD-only top-up while its CDD is missing, and nothing once it is complete.
   const formDisabled = status.status === "PENDING" || submitting;
-  const showForm =
-    status.status === "UNVERIFIED" ||
-    status.status === "PENDING" ||
-    (status.status === "REJECTED" && resubmitting);
+  const formMode = kycFormMode(status, resubmitting);
+  const showForm = formMode === "full";
 
   // Unchanged from USDX-152: the identity block + both photos gate the button.
   // The CDD block is deliberately NOT part of this gate — a disabled button can
@@ -210,6 +240,16 @@ export function KycPageContent() {
         onResubmit={() => setResubmitting(true)}
         resubmitActive={resubmitting}
       />
+
+      {formMode === "cdd-only" && (
+        <KycCddTopUp
+          form={cdd}
+          errors={errors}
+          onChange={setCddField}
+          onSubmit={handleCddTopUpSubmit}
+          submitting={submittingCdd}
+        />
+      )}
 
       {showForm && (
         <form onSubmit={handleSubmit}>

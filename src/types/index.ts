@@ -26,6 +26,17 @@ export interface KycMyStatus {
   submittedAt?: string | null;
   reviewedAt?: string | null;
   rejectionReason?: string | null;
+  // USDX-545 — is the CDD block on record for this customer?
+  //
+  // AWAITING BACKEND: `/api/v2/kyc/me` does not return this yet. It is the ONLY
+  // thing that tells an already-VERIFIED customer apart from one who still owes
+  // us due-diligence answers, and it is deliberately a boolean rather than the
+  // values themselves — /kyc/me carries no PII by contract (kyc.yaml § myStatus)
+  // and this must not become the exception.
+  //
+  // `undefined` means "the backend has not shipped it", NOT "complete" and NOT
+  // "missing" — see lib/kyc/form-mode.ts for why unknown shows no form.
+  cddComplete?: boolean;
 }
 
 export interface Chain {

@@ -85,6 +85,26 @@ export interface SubmitKycRequest {
   npwp: string | null;
 }
 
+/**
+ * Body of the CDD-only top-up (USDX-545): a customer whose identity is ALREADY
+ * VERIFIED filling in the due-diligence answers that were never asked of them.
+ *
+ * Exactly the CDD subset of `SubmitKycRequest` — no identity, no object keys.
+ * Sending it through the normal submit endpoint is not an option: that endpoint
+ * sets `status = PENDING`, which would knock a verified customer back into review.
+ *
+ * AWAITING BACKEND — see § Backend Integration Notes on the PR.
+ */
+export interface SubmitKycCddRequest {
+  occupation: Occupation;
+  sourceOfFunds: SourceOfFunds;
+  annualIncomeRange: AnnualIncomeRange;
+  transactionPurpose: TransactionPurpose;
+  pepStatus: boolean;
+  pepRelation: string | null;
+  npwp: string | null;
+}
+
 // ── Storage (openapi storage.yaml — consumer) ──────────────────────────────
 export type PresignedDocKind = "ktp" | "selfie";
 

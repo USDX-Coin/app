@@ -78,6 +78,20 @@ export async function seedKycStatus(
 }
 
 /**
+ * Arm the mock's CDD-on-record seam (mock-api KYC_CDD_OVERRIDE_KEY, USDX-545) so a
+ * VERIFIED customer can be placed on either side of the CDD top-up: `false` (the
+ * mock default, matching dev where no VERIFIED customer has CDD) shows the top-up
+ * form, `true` hides it. Boolean flag only — never CDD values. Call before the
+ * first page.goto().
+ */
+export async function seedKycCddComplete(page: Page, complete: boolean) {
+  await page.addInitScript((c) => {
+    if (c) localStorage.setItem("usdx-mock-kyc-cdd", "1");
+    else localStorage.removeItem("usdx-mock-kyc-cdd");
+  }, complete);
+}
+
+/**
  * Arm the mock's rate-limit seam (mock-api RETRY_AFTER_OVERRIDE_KEY): every
  * login/forgot-password/resend call throws 429 with this Retry-After value, so
  * specs can assert the human-readable cooldown formatting (USDX-167). Daily

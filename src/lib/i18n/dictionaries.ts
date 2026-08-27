@@ -465,6 +465,18 @@ const en: Dict = {
     "I, or a close relative of mine, holds a public office (PEP)",
   "kyc.cdd.pepRelation": "Relationship and office held",
   "kyc.cdd.pepRelationPh": "e.g. father - regional council member",
+  // CDD top-up for an already-VERIFIED customer (USDX-545, Wisnu 27 Aug 2026).
+  // Informational, never an ultimatum: nothing is gated on this and the copy has
+  // to say so. Do not rewrite `noGate` into a warning.
+  "kyc.cdd.topup.title": "Complete your customer profile",
+  "kyc.cdd.topup.body":
+    "Your identity is already verified, so there is nothing to re-enter. We only still need a few profile details we never asked you for: occupation, source of funds, annual income, transaction purpose, PEP status and NPWP.",
+  "kyc.cdd.topup.noGate":
+    "Your access does not change. You can keep minting and redeeming as usual, before or after filling this in.",
+  "kyc.cdd.topup.submit": "Save profile details",
+  "kyc.cdd.topup.saving": "Saving...",
+  "kyc.cdd.topup.saved": "Thank you — your profile details have been saved.",
+  "kyc.cdd.topup.failed": "Could not save your profile details",
   "kyc.err.occupation": "Occupation is required",
   "kyc.err.sourceOfFunds": "Source of funds is required",
   "kyc.err.annualIncomeRange": "Annual income is required",
@@ -963,6 +975,18 @@ const id: Dict = {
     "Saya atau kerabat dekat saya memegang jabatan publik (PEP)",
   "kyc.cdd.pepRelation": "Hubungan dan jabatan yang dipegang",
   "kyc.cdd.pepRelationPh": "mis. ayah - anggota DPRD",
+  // Top-up CDD untuk nasabah yang sudah VERIFIED (USDX-545, Wisnu 27 Agu 2026).
+  // Nadanya memberi tahu, bukan mengancam: tidak ada akses yang dikunci, dan
+  // teksnya harus menyatakan itu. Jangan ubah `noGate` jadi peringatan.
+  "kyc.cdd.topup.title": "Lengkapi profil nasabah Anda",
+  "kyc.cdd.topup.body":
+    "Identitas Anda sudah terverifikasi, jadi tidak ada yang perlu diisi ulang. Kami hanya masih membutuhkan beberapa data profil yang dulu belum kami tanyakan: pekerjaan, sumber dana, penghasilan per tahun, tujuan transaksi, status PEP, dan NPWP.",
+  "kyc.cdd.topup.noGate":
+    "Akses Anda tidak berubah. Anda tetap bisa mint dan redeem seperti biasa, sebelum maupun sesudah mengisi ini.",
+  "kyc.cdd.topup.submit": "Simpan Data Profil",
+  "kyc.cdd.topup.saving": "Menyimpan...",
+  "kyc.cdd.topup.saved": "Terima kasih — data profil Anda sudah tersimpan.",
+  "kyc.cdd.topup.failed": "Gagal menyimpan data profil",
   "kyc.err.occupation": "Pekerjaan wajib dipilih",
   "kyc.err.sourceOfFunds": "Sumber dana wajib dipilih",
   "kyc.err.annualIncomeRange": "Penghasilan per tahun wajib dipilih",

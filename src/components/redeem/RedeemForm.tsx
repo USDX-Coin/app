@@ -10,6 +10,7 @@ import { useState } from "react";
 import { ArrowUpDown, BookText, Landmark, Wallet } from "lucide-react";
 import { useRedeem } from "@/hooks/useRedeem";
 import { useKycGate } from "@/hooks/useKycGate";
+import { KycGateUnavailableNotice } from "@/components/kyc/KycGateUnavailableNotice";
 import { formatAmount, formatIDR, truncateAddress } from "@/lib/utils";
 import { getChainById } from "@/lib/chains";
 import { REDEEM_CHAIN_ID } from "@/lib/constants";
@@ -389,6 +390,8 @@ export function RedeemForm() {
       >
         {t("btn.redeem")}
       </button>
+
+      {gate.unavailable && <KycGateUnavailableNotice />}
 
       <KycGateDialog
         open={gate.open}

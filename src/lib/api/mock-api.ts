@@ -286,11 +286,24 @@ export async function mockMintCheckoutCode(): Promise<string> {
 //     source: it holds no user at all any more (CLNT-12).
 //   usdx-mock-me-delay — stretch the round trip so the "authenticated but identity
 //     not yet known" window is observable instead of a 200ms race.
+//   usdx-mock-offline  — /v2/auth/me AND /v2/kyc/me both fail with a non-401, the
+//     shape of "backend unreachable". Lets the disabled-CTA-with-a-reason path be
+//     exercised offline; a 401 has its own path (logout + /login) and is not this.
 const MOCK_USER_KEY = "usdx-mock-user";
 const ME_DELAY_KEY = "usdx-mock-me-delay";
+const OFFLINE_KEY = "usdx-mock-offline";
+
+function offlineArmed(): boolean {
+  return typeof localStorage !== "undefined" && localStorage.getItem(OFFLINE_KEY) === "1";
+}
+
+function unreachable(): ApiError {
+  return new ApiError(503, "SERVICE_UNAVAILABLE", "Backend unreachable (mock seam)");
+}
 
 export async function mockGetMe(): Promise<User> {
   await delay(meDelayMs());
+  if (offlineArmed()) throw unreachable();
   const account = currentAccount();
   if (account) return account.user;
   return seededUser() ?? DEMO_USER;
@@ -351,6 +364,7 @@ function cddCompleteOverride(): boolean {
 
 export async function mockGetMyKycStatus(): Promise<KycMyStatus> {
   await delay(200);
+  if (offlineArmed()) throw unreachable();
   // Same resolution order as mockGetMe, so /me and /kyc/me stay coherent.
   const user = currentAccount()?.user ?? seededUser() ?? DEMO_USER;
   const status = kycStatusOverride() ?? user.kycStatus;

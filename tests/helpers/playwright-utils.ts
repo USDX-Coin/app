@@ -79,6 +79,16 @@ export async function clearAuth(page: Page) {
 }
 
 /**
+ * Arm the mock's outage seam (mock-api OFFLINE_KEY): `GET /v2/auth/me` and
+ * `GET /v2/kyc/me` both fail with a non-401 (503), the shape of "backend
+ * unreachable". Neither source can then answer what the customer's KYC status is.
+ * Call before the first page.goto().
+ */
+export async function seedOffline(page: Page) {
+  await page.addInitScript(() => localStorage.setItem("usdx-mock-offline", "1"));
+}
+
+/**
  * Stretch the mock's `GET /v2/auth/me` round trip (mock-api ME_DELAY_KEY) so the
  * window where the app knows `isAuthenticated` but not yet *who* is observable
  * instead of a 200ms race. Call before the first page.goto().

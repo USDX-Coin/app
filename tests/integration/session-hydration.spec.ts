@@ -5,6 +5,7 @@ import {
   loginViaStorage,
   seedKycStatus,
   seedMeDelay,
+  seedOffline,
 } from "../helpers/playwright-utils";
 
 // The user object is no longer persisted (only `isAuthenticated` is), so on every
@@ -133,6 +134,54 @@ test.describe("Session hydration (no persisted user)", () => {
       await clearAuth(page);
       await page.goto("/mint");
       await expect(page).toHaveURL(/\/login$/);
+    });
+  });
+});
+
+test.describe("Disabled CTA explains itself (backend unreachable)", () => {
+  test.describe("negative", () => {
+    // A disabled Mint button with no explanation leaves the customer guessing
+    // whether the app is broken, their account is, or they are. Say which.
+    test("both sources down: the CTA is disabled AND the reason is on screen", async ({
+      page,
+    }) => {
+      await forceEnglish(page);
+      await seedOffline(page);
+      await loginViaStorage(page);
+      await page.goto("/mint");
+
+      const notice = page.getByTestId("kyc-gate-unavailable");
+      await expect(notice).toBeVisible({ timeout: 15000 });
+      await expect(notice).toContainText(/reach the server/i);
+
+      await expect(page.getByRole("button", { name: "Mint", exact: true })).toBeDisabled();
+      // Not a KYC verdict — no gate dialog is opened at the customer.
+      expect(await page.getByRole("dialog").count()).toBe(0);
+    });
+  });
+
+  test.describe("positive", () => {
+    // Loading is momentary and self-resolving. Explaining it would be noise, and
+    // wrongly blame the connection for something that is about to succeed.
+    test("while merely loading, no unreachable notice appears at any point", async ({
+      page,
+    }) => {
+      await coldLoad(page, "/mint");
+
+      await expect(page.getByTestId("session-name-skeleton").first()).toBeVisible({
+        timeout: 15000,
+      });
+
+      let samples = 0;
+      while ((await countNow(page, "session-name-skeleton")) > 0) {
+        expect(await countNow(page, "kyc-gate-unavailable")).toBe(0);
+        samples++;
+        await page.waitForTimeout(100);
+      }
+      expect(samples).toBeGreaterThan(3);
+
+      await expect(page.getByText("Demo User").first()).toBeVisible({ timeout: 15000 });
+      expect(await countNow(page, "kyc-gate-unavailable")).toBe(0);
     });
   });
 });

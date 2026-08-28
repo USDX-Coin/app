@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getMyKycStatus } from "@/lib/api/kyc-api";
 import { KYC_STATUS_KEY } from "@/hooks/useKyc";
 import { useSessionUser } from "@/hooks/useSession";
+import { isUnreachable } from "@/lib/api/errors";
 import type { KycStatus } from "@/types";
 
 // Action gate for Week 2+ transactions (USDX-153). Pages stay fully explorable;
@@ -15,7 +16,7 @@ import type { KycStatus } from "@/types";
 // session user from GET /v2/auth/me. Suspended / unverified-email users never get
 // this far — login already blocks them (403).
 export function useKycGate() {
-  const { user } = useSessionUser();
+  const session = useSessionUser();
   const [open, setOpen] = useState(false);
 
   const statusQuery = useQuery({
@@ -29,13 +30,20 @@ export function useKycGate() {
   // only because the user object came back instantly from localStorage; now it does
   // not, and defaulting would open a "complete your KYC" dialog in the face of a
   // customer who IS verified. Unknown is its own state: the CTA waits (disabled),
-  // no dialog, no verdict. If BOTH calls fail without a 401 the CTA stays disabled —
-  // deliberately: with the backend unreachable the transaction could not proceed
-  // anyway, and a disabled button is honest where the dialog would be a lie.
-  const loading = !statusQuery.data && !user;
+  // no dialog, no verdict.
+  const loading = !statusQuery.data && !session.user;
+
+  // …and when BOTH sources have failed with something other than a 401, that wait is
+  // never going to end on its own. The CTA still stays disabled — with the backend
+  // unreachable the transaction could not go through anyway — but a button that dies
+  // in silence is the worst thing to hand a customer: they cannot tell whether the
+  // app is broken, their account is, or they are, so they call us or leave. Callers
+  // put a one-line reason next to the disabled button. Not a dialog, not a retry:
+  // this is not a verdict about the customer, just the state of the connection.
+  const unavailable = loading && session.unreachable && isUnreachable(statusQuery.error);
 
   const status: KycStatus =
-    statusQuery.data?.status ?? user?.kycStatus ?? "UNVERIFIED";
+    statusQuery.data?.status ?? session.user?.kycStatus ?? "UNVERIFIED";
   const verified = !loading && status === "VERIFIED";
 
   const guard = useCallback(
@@ -54,6 +62,7 @@ export function useKycGate() {
     status,
     verified,
     loading,
+    unavailable,
     rejectionReason: statusQuery.data?.rejectionReason ?? null,
     open,
     setOpen,

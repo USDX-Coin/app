@@ -10,19 +10,29 @@ import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/authStore";
 import { getMe } from "@/lib/api/auth-api";
+import { isUnreachable } from "@/lib/api/errors";
 import type { User } from "@/types";
+
+// One key, one request: `useSession` (the fetcher, mounted by the dashboard layout)
+// and every `useSessionUser` reader share this cache entry, so readers observe the
+// same in-flight/error state without firing a second call.
+const SESSION_QUERY_KEY = ["session", "me"] as const;
+
+function sessionQueryOptions(isAuthenticated: boolean) {
+  return {
+    queryKey: SESSION_QUERY_KEY,
+    queryFn: getMe,
+    enabled: isAuthenticated,
+    staleTime: 60_000,
+    retry: false,
+  };
+}
 
 export function useSession() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const setUser = useAuthStore((s) => s.setUser);
 
-  const query = useQuery({
-    queryKey: ["session", "me"],
-    queryFn: getMe,
-    enabled: isAuthenticated,
-    staleTime: 60_000,
-    retry: false,
-  });
+  const query = useQuery(sessionQueryOptions(isAuthenticated));
 
   useEffect(() => {
     if (query.data) setUser(query.data);
@@ -31,18 +41,26 @@ export function useSession() {
   return query;
 }
 
-// Read the profile together with whether it is merely still on its way.
+// Read the profile together with WHY it is not here, when it is not here.
 //
-// `loading` is true exactly while the app knows it has a session but not yet WHO —
-// the window that opened when the user object stopped being persisted. Callers must
-// render a skeleton in that window; they must not redirect, lock an action, or
-// print a fallback that reads as a verdict ("Unverified", "-").
+// `loading` — the app knows it has a session but not yet who. Callers render a
+//   skeleton; they must not redirect, lock an action, or print a fallback that reads
+//   as a verdict ("Unverified", "-"). It is momentary and needs no explanation.
 //
-// If the refresh fails without a 401 (offline, 5xx), `user` stays null and the
-// skeleton stays up. That is deliberate: a stale-looking screen the customer can
-// reload is a much cheaper failure than telling a verified customer they are not.
-export function useSessionUser(): { user: User | null; loading: boolean } {
+// `unreachable` — same missing data, but the fetch has already failed with something
+//   other than a 401, so it is not coming without a reload. `loading` deliberately
+//   stays true alongside it: the skeleton is still the honest thing to show, and a
+//   stale-looking screen the customer can reload is far cheaper than telling a
+//   verified customer they are not. What changes is that callers may now say why.
+export function useSessionUser(): {
+  user: User | null;
+  loading: boolean;
+  unreachable: boolean;
+} {
   const user = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  return { user, loading: isAuthenticated && user === null };
+  const { error } = useQuery(sessionQueryOptions(isAuthenticated));
+
+  const missing = isAuthenticated && user === null;
+  return { user, loading: missing, unreachable: missing && isUnreachable(error) };
 }

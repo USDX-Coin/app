@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ArrowUpDown, BookText, ScanLine } from "lucide-react";
 import { useMint } from "@/hooks/useMint";
 import { useKycGate } from "@/hooks/useKycGate";
+import { KycGateUnavailableNotice } from "@/components/kyc/KycGateUnavailableNotice";
 import { formatAmount } from "@/lib/utils";
 import { KycGateDialog } from "@/components/kyc/KycGateDialog";
 import { MintReview } from "@/components/mint/MintReview";
@@ -244,6 +245,8 @@ export function MintForm() {
       >
         {t("btn.mint")}
       </button>
+
+      {gate.unavailable && <KycGateUnavailableNotice />}
 
       <KycGateDialog
         open={gate.open}

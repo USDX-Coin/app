@@ -15,6 +15,17 @@ export function getErrorMessage(error: unknown, fallback = "Something went wrong
   return fallback;
 }
 
+// The call failed for a reason that is NOT an expired session — offline, DNS, 5xx,
+// a dead backend. 401 is excluded on purpose: `ApiClientBridge` already clears the
+// session and bounces to /login for it, so telling the customer "can't reach the
+// server" would point them at the wrong problem. `null`/`undefined` (no error at
+// all, including a call still in flight) is never unreachable — a request that has
+// not answered yet is loading, not failed.
+export function isUnreachable(error: unknown): boolean {
+  if (error === null || error === undefined) return false;
+  return !(isApiError(error) && error.status === 401);
+}
+
 // 403 EMAIL_NOT_VERIFIED — backend asks the user to verify before continuing.
 // auth.yaml login/kyc/storage. `details.resendUrl` may accompany it.
 export function isEmailNotVerified(error: unknown): boolean {

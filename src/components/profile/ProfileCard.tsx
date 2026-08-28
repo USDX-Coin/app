@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useAuthStore } from "@/stores/authStore";
+import { useSessionUser } from "@/hooks/useSession";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ChangePasswordModal } from "@/components/profile/ChangePasswordModal";
 import { PAGE_HEADING_STICKY } from "@/components/shared/PageHeader";
 import { useLang } from "@/providers/LanguageProvider";
@@ -11,8 +12,17 @@ import { LANGUAGES } from "@/lib/i18n/dictionaries";
 import { cn, formatDate } from "@/lib/utils";
 import { ShieldCheck, Mail, User, Calendar, BadgeCheck, Globe, Lock } from "lucide-react";
 
+// Stands in for a value still travelling from /api/v2/auth/me. The alternative —
+// printing "-" or defaulting the KYC label to "Unverified" — states something about
+// the customer that the app does not yet know.
+function FieldSkeleton({ className }: { className?: string }) {
+  return (
+    <Skeleton data-testid="profile-field-skeleton" className={cn("h-4 w-40", className)} />
+  );
+}
+
 export function ProfileCard() {
-  const user = useAuthStore((s) => s.user);
+  const { user, loading } = useSessionUser();
   const { t, lang } = useLang();
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
@@ -32,13 +42,17 @@ export function ProfileCard() {
       <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold">{t("profile.personalInfo")}</h2>
-          <Badge
-            variant="secondary"
-            className="bg-primary/10 text-primary flex items-center gap-1"
-          >
-            <ShieldCheck className="h-3.5 w-3.5" />
-            {kycLabel}
-          </Badge>
+          {loading ? (
+            <FieldSkeleton className="h-6 w-24 rounded-full" />
+          ) : (
+            <Badge
+              variant="secondary"
+              className="bg-primary/10 text-primary flex items-center gap-1"
+            >
+              <ShieldCheck className="h-3.5 w-3.5" />
+              {kycLabel}
+            </Badge>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -46,7 +60,11 @@ export function ProfileCard() {
             <User className="h-4 w-4 text-muted-foreground mt-0.5" />
             <div>
               <p className="text-xs text-muted-foreground">{t("profile.fullName")}</p>
-              <p className="text-sm font-medium">{user?.name ?? "-"}</p>
+              {loading ? (
+                <FieldSkeleton className="mt-1" />
+              ) : (
+                <p className="text-sm font-medium">{user?.name ?? "-"}</p>
+              )}
             </div>
           </div>
 
@@ -54,7 +72,11 @@ export function ProfileCard() {
             <Mail className="h-4 w-4 text-muted-foreground mt-0.5" />
             <div>
               <p className="text-xs text-muted-foreground">{t("profile.email")}</p>
-              <p className="text-sm font-medium">{user?.email ?? "-"}</p>
+              {loading ? (
+                <FieldSkeleton className="mt-1" />
+              ) : (
+                <p className="text-sm font-medium">{user?.email ?? "-"}</p>
+              )}
             </div>
           </div>
 
@@ -62,9 +84,13 @@ export function ProfileCard() {
             <Calendar className="h-4 w-4 text-muted-foreground mt-0.5" />
             <div>
               <p className="text-xs text-muted-foreground">{t("profile.memberSince")}</p>
-              <p className="text-sm font-medium">
-                {user?.createdAt ? formatDate(user.createdAt) : "-"}
-              </p>
+              {loading ? (
+                <FieldSkeleton className="mt-1 w-32" />
+              ) : (
+                <p className="text-sm font-medium">
+                  {user?.createdAt ? formatDate(user.createdAt) : "-"}
+                </p>
+              )}
             </div>
           </div>
 
@@ -72,7 +98,11 @@ export function ProfileCard() {
             <BadgeCheck className="h-4 w-4 text-muted-foreground mt-0.5" />
             <div>
               <p className="text-xs text-muted-foreground">{t("profile.kycLevel")}</p>
-              <p className="text-sm font-medium">{kycLabel}</p>
+              {loading ? (
+                <FieldSkeleton className="mt-1 w-24" />
+              ) : (
+                <p className="text-sm font-medium">{kycLabel}</p>
+              )}
             </div>
           </div>
         </div>

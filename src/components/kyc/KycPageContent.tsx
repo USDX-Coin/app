@@ -12,11 +12,11 @@ import { PAGE_HEADING_STICKY } from "@/components/shared/PageHeader";
 import { KycStatusBanner } from "./KycStatusBanner";
 import { KycCddFields } from "./KycCddFields";
 import { KycCddTopUp } from "./KycCddTopUp";
-import { useSession } from "@/hooks/useSession";
+import { KycPageSkeleton } from "./KycPageSkeleton";
+import { useSessionUser } from "@/hooks/useSession";
 import { useKyc, type KycDocState } from "@/hooks/useKyc";
-import { useAuthStore } from "@/stores/authStore";
 import { useLang } from "@/providers/LanguageProvider";
-import { isEmailVerified } from "@/lib/auth/guards";
+import { emailVerificationGate } from "@/lib/auth/guards";
 import { getErrorMessage, isApiError } from "@/lib/api/errors";
 import type { PresignedDocKind } from "@/lib/api/types";
 import {
@@ -55,8 +55,9 @@ const EMPTY_FORM = {
 // "VERIFIED never gets the full form" is load-bearing, because the full form's
 // submit sets status back to PENDING.
 export function KycPageContent() {
-  useSession(); // refresh user (emailVerifiedAt / kycStatus) from /api/v2/auth/me
-  const user = useAuthStore((s) => s.user);
+  // The dashboard layout runs the /api/v2/auth/me fetch; this just reads it, plus
+  // whether the answer is still on its way.
+  const { user } = useSessionUser();
   const { t } = useLang();
   const {
     status,
@@ -176,7 +177,11 @@ export function KycPageContent() {
   }
 
   // requireEmailVerified — Phase 1 users migrate via Forgot password.
-  if (user && !isEmailVerified(user)) {
+  // Three-way on purpose: "unknown" means /auth/me has not answered yet, and a
+  // verified customer must never see this gate just because their data is late.
+  const emailGate = emailVerificationGate(user);
+
+  if (emailGate === "blocked") {
     return (
       <div className="mx-auto w-full max-w-xl">
         <h1 className={cn(PAGE_HEADING_STICKY, "text-2xl font-semibold text-foreground")}>
@@ -184,6 +189,7 @@ export function KycPageContent() {
         </h1>
         <div
           role="alert"
+          data-testid="kyc-email-gate"
           className="mt-6 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200"
         >
           {gateBefore}
@@ -196,12 +202,8 @@ export function KycPageContent() {
     );
   }
 
-  if (statusLoading || !status) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="size-7 animate-spin text-primary" />
-      </div>
-    );
+  if (emailGate === "unknown" || statusLoading || !status) {
+    return <KycPageSkeleton />;
   }
 
   // Form visibility per state (USDX-152 + USDX-545): UNVERIFIED active; PENDING

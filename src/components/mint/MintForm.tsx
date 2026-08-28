@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ArrowUpDown, BookText, ScanLine } from "lucide-react";
 import { useMint } from "@/hooks/useMint";
 import { useKycGate } from "@/hooks/useKycGate";
+import { KycGateUnavailableNotice } from "@/components/kyc/KycGateUnavailableNotice";
 import { formatAmount } from "@/lib/utils";
 import { KycGateDialog } from "@/components/kyc/KycGateDialog";
 import { MintReview } from "@/components/mint/MintReview";
@@ -238,12 +239,14 @@ export function MintForm() {
           the action is locked (USDX-153); form validation only gates VERIFIED. */}
       <button
         type="button"
-        disabled={gate.verified && !isFormValid}
+        disabled={gate.loading || (gate.verified && !isFormValid)}
         onClick={() => gate.guard(() => setReviewOpen(true))}
         className="brand-gradient flex h-[42px] items-center justify-center rounded-lg text-sm font-medium text-white transition-opacity disabled:opacity-50"
       >
         {t("btn.mint")}
       </button>
+
+      {gate.unavailable && <KycGateUnavailableNotice />}
 
       <KycGateDialog
         open={gate.open}

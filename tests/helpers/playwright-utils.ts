@@ -1,44 +1,57 @@
 import type { Page } from "@playwright/test";
 
-const AUTH_STATE = {
-  state: {
-    user: {
-      id: "usr_1",
-      name: "Demo User",
-      email: "demo@usdx.com",
-      phone: "+628123456789",
-      entityType: "INDIVIDUAL",
-      kycStatus: "VERIFIED",
-      suspended: false,
-      emailVerifiedAt: "2026-01-01T00:00:00Z",
-      createdAt: "2026-01-01T00:00:00Z",
-      updatedAt: "2026-01-01T00:00:00Z",
-    },
-    token: "mock-token",
-    isAuthenticated: true,
-  },
-  version: 0,
+interface SeedUser {
+  id: string;
+  name: string | null;
+  email: string;
+  phone: string | null;
+  entityType: "INDIVIDUAL" | "LEGAL_ENTITY";
+  kycStatus: "UNVERIFIED" | "PENDING" | "VERIFIED" | "REJECTED";
+  suspended: boolean;
+  emailVerifiedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const SEED_USER: SeedUser = {
+  id: "usr_1",
+  name: "Demo User",
+  email: "demo@usdx.com",
+  phone: "+628123456789",
+  entityType: "INDIVIDUAL",
+  kycStatus: "VERIFIED",
+  suspended: false,
+  emailVerifiedAt: "2026-01-01T00:00:00Z",
+  createdAt: "2026-01-01T00:00:00Z",
+  updatedAt: "2026-01-01T00:00:00Z",
 };
 
+// Only `isAuthenticated` is persisted by the app — no customer data ever reaches
+// localStorage. The seeded session therefore has to look exactly like that.
+const AUTH_STATE = { state: { isAuthenticated: true }, version: 0 };
+
+/**
+ * Fake a logged-in session without driving the login form.
+ *
+ * Two keys, two jobs:
+ *  - `usdx-auth` — what the app itself persists: the `isAuthenticated` render hint.
+ *  - `usdx-mock-user` — the mock backend seam (mock-api MOCK_USER_KEY). The
+ *    in-memory mock has no logged-in account for a storage-seeded session, so this
+ *    is what `GET /v2/auth/me` answers with. Specs shape the customer here.
+ */
 export async function loginViaStorage(
   page: Page,
-  userOverrides?: Partial<Omit<(typeof AUTH_STATE)["state"]["user"], "name">> & {
-    name?: string | null;
-  },
+  userOverrides?: Partial<SeedUser>,
 ) {
-  const auth = userOverrides
-    ? {
-        ...AUTH_STATE,
-        state: {
-          ...AUTH_STATE.state,
-          user: { ...AUTH_STATE.state.user, ...userOverrides },
-        },
-      }
-    : AUTH_STATE;
+  const user = userOverrides ? { ...SEED_USER, ...userOverrides } : SEED_USER;
   await page.goto("/login");
-  await page.evaluate((a) => {
-    localStorage.setItem("usdx-auth", JSON.stringify(a));
-  }, auth);
+  await page.evaluate(
+    ({ auth, u }) => {
+      localStorage.setItem("usdx-auth", JSON.stringify(auth));
+      localStorage.setItem("usdx-mock-user", JSON.stringify(u));
+    },
+    { auth: AUTH_STATE, u: user },
+  );
 }
 
 /**
@@ -59,7 +72,32 @@ export async function forceIndonesian(page: Page) {
 }
 
 export async function clearAuth(page: Page) {
-  await page.evaluate(() => localStorage.removeItem("usdx-auth"));
+  await page.evaluate(() => {
+    localStorage.removeItem("usdx-auth");
+    localStorage.removeItem("usdx-mock-user");
+  });
+}
+
+/**
+ * Arm the mock's outage seam (mock-api OFFLINE_KEY): `GET /v2/auth/me` and
+ * `GET /v2/kyc/me` both fail with a non-401 (503), the shape of "backend
+ * unreachable". Neither source can then answer what the customer's KYC status is.
+ * Call before the first page.goto().
+ */
+export async function seedOffline(page: Page) {
+  await page.addInitScript(() => localStorage.setItem("usdx-mock-offline", "1"));
+}
+
+/**
+ * Stretch the mock's `GET /v2/auth/me` round trip (mock-api ME_DELAY_KEY) so the
+ * window where the app knows `isAuthenticated` but not yet *who* is observable
+ * instead of a 200ms race. Call before the first page.goto().
+ */
+export async function seedMeDelay(page: Page, ms: number) {
+  await page.addInitScript(
+    (v) => localStorage.setItem("usdx-mock-me-delay", v),
+    String(ms),
+  );
 }
 
 /**

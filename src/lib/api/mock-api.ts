@@ -279,23 +279,47 @@ export async function mockMintCheckoutCode(): Promise<string> {
   return "mock-checkout-handoff-code";
 }
 
-export async function mockGetMe(): Promise<User> {
-  await delay(200);
-  const account = currentAccount();
-  if (account) return account.user;
-  // Storage-seeded session (Playwright loginViaStorage): the in-memory mock has
-  // no logged-in account, so mirror the persisted user instead of falling back
-  // to DEMO_USER — otherwise the /v2/auth/me refresh (useSession) would
-  // overwrite seeded state like `name: null` (USDX-153 header fallback tests).
-  return persistedUser() ?? DEMO_USER;
+// Test seams for /v2/auth/me (mock-only, mirror KYC_OVERRIDE_KEY):
+//   usdx-mock-user     — the user this endpoint answers with. Playwright's
+//     loginViaStorage fakes a session without going through mockLogin, so the
+//     in-memory mock has no account to serve. The app's own persisted blob is not a
+//     source: it holds no user at all any more (CLNT-12).
+//   usdx-mock-me-delay — stretch the round trip so the "authenticated but identity
+//     not yet known" window is observable instead of a 200ms race.
+//   usdx-mock-offline  — /v2/auth/me AND /v2/kyc/me both fail with a non-401, the
+//     shape of "backend unreachable". Lets the disabled-CTA-with-a-reason path be
+//     exercised offline; a 401 has its own path (logout + /login) and is not this.
+const MOCK_USER_KEY = "usdx-mock-user";
+const ME_DELAY_KEY = "usdx-mock-me-delay";
+const OFFLINE_KEY = "usdx-mock-offline";
+
+function offlineArmed(): boolean {
+  return typeof localStorage !== "undefined" && localStorage.getItem(OFFLINE_KEY) === "1";
 }
 
-function persistedUser(): User | null {
+function unreachable(): ApiError {
+  return new ApiError(503, "SERVICE_UNAVAILABLE", "Backend unreachable (mock seam)");
+}
+
+export async function mockGetMe(): Promise<User> {
+  await delay(meDelayMs());
+  if (offlineArmed()) throw unreachable();
+  const account = currentAccount();
+  if (account) return account.user;
+  return seededUser() ?? DEMO_USER;
+}
+
+function meDelayMs(): number {
+  if (typeof localStorage === "undefined") return 200;
+  const ms = Number(localStorage.getItem(ME_DELAY_KEY));
+  return Number.isFinite(ms) && ms > 0 ? ms : 200;
+}
+
+function seededUser(): User | null {
   if (typeof localStorage === "undefined") return null;
   try {
-    const raw = localStorage.getItem("usdx-auth");
-    if (!raw) return null;
-    return (JSON.parse(raw)?.state?.user as User) ?? null;
+    const raw = localStorage.getItem(MOCK_USER_KEY);
+    return raw ? (JSON.parse(raw) as User) : null;
   } catch {
     return null;
   }
@@ -340,7 +364,9 @@ function cddCompleteOverride(): boolean {
 
 export async function mockGetMyKycStatus(): Promise<KycMyStatus> {
   await delay(200);
-  const user = currentAccount()?.user ?? DEMO_USER;
+  if (offlineArmed()) throw unreachable();
+  // Same resolution order as mockGetMe, so /me and /kyc/me stay coherent.
+  const user = currentAccount()?.user ?? seededUser() ?? DEMO_USER;
   const status = kycStatusOverride() ?? user.kycStatus;
   if (status === "UNVERIFIED") {
     // Never submitted → status only, mirroring the backend fallback to

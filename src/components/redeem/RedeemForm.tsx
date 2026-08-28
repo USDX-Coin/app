@@ -10,6 +10,7 @@ import { useState } from "react";
 import { ArrowUpDown, BookText, Landmark, Wallet } from "lucide-react";
 import { useRedeem } from "@/hooks/useRedeem";
 import { useKycGate } from "@/hooks/useKycGate";
+import { KycGateUnavailableNotice } from "@/components/kyc/KycGateUnavailableNotice";
 import { formatAmount, formatIDR, truncateAddress } from "@/lib/utils";
 import { getChainById } from "@/lib/chains";
 import { REDEEM_CHAIN_ID } from "@/lib/constants";
@@ -383,12 +384,14 @@ export function RedeemForm() {
           (USDX-153); form validation only gates VERIFIED users. */}
       <button
         type="button"
-        disabled={gate.verified && !isFormValid}
+        disabled={gate.loading || (gate.verified && !isFormValid)}
         onClick={() => gate.guard(handleRedeem)}
         className="brand-gradient flex h-[42px] items-center justify-center rounded-lg text-sm font-medium text-white transition-opacity disabled:opacity-50"
       >
         {t("btn.redeem")}
       </button>
+
+      {gate.unavailable && <KycGateUnavailableNotice />}
 
       <KycGateDialog
         open={gate.open}

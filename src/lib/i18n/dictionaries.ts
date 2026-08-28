@@ -390,6 +390,9 @@ const en: Dict = {
   "kyc.subtitle": "Verify your identity to unlock minting, redeeming, and bridging.",
   "kyc.gate.body": "Please verify your email before submitting KYC. If you can't find the email, reset your password via {link} to confirm ownership.",
   "kyc.gate.link": "Forgot password",
+  // Shown under a transaction CTA disabled by an unreachable backend — never by a
+  // failed verification, and never while merely loading.
+  "kyc.gate.unreachable": "Can't reach the server right now. Try reloading the page.",
   "kyc.banner.verifiedTitle": "Your identity is verified",
   "kyc.banner.verifiedBody": "You can now access all features.",
   "kyc.banner.goDashboard": "Go to Dashboard",
@@ -901,6 +904,7 @@ const id: Dict = {
   "kyc.subtitle": "Verifikasi identitas Anda untuk membuka mint, redeem, dan bridge.",
   "kyc.gate.body": "Verifikasi email Anda dulu sebelum mengirim KYC. Kalau email tidak ditemukan, reset password via {link} untuk konfirmasi kepemilikan.",
   "kyc.gate.link": "Lupa Password",
+  "kyc.gate.unreachable": "Belum bisa terhubung ke server. Coba muat ulang halaman.",
   "kyc.banner.verifiedTitle": "Identitas Anda terverifikasi",
   "kyc.banner.verifiedBody": "Anda sekarang bisa mengakses semua fitur.",
   "kyc.banner.goDashboard": "Ke Dashboard",

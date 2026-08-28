@@ -20,8 +20,10 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn, formatAmount } from "@/lib/utils";
 import { useWalletBalance } from "@/hooks/useWalletBalance";
+import { useSessionUser } from "@/hooks/useSession";
 import { useAuthStore } from "@/stores/authStore";
 import { logout as revokeSession } from "@/lib/api/auth-api";
 import { useLang } from "@/providers/LanguageProvider";
@@ -139,7 +141,7 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const user = useAuthStore((s) => s.user);
+  const { user, loading: sessionLoading } = useSessionUser();
   const logout = useAuthStore((s) => s.logout);
   const { t, lang, setLang } = useLang();
   // Real on-chain USDX balance of the connected wallet (USDX-396). Wallets are
@@ -167,7 +169,11 @@ export function Sidebar({
         <DropdownMenu>
           <DropdownMenuTrigger className="flex items-center gap-1.5 outline-none">
             <img src="/image/usdx-logo.png" alt="USDX" className="size-8 rounded-full" />
-            <span className="max-w-[150px] truncate text-base font-medium tracking-tight">{name}</span>
+            {sessionLoading ? (
+              <Skeleton data-testid="session-name-skeleton" className="h-4 w-28" />
+            ) : (
+              <span className="max-w-[150px] truncate text-base font-medium tracking-tight">{name}</span>
+            )}
             <ChevronsUpDown className="size-5 text-sidebar-muted" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-44">

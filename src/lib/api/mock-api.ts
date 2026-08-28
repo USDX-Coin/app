@@ -279,23 +279,34 @@ export async function mockMintCheckoutCode(): Promise<string> {
   return "mock-checkout-handoff-code";
 }
 
+// Test seams for /v2/auth/me (mock-only, mirror KYC_OVERRIDE_KEY):
+//   usdx-mock-user     — the user this endpoint answers with. Playwright's
+//     loginViaStorage fakes a session without going through mockLogin, so the
+//     in-memory mock has no account to serve. The app's own persisted blob is not a
+//     source: it holds no user at all any more (CLNT-12).
+//   usdx-mock-me-delay — stretch the round trip so the "authenticated but identity
+//     not yet known" window is observable instead of a 200ms race.
+const MOCK_USER_KEY = "usdx-mock-user";
+const ME_DELAY_KEY = "usdx-mock-me-delay";
+
 export async function mockGetMe(): Promise<User> {
-  await delay(200);
+  await delay(meDelayMs());
   const account = currentAccount();
   if (account) return account.user;
-  // Storage-seeded session (Playwright loginViaStorage): the in-memory mock has
-  // no logged-in account, so mirror the persisted user instead of falling back
-  // to DEMO_USER — otherwise the /v2/auth/me refresh (useSession) would
-  // overwrite seeded state like `name: null` (USDX-153 header fallback tests).
-  return persistedUser() ?? DEMO_USER;
+  return seededUser() ?? DEMO_USER;
 }
 
-function persistedUser(): User | null {
+function meDelayMs(): number {
+  if (typeof localStorage === "undefined") return 200;
+  const ms = Number(localStorage.getItem(ME_DELAY_KEY));
+  return Number.isFinite(ms) && ms > 0 ? ms : 200;
+}
+
+function seededUser(): User | null {
   if (typeof localStorage === "undefined") return null;
   try {
-    const raw = localStorage.getItem("usdx-auth");
-    if (!raw) return null;
-    return (JSON.parse(raw)?.state?.user as User) ?? null;
+    const raw = localStorage.getItem(MOCK_USER_KEY);
+    return raw ? (JSON.parse(raw) as User) : null;
   } catch {
     return null;
   }
@@ -340,7 +351,8 @@ function cddCompleteOverride(): boolean {
 
 export async function mockGetMyKycStatus(): Promise<KycMyStatus> {
   await delay(200);
-  const user = currentAccount()?.user ?? DEMO_USER;
+  // Same resolution order as mockGetMe, so /me and /kyc/me stay coherent.
+  const user = currentAccount()?.user ?? seededUser() ?? DEMO_USER;
   const status = kycStatusOverride() ?? user.kycStatus;
   if (status === "UNVERIFIED") {
     // Never submitted → status only, mirroring the backend fallback to

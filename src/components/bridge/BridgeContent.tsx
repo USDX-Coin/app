@@ -152,7 +152,7 @@ export function BridgeContent() {
                 {addressError && <p className="text-sm text-destructive">{addressError}</p>}
               </div>
             </div>
-            <button type="button" disabled={gate.verified && !isValid} onClick={() => gate.guard(() => setStep("confirmation"))} className="brand-gradient flex h-[42px] items-center justify-center rounded-lg text-sm font-medium text-white transition-opacity disabled:opacity-50">
+            <button type="button" disabled={gate.loading || (gate.verified && !isValid)} onClick={() => gate.guard(() => setStep("confirmation"))} className="brand-gradient flex h-[42px] items-center justify-center rounded-lg text-sm font-medium text-white transition-opacity disabled:opacity-50">
               {t("btn.bridge")}
             </button>
             <KycGateDialog open={gate.open} onOpenChange={gate.setOpen} status={gate.status} rejectionReason={gate.rejectionReason} />

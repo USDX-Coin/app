@@ -6,7 +6,9 @@ import dynamic from "next/dynamic";
 import { Loader2, Menu, PanelLeft } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/stores/authStore";
+import { useSession, useSessionUser } from "@/hooks/useSession";
 
 function ShellSpinner() {
   return (
@@ -32,9 +34,15 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const { isAuthenticated, user } = useAuthStore();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [desktopHidden, setDesktopHidden] = useState(false);
+
+  // The customer profile is no longer persisted, so the shell itself has to fetch
+  // it — on every authenticated page, not just /kyc. Everything downstream (the
+  // name here, the sidebar, /profile, the KYC gates) reads the result.
+  useSession();
+  const { user, loading: sessionLoading } = useSessionUser();
 
   // Detect client-side hydration without triggering cascading renders
   const hydrated = useSyncExternalStore(
@@ -91,9 +99,13 @@ export default function DashboardLayout({
           <header className="flex h-14 items-center justify-between border-b border-border bg-sidebar px-4 md:hidden">
             <div className="flex items-center gap-2">
               <img src="/image/usdx-logo.png" alt="USDX" className="size-7 rounded-full" />
-              <span className="max-w-[160px] truncate text-sm font-medium text-foreground">
-                {name}
-              </span>
+              {sessionLoading ? (
+                <Skeleton data-testid="session-name-skeleton" className="h-4 w-28" />
+              ) : (
+                <span className="max-w-[160px] truncate text-sm font-medium text-foreground">
+                  {name}
+                </span>
+              )}
             </div>
             <button
               type="button"

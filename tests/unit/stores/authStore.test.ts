@@ -63,8 +63,7 @@ describe("authStore", () => {
       };
       // Token stays in-memory only — a stolen localStorage snapshot yields no credential.
       expect(persisted.state.token ?? null).toBeNull();
-      // Non-credential fields still persist so a reload doesn't flash the login screen.
-      expect(persisted.state.user).toBeTruthy();
+      // The render hint survives so a reload doesn't flash the login screen.
       expect(persisted.state.isAuthenticated).toBe(true);
     });
 
@@ -79,6 +78,47 @@ describe("authStore", () => {
       // In-memory state keeps the token (cross-site preview bearer fallback); only
       // persistence drops it.
       expect(useAuthStore.getState().token).toBe("in-mem-token");
+    });
+  });
+
+  // The store is the only thing that decides what lands on the device. Assert the
+  // ACTUAL bytes in localStorage, not the shape of `partialize` — a test that only
+  // reads the selector would still pass if the selector leaked a nested object.
+  describe("no PII on the device", () => {
+    test("after login localStorage carries no name, email or phone", () => {
+      useAuthStore.getState().setAuth(mockUser, "test-token");
+
+      const raw = localStorage.getItem("usdx-auth") ?? "";
+      expect(raw).not.toContain(mockUser.name as string);
+      expect(raw).not.toContain(mockUser.email);
+      expect(raw).not.toContain(mockUser.phone as string);
+      // The customer id is not needed by any pre-server render either.
+      expect(raw).not.toContain(mockUser.id);
+
+      const persisted = JSON.parse(raw) as { state: Record<string, unknown> };
+      expect(persisted.state.user ?? null).toBeNull();
+      // `isAuthenticated` is the ONLY persisted key.
+      expect(Object.keys(persisted.state)).toEqual(["isAuthenticated"]);
+    });
+
+    test("no localStorage key anywhere holds the user's email after login", () => {
+      useAuthStore.getState().setAuth(mockUser, "test-token");
+
+      const hits: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (localStorage.getItem(key) ?? "").includes(mockUser.email)) {
+          hits.push(key);
+        }
+      }
+      expect(hits).toEqual([]);
+    });
+
+    test("the user stays available in memory for the current tab", () => {
+      useAuthStore.getState().setAuth(mockUser, "test-token");
+      // Dropping persistence must not change what the running app can render —
+      // only what survives a reload on the device.
+      expect(useAuthStore.getState().user).toEqual(mockUser);
     });
   });
 

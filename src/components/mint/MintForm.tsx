@@ -238,7 +238,7 @@ export function MintForm() {
           the action is locked (USDX-153); form validation only gates VERIFIED. */}
       <button
         type="button"
-        disabled={gate.verified && !isFormValid}
+        disabled={gate.loading || (gate.verified && !isFormValid)}
         onClick={() => gate.guard(() => setReviewOpen(true))}
         className="brand-gradient flex h-[42px] items-center justify-center rounded-lg text-sm font-medium text-white transition-opacity disabled:opacity-50"
       >

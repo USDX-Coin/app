@@ -45,17 +45,23 @@ describe('functionOrPage')
 
 ### Integration/E2E: Auth via localStorage
 
+The app persists **only** `isAuthenticated` — no token, no customer data. So a seeded
+session writes two keys: the app's own hint, and the mock seam holding the user that
+`GET /v2/auth/me` should answer with.
+
 ```typescript
-async function loginViaStorage(page) {
+async function loginViaStorage(page, userOverrides) {
   await page.goto("/login");
-  await page.evaluate(() => {
-    localStorage.setItem("usdx-auth", JSON.stringify({
-      state: { user: {...}, token: "mock", isAuthenticated: true },
-      version: 0,
-    }));
-  });
+  await page.evaluate(({ auth, u }) => {
+    localStorage.setItem("usdx-auth", JSON.stringify(auth)); // { state: { isAuthenticated: true }, version: 0 }
+    localStorage.setItem("usdx-mock-user", JSON.stringify(u)); // mock-api MOCK_USER_KEY
+  }, { auth: AUTH_STATE, u: { ...SEED_USER, ...userOverrides } });
 }
 ```
+
+`seedMeDelay(page, ms)` stretches that `/auth/me` round trip, so the window where the
+app knows it has a session but not yet *who* is assertable (see
+`integration/session-hydration.spec.ts`).
 
 ### Unit: Store reset
 

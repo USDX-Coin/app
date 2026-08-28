@@ -3,6 +3,12 @@ import { persist } from "zustand/middleware";
 import type { User } from "@/types";
 
 interface AuthState {
+  // The consumer profile. IN-MEMORY only — it never reaches localStorage, because
+  // `name` / `email` / `phone` are the customer's personal data and the backend
+  // already stores `users.phone` encrypted at rest. Writing it back out in clear on
+  // the device would undo that. Repopulated on every app load from
+  // GET /api/v2/auth/me (`useSession`, mounted by the dashboard layout); `null`
+  // means "not answered yet", never "not verified" — see `lib/auth/guards.ts`.
   user: User | null;
   // Bearer credential (openapi AuthTokenV2.accessToken / sessionId). Kept IN-MEMORY
   // only — never persisted (USDX-357 / WSTG-CLNT-12: a token in localStorage is
@@ -29,10 +35,30 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: "usdx-auth",
-      // CLNT-12: persist only non-credential UX state. `token` is deliberately excluded
-      // so it never reaches localStorage; `user`/`isAuthenticated` persist so a reload
-      // doesn't flash the login screen while the cookie re-authenticates in the background.
-      partialize: (state) => ({ user: state.user, isAuthenticated: state.isAuthenticated }),
+      // ONE key on the device, and it is a rendering hint — not a security claim.
+      //
+      // `isAuthenticated` answers a single question the UI has to answer before the
+      // server can: which page skeleton do I draw, the dashboard shell or the login
+      // form. Authority stays where it already was — the httpOnly session cookie and
+      // the server. Someone who edits this value to `true` in devtools gets an empty
+      // shell and nothing else: every byte of content on it (identity, KYC status,
+      // balances, orders) is fetched with the cookie, so a forged flag buys a
+      // skeleton and a redirect back to /login on the first 401. Do NOT "harden" this
+      // by signing it or moving it server-side; there is nothing here to protect.
+      //
+      // What is deliberately NOT here:
+      //  - `token` — a credential in localStorage is stealable by XSS (USDX-357 /
+      //    WSTG-CLNT-12).
+      //  - `user` — name / email / phone are the customer's personal data. They are
+      //    needed only to DISPLAY, and display can wait for /api/v2/auth/me. Keeping
+      //    them out means a device backup, a borrowed laptop or a browser extension
+      //    finds nothing at rest, without the victim ever opening the app. (This does
+      //    not defeat XSS: script running on the page can still call /auth/me with
+      //    the victim's cookie. It removes the data that just sits there.)
+      //
+      // Encrypting the blob was rejected — the key would ship to the same device.
+      // sessionStorage was rejected — the same script reads it just as easily.
+      partialize: (state) => ({ isAuthenticated: state.isAuthenticated }),
     }
   )
 );

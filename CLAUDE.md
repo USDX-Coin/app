@@ -70,6 +70,13 @@ Zustand Store  →  Custom Hook  →  Component  →  Mock API
 ```
 
 - **Zustand**: form wizard state (step, chainId, amount), auth (user, token)
+- **What auth actually persists**: `isAuthenticated` and nothing else. The token is
+  in-memory (CLNT-12) and so is the `user` object — name/email/phone are the
+  customer's personal data and `users.phone` is encrypted server-side. The dashboard
+  layout refetches the profile from `GET /api/v2/auth/me` on every app load
+  (`useSession`), so `user === null` means "not answered yet", never "not verified".
+  Anything that redirects or locks must use the tri-state `lib/auth/guards.ts`
+  (`unknown | allowed | blocked`) and render a skeleton on `unknown`
 - **TanStack Query**: async data (transactions, wallet balance, mutations)
 - **Hooks**: combine store + query + validation + calculations + useMemo
 

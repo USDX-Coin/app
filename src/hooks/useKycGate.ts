@@ -28,7 +28,10 @@ export function useKycGate() {
   // Neither source has answered yet. The old `?? "UNVERIFIED"` default was safe
   // only because the user object came back instantly from localStorage; now it does
   // not, and defaulting would open a "complete your KYC" dialog in the face of a
-  // customer who is verified. Unknown is its own state: block nothing, show nothing.
+  // customer who IS verified. Unknown is its own state: the CTA waits (disabled),
+  // no dialog, no verdict. If BOTH calls fail without a 401 the CTA stays disabled —
+  // deliberately: with the backend unreachable the transaction could not proceed
+  // anyway, and a disabled button is honest where the dialog would be a lie.
   const loading = !statusQuery.data && !user;
 
   const status: KycStatus =

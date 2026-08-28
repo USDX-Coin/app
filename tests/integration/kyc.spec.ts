@@ -30,6 +30,12 @@ async function fillForm(page: Page) {
   await page.getByLabel("Birth Place").fill("Jakarta");
   await page.getByLabel("KTP Number").fill("3171234567890123");
   await page.getByLabel("Address", { exact: true }).fill("Jl. Sudirman No. 1");
+  // CDD block (USDX-545) — also required for a submit to go through. The CDD
+  // rules themselves are covered in kyc-cdd.spec.ts; here it is just form fill.
+  await page.selectOption("#occupation", "PRIVATE_EMPLOYEE");
+  await page.selectOption("#sourceOfFunds", "SALARY");
+  await page.selectOption("#annualIncomeRange", "FROM_100M_TO_500M");
+  await page.selectOption("#transactionPurpose", "INVESTMENT");
 }
 
 async function uploadPhotos(page: Page) {

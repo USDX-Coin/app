@@ -5,6 +5,7 @@ import type {
   ResetPasswordRequest,
   ChangePasswordRequest,
   SubmitKycRequest,
+  SubmitKycCddRequest,
   PresignedUploadRequest,
   PresignedUploadResult,
   CreateMintRequest,
@@ -325,6 +326,18 @@ function setKycStatusOverride(status: User["kycStatus"]) {
   localStorage.setItem(KYC_OVERRIDE_KEY, status);
 }
 
+// USDX-545 seam: simulated "CDD already on record" flag ("usdx-mock-kyc-cdd").
+// Default FALSE — matching dev, where the CDD columns do not exist yet and every
+// existing VERIFIED customer is missing the answers. A BOOLEAN FLAG ONLY: the CDD
+// values themselves (and above all `npwp` / `pepRelation`) are never written here.
+// Mock-only; the real backend owns this state.
+const KYC_CDD_OVERRIDE_KEY = "usdx-mock-kyc-cdd";
+
+function cddCompleteOverride(): boolean {
+  if (typeof localStorage === "undefined") return false;
+  return localStorage.getItem(KYC_CDD_OVERRIDE_KEY) === "1";
+}
+
 export async function mockGetMyKycStatus(): Promise<KycMyStatus> {
   await delay(200);
   const user = currentAccount()?.user ?? DEMO_USER;
@@ -340,6 +353,27 @@ export async function mockGetMyKycStatus(): Promise<KycMyStatus> {
     submittedAt: user.updatedAt,
     reviewedAt: status === "PENDING" ? null : user.updatedAt,
     rejectionReason: status === "REJECTED" ? MOCK_REJECT_REASON : null,
+    cddComplete: cddCompleteOverride(),
+  };
+}
+
+// CDD-only top-up (USDX-545). The whole point of this handler is what it does NOT
+// do: it does not touch `kycStatus`, does not arm the status seam, and does not
+// bump `submissionCount`. Only the "CDD is on record now" flag flips.
+export async function mockSubmitKycCdd(_req: SubmitKycCddRequest): Promise<KycMyStatus> {
+  await delay(500);
+  const user = currentAccount()?.user ?? DEMO_USER;
+  const status = kycStatusOverride() ?? user.kycStatus;
+  if (typeof localStorage !== "undefined") {
+    localStorage.setItem(KYC_CDD_OVERRIDE_KEY, "1");
+  }
+  return {
+    status,
+    submissionCount: 1,
+    submittedAt: user.updatedAt,
+    reviewedAt: user.updatedAt,
+    rejectionReason: null,
+    cddComplete: true,
   };
 }
 

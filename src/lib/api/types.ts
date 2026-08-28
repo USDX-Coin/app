@@ -1,4 +1,10 @@
 import type { AmountCurrency, ConsumerOrderType, EntityType } from "@/types";
+import type {
+  AnnualIncomeRange,
+  Occupation,
+  SourceOfFunds,
+  TransactionPurpose,
+} from "@/lib/kyc/cdd";
 
 // ── Auth (openapi auth.yaml — Auth v2 / consumer) ──────────────────────────
 export interface LoginRequest {
@@ -57,6 +63,46 @@ export interface SubmitKycRequest {
   addressLine2: string | null;
   ktpObjectKey: string;
   selfieObjectKey: string;
+
+  // --- CDD block (USDX-545) --------------------------------------------------
+  // AWAITING BACKEND: the consumer contract (sot/api/kyc.yaml SubmitKycRequest)
+  // does not carry these yet — the endpoint is being extended in parallel under
+  // the same ticket. Field NAMES are the camelCase spelling of the reference
+  // columns in `backend/src/database/schema/partner/partner-customer-kyc.ts`
+  // (`source_of_funds` → `sourceOfFunds`, …), matching how every existing field
+  // on THIS endpoint is spelled (`first_name` → `firstName`,
+  // `identity_number` → `identityNumber`). Enum VALUES are byte-identical to the
+  // schema. If the backend lands snake_case keys instead, only this interface and
+  // `toCddPayload` change.
+  occupation: Occupation;
+  sourceOfFunds: SourceOfFunds;
+  annualIncomeRange: AnnualIncomeRange;
+  transactionPurpose: TransactionPurpose;
+  pepStatus: boolean;
+  // PII, nullable: only sent when pepStatus is true.
+  pepRelation: string | null;
+  // PII, nullable: optional — only customers who have an NPWP.
+  npwp: string | null;
+}
+
+/**
+ * Body of the CDD-only top-up (USDX-545): a customer whose identity is ALREADY
+ * VERIFIED filling in the due-diligence answers that were never asked of them.
+ *
+ * Exactly the CDD subset of `SubmitKycRequest` — no identity, no object keys.
+ * Sending it through the normal submit endpoint is not an option: that endpoint
+ * sets `status = PENDING`, which would knock a verified customer back into review.
+ *
+ * AWAITING BACKEND — see § Backend Integration Notes on the PR.
+ */
+export interface SubmitKycCddRequest {
+  occupation: Occupation;
+  sourceOfFunds: SourceOfFunds;
+  annualIncomeRange: AnnualIncomeRange;
+  transactionPurpose: TransactionPurpose;
+  pepStatus: boolean;
+  pepRelation: string | null;
+  npwp: string | null;
 }
 
 // ── Storage (openapi storage.yaml — consumer) ──────────────────────────────

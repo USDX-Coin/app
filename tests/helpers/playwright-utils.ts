@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
 const AUTH_STATE = {
   state: {
@@ -115,6 +115,21 @@ export async function seedBannerTtl(page: Page, ms: number) {
     (v) => localStorage.setItem("usdx-mock-banner-ttl", v),
     String(ms),
   );
+}
+
+/**
+ * Pilih pekerjaan lewat combobox pencarian (USDX-586). 99 nilai Permendagri tidak
+ * lagi muat di `<select>`, jadi `selectOption("#occupation", …)` sudah tidak
+ * berlaku: tombolnya membuka panel Popover + Command, dan penyaringan bekerja pada
+ * LABEL yang terlihat — nilai enum tidak pernah ikut disaring maupun tampil.
+ *
+ * `label` memakai ejaan Permendagri apa adanya, sama di kedua bahasa.
+ */
+export async function pickOccupation(page: Page, label: string) {
+  await page.getByTestId("occupation-trigger").click();
+  await page.getByPlaceholder(/Search occupation|Cari pekerjaan/).fill(label);
+  await page.getByRole("option", { name: label, exact: true }).click();
+  await expect(page.getByTestId("occupation-trigger")).toContainText(label);
 }
 
 /** Tiny valid PNG for upload tests (file-type/size validation is client-side). */

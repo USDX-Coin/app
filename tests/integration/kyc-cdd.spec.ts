@@ -3,13 +3,15 @@ import {
   loginViaStorage,
   forceEnglish,
   forceIndonesian,
+  pickOccupation,
   seedKycStatus,
   TEST_PNG,
 } from "../helpers/playwright-utils";
 
-// /kyc CDD block (USDX-545): the four due-diligence dropdowns, the PEP
-// declaration and its conditional relation field, and optional NPWP. Runs against
-// the mock backend via the existing localStorage seams.
+// /kyc CDD block (USDX-545, extended USDX-586): the due-diligence answers, the PEP
+// declaration with its conditional relation AND source of wealth, the optional
+// workplace details and NPWP, plus the searchable 99-value occupation picker. Runs
+// against the mock backend via the existing localStorage seams.
 
 /**
  * Every technical enum member that must never be rendered as UI text. Asserted in
@@ -17,10 +19,10 @@ import {
  * "Salary"/`SALARY` differ only by case, which would make the check toothless.
  */
 const ENUM_VALUES = [
-  "PRIVATE_EMPLOYEE",
-  "SELF_EMPLOYED",
-  "CIVIL_SERVANT",
-  "STUDENT",
+  "KARYAWAN_SWASTA",
+  "WIRASWASTA",
+  "PEGAWAI_NEGERI_SIPIL",
+  "BELUM_TIDAK_BEKERJA",
   "SALARY",
   "BUSINESS",
   "INHERITANCE",
@@ -28,14 +30,22 @@ const ENUM_VALUES = [
   "FROM_100M_TO_500M",
   "FROM_500M_TO_1B",
   "OVER_1B",
+  "UNDER_500M",
+  "FROM_500M_TO_2B",
+  "OVER_10B",
   "INVESTMENT",
   "PAYMENT",
   "REMITTANCE",
   "OTHER",
+  "SALARY_ACCUMULATION",
+  "PROPERTY_SALE",
 ] as const;
 
-/** placeholders (4) + members (5 + 5 + 4 + 4). */
-const TOTAL_CDD_OPTIONS = 22;
+/**
+ * `<select>` yang tersisa: placeholder (4) + anggota (5 + 4 + 4 + 4). Pekerjaan
+ * TIDAK ikut dihitung — sejak USDX-586 ia combobox pencarian, bukan `<select>`.
+ */
+const TOTAL_CDD_OPTIONS = 21;
 
 // Distinctive so a storage scan can prove they were never persisted.
 const NPWP_SENTINEL = "091234567890000";
@@ -63,10 +73,17 @@ async function fillIdentity(page: Page) {
   await page.getByLabel("Address", { exact: true }).fill("Jl. Sudirman No. 1");
 }
 
+async function fillIdentityExtras(page: Page) {
+  await page.selectOption("#gender", "LAKI_LAKI");
+  await page.selectOption("#maritalStatus", "KAWIN");
+  await page.getByLabel("Mother's Maiden Name").fill("Siti Aminah");
+}
+
 async function fillCdd(page: Page) {
-  await page.selectOption("#occupation", "PRIVATE_EMPLOYEE");
+  await pickOccupation(page, "Karyawan Swasta");
   await page.selectOption("#sourceOfFunds", "SALARY");
   await page.selectOption("#annualIncomeRange", "FROM_100M_TO_500M");
+  await page.selectOption("#netWorthRange", "FROM_500M_TO_2B");
   await page.selectOption("#transactionPurpose", "INVESTMENT");
 }
 
@@ -89,7 +106,7 @@ async function dumpWebStorage(page: Page) {
 
 test.describe("KYC CDD fields", () => {
   test.describe("positive", () => {
-    test("all four dropdowns are present and submit succeeds once answered", async ({
+    test("every due-diligence control is present and submit succeeds once answered", async ({
       page,
     }) => {
       await gotoKyc(page);
@@ -97,12 +114,14 @@ test.describe("KYC CDD fields", () => {
         "#occupation",
         "#sourceOfFunds",
         "#annualIncomeRange",
+        "#netWorthRange",
         "#transactionPurpose",
       ]) {
         await expect(page.locator(id)).toBeVisible();
       }
 
       await fillIdentity(page);
+      await fillIdentityExtras(page);
       await fillCdd(page);
       await uploadPhotos(page);
       await page.getByRole("button", { name: "Submit for Verification" }).click();
@@ -114,6 +133,7 @@ test.describe("KYC CDD fields", () => {
     test("NPWP is optional — submit goes through with it empty", async ({ page }) => {
       await gotoKyc(page);
       await fillIdentity(page);
+      await fillIdentityExtras(page);
       await fillCdd(page);
       await uploadPhotos(page);
       await expect(page.getByLabel("NPWP (optional)")).toHaveValue("");
@@ -131,15 +151,18 @@ test.describe("KYC CDD fields", () => {
       await expect(page.getByLabel("Pekerjaan")).toBeVisible();
       await expect(page.getByLabel("Sumber Dana")).toBeVisible();
       await expect(page.getByLabel("Penghasilan per Tahun")).toBeVisible();
+      await expect(page.getByLabel("Nilai Harta Kekayaan")).toBeVisible();
       await expect(page.getByLabel("Tujuan Transaksi")).toBeVisible();
 
       // Option text, not option value.
       await expect(
-        page.locator("#occupation option", { hasText: "Karyawan swasta" }),
-      ).toHaveCount(1);
-      await expect(
         page.locator("#annualIncomeRange option", { hasText: "Rp 100 juta - Rp 500 juta" }),
       ).toHaveCount(1);
+      await expect(
+        page.locator("#netWorthRange option", { hasText: "Rp 500 juta - Rp 2 miliar" }),
+      ).toHaveCount(1);
+      // Pekerjaan: label Permendagri apa adanya, tidak diterjemahkan ulang.
+      await pickOccupation(page, "Karyawan Swasta");
     });
   });
 
@@ -149,12 +172,14 @@ test.describe("KYC CDD fields", () => {
     }) => {
       await gotoKyc(page);
       await fillIdentity(page);
+      await fillIdentityExtras(page);
       await uploadPhotos(page); // identity block complete → the button is enabled
       await page.getByRole("button", { name: "Submit for Verification" }).click();
 
       await expect(page.getByText("Occupation is required")).toBeVisible();
       await expect(page.getByText("Source of funds is required")).toBeVisible();
       await expect(page.getByText("Annual income is required")).toBeVisible();
+      await expect(page.getByText("Net worth is required")).toBeVisible();
       await expect(page.getByText("Transaction purpose is required")).toBeVisible();
       // Rejected: the status banner never flips.
       await expect(page.getByText("Verification in review")).toBeHidden();
@@ -165,6 +190,7 @@ test.describe("KYC CDD fields", () => {
     }) => {
       await gotoKyc(page);
       await fillIdentity(page);
+      await fillIdentityExtras(page);
       await fillCdd(page);
       await page.selectOption("#sourceOfFunds", ""); // back to the placeholder
       await uploadPhotos(page);
@@ -178,12 +204,16 @@ test.describe("KYC CDD fields", () => {
     test("declaring PEP without the relation is rejected by name", async ({ page }) => {
       await gotoKyc(page);
       await fillIdentity(page);
+      await fillIdentityExtras(page);
       await fillCdd(page);
       await uploadPhotos(page);
       await page.getByLabel(/holds a public office/).check();
       await page.getByRole("button", { name: "Submit for Verification" }).click();
 
       await expect(page.getByText("PEP relationship is required")).toBeVisible();
+      // Pasal 37 (1) d: EDD berkala untuk PEP menganalisis sumber dana DAN sumber
+      // kekayaan, jadi keduanya wajib begitu PEP dinyatakan.
+      await expect(page.getByText("Source of wealth is required")).toBeVisible();
       await expect(page.getByText("Verification in review")).toBeHidden();
     });
 
@@ -194,7 +224,7 @@ test.describe("KYC CDD fields", () => {
       // Every <option> must carry a human label in its text and the technical
       // member only in its value attribute.
       const options = await page.$$eval(
-        "#occupation option, #sourceOfFunds option, #annualIncomeRange option, #transactionPurpose option",
+        "#sourceOfFunds option, #annualIncomeRange option, #netWorthRange option, #transactionPurpose option",
         (els) =>
           els.map((el) => ({
             value: (el as HTMLOptionElement).value,
@@ -220,14 +250,19 @@ test.describe("KYC CDD fields", () => {
     test("the PEP relation field appears only while PEP is declared", async ({ page }) => {
       await gotoKyc(page);
       const relation = page.getByLabel("Relationship and office held");
+      const sourceOfWealth = page.locator("#sourceOfWealth");
       await expect(relation).toBeHidden();
+      await expect(sourceOfWealth).toBeHidden();
 
       const pep = page.getByLabel(/holds a public office/);
       await pep.check();
       await expect(relation).toBeVisible();
+      // Pasal 37 (1) d: sumber kekayaan ikut ditanyakan begitu PEP dinyatakan.
+      await expect(sourceOfWealth).toBeVisible();
 
       await pep.uncheck();
       await expect(relation).toBeHidden();
+      await expect(sourceOfWealth).toBeHidden();
     });
 
     test("un-checking PEP clears the relation instead of keeping it hidden", async ({
@@ -237,9 +272,12 @@ test.describe("KYC CDD fields", () => {
       const pep = page.getByLabel(/holds a public office/);
       await pep.check();
       await page.getByLabel("Relationship and office held").fill(PEP_SENTINEL);
+      await page.selectOption("#sourceOfWealth", "SALARY_ACCUMULATION");
       await pep.uncheck();
       await pep.check();
+      // Keduanya ditarik kembali, bukan sekadar disembunyikan.
       await expect(page.getByLabel("Relationship and office held")).toHaveValue("");
+      await expect(page.locator("#sourceOfWealth")).toHaveValue("");
     });
 
     test("NPWP and the PEP relation never reach local or session storage", async ({
@@ -247,10 +285,12 @@ test.describe("KYC CDD fields", () => {
     }) => {
       await gotoKyc(page);
       await fillIdentity(page);
+      await fillIdentityExtras(page);
       await fillCdd(page);
       await page.getByLabel("NPWP (optional)").fill(NPWP_SENTINEL);
       await page.getByLabel(/holds a public office/).check();
       await page.getByLabel("Relationship and office held").fill(PEP_SENTINEL);
+      await page.selectOption("#sourceOfWealth", "SALARY_ACCUMULATION");
       await uploadPhotos(page);
 
       // While typing…
@@ -279,9 +319,112 @@ test.describe("KYC CDD fields", () => {
       await expect(page.getByText("Verification in review")).toBeVisible({
         timeout: 15000,
       });
-      await expect(page.locator("#occupation")).toBeDisabled();
+      await expect(page.getByTestId("occupation-trigger")).toBeDisabled();
+      await expect(page.locator("#netWorthRange")).toBeDisabled();
       await expect(page.locator("#pepStatus")).toBeDisabled();
       await expect(page.getByLabel("NPWP (optional)")).toBeDisabled();
+    });
+  });
+});
+
+// USDX-586 — pemilih pekerjaan dengan pencarian. 99 nilai Permendagri di dropdown
+// polos tidak bisa dipakai manusia, jadi ini SATU-SATUNYA kontrol baru yang
+// ditambahkan tiket ini. Yang diuji: penyaringan bekerja, yang tersimpan tetap
+// nilai enum (bukan teks bebas), dan kotak pencarian tidak pernah jadi jawaban.
+test.describe("KYC occupation picker", () => {
+  const trigger = (page: Page) => page.getByTestId("occupation-trigger");
+  const search = (page: Page) => page.getByPlaceholder(/Search occupation|Cari pekerjaan/);
+
+  test.describe("positive", () => {
+    test("typing filters the 99 Permendagri jobs down to the matching ones", async ({
+      page,
+    }) => {
+      await gotoKyc(page);
+      await trigger(page).click();
+      // Dibatasi ke listbox milik cmdk: `<option>` dari `<select>` bawaan juga
+      // ber-role "option" dan akan ikut terhitung kalau tidak dipersempit.
+      const jobs = page.getByRole("listbox").getByRole("option");
+      await expect(jobs).toHaveCount(99);
+
+      // "swasta" ada di dalam DUA label ("Karyawan Swasta" dan "WiraSWASTA"), jadi
+      // keduanya bertahan — penyaringannya substring, bukan awalan.
+      await search(page).fill("swasta");
+      await expect(page.getByRole("option", { name: "Karyawan Swasta" })).toBeVisible();
+      await expect(page.getByRole("option", { name: "Wiraswasta" })).toBeVisible();
+      // Menyaring, bukan sekadar menyorot: 97 pekerjaan lain hilang dari daftar.
+      await expect(jobs).toHaveCount(2);
+    });
+
+    test("a picked job is stored as its enum value, not as free text", async ({ page }) => {
+      await gotoKyc(page);
+      await fillIdentity(page);
+      await fillIdentityExtras(page);
+      await pickOccupation(page, "Wiraswasta");
+      await page.selectOption("#sourceOfFunds", "BUSINESS");
+      await page.selectOption("#annualIncomeRange", "OVER_1B");
+      await page.selectOption("#netWorthRange", "OVER_10B");
+      await page.selectOption("#transactionPurpose", "INVESTMENT");
+      await uploadPhotos(page);
+
+      // Tidak ada error "Pekerjaan wajib dipilih" → validator melihat anggota enum
+      // yang sah, dan submit lolos.
+      await page.getByRole("button", { name: "Submit for Verification" }).click();
+      await expect(page.getByText("Verification in review")).toBeVisible({ timeout: 15000 });
+      await expect(page.getByText("Occupation is required")).toBeHidden();
+    });
+
+    test("Permendagri wording is used verbatim, in both locales", async ({ page }) => {
+      for (const locale of ["en", "id"] as const) {
+        await gotoKyc(page, locale);
+        await trigger(page).click();
+        // Ejaan asli Permendagri, termasuk yang terlihat seperti salah ketik.
+        for (const label of ["Karyawan Swasta", "Wiraswasta", "Cheff", "Petani/Pekebun"]) {
+          await expect(page.getByRole("option", { name: label, exact: true })).toBeVisible();
+        }
+        await page.keyboard.press("Escape");
+      }
+    });
+  });
+
+  test.describe("negative", () => {
+    test("text typed into the search box is never accepted as an answer", async ({
+      page,
+    }) => {
+      await gotoKyc(page);
+      await fillIdentity(page);
+      await fillIdentityExtras(page);
+      await page.selectOption("#sourceOfFunds", "SALARY");
+      await page.selectOption("#annualIncomeRange", "UNDER_100M");
+      await page.selectOption("#netWorthRange", "UNDER_500M");
+      await page.selectOption("#transactionPurpose", "PAYMENT");
+      await uploadPhotos(page);
+
+      await trigger(page).click();
+      await search(page).fill("Tukang Roket Antariksa");
+      await expect(page.getByText(/No occupation found|Pekerjaan tidak ditemukan/)).toBeVisible();
+      await page.keyboard.press("Escape");
+
+      await page.getByRole("button", { name: "Submit for Verification" }).click();
+      await expect(page.getByText("Occupation is required")).toBeVisible();
+      await expect(page.getByText("Verification in review")).toBeHidden();
+    });
+  });
+
+  test.describe("edge cases", () => {
+    test("the workplace pair is optional — submit succeeds with both empty", async ({
+      page,
+    }) => {
+      await gotoKyc(page);
+      await fillIdentity(page);
+      await fillIdentityExtras(page);
+      await fillCdd(page);
+      await uploadPhotos(page);
+      // Butir g) Pasal 25 (1) a angka 1 berakhir "jika ada" — nasabah yang tidak
+      // bekerja tidak punya jawabannya.
+      await expect(page.getByLabel("Employer Address (optional)")).toHaveValue("");
+      await expect(page.getByLabel("Employer Phone (optional)")).toHaveValue("");
+      await page.getByRole("button", { name: "Submit for Verification" }).click();
+      await expect(page.getByText("Verification in review")).toBeVisible({ timeout: 15000 });
     });
   });
 });

@@ -11,6 +11,7 @@ import {
 } from "@/lib/api/kyc-api";
 import type { SubmitKycRequest, PresignedDocKind } from "@/lib/api/types";
 import { toCddPayload } from "@/lib/kyc/cdd";
+import { toIdentityPayload } from "@/lib/kyc/identity";
 
 // Shared with useKycGate so the gate and the /kyc page read the same cache entry.
 export const KYC_STATUS_KEY = ["kyc", "me"] as const;
@@ -39,20 +40,16 @@ const EMPTY_DOC: KycDocState = {
 };
 
 export interface KycSubmitInput {
-  firstName: string;
-  lastName: string;
-  dob: string;
-  birthPlace: string;
-  identityNumber: string;
-  addressLine1: string;
-  addressLine2?: string | null;
-  // CDD block (USDX-545) — already narrowed + normalised by `toCddPayload`, so the
-  // hook only forwards it. Kept as one nested object rather than seven loose
-  // params so the caller cannot forward a half-validated CDD form.
+  // Kedua separuh form sudah disempitkan + dinormalkan builder-nya masing-masing
+  // (`toIdentityPayload` / `toCddPayload`), jadi hook tinggal meneruskan. Disimpan
+  // sebagai dua objek bersarang, bukan puluhan parameter lepas, supaya pemanggil
+  // tidak bisa meneruskan form yang baru setengah divalidasi.
+  identity: IdentityPayload;
   cdd: CddPayload;
 }
 
 export type CddPayload = ReturnType<typeof toCddPayload>;
+export type IdentityPayload = ReturnType<typeof toIdentityPayload>;
 
 // KYC status + submission flow (USDX-152). Files upload EAGERLY on selection
 // (presign → PUT to bucket → keep objectKey in state, per the ticket's per-file
@@ -127,21 +124,18 @@ export function useKyc() {
   const submitMutation = useMutation({
     mutationFn: async (input: KycSubmitInput) => {
       const payload: SubmitKycRequest = {
-        firstName: input.firstName,
-        lastName: input.lastName,
-        dob: input.dob,
-        birthPlace: input.birthPlace,
-        identityType: "KTP",
-        identityNumber: input.identityNumber,
+        // Di-spread, bukan didaftar ulang field per field: builder payload adalah
+        // satu-satunya tempat yang boleh memutuskan kunci wire, sehingga penggantian
+        // nama di sana tidak bisa diam-diam meninggalkan salinan basi di sini.
+        ...input.identity,
+        ...input.cdd,
+        // `country` tetap "ID" (kyc.yaml: "Phase 2 awal hanya `ID`") dan ditampilkan
+        // read-only di form, jadi ia tidak pernah jadi state yang dikirim nasabah.
+        // Beda dari `nationality`, yang justru bisa diisi — negara alamat tinggal
+        // bukan kewarganegaraan.
         country: "ID",
-        addressLine1: input.addressLine1,
-        addressLine2: input.addressLine2 ?? null,
         ktpObjectKey: docs.ktp.objectKey!,
         selfieObjectKey: docs.selfie.objectKey!,
-        // CDD (USDX-545). Spread, not re-listed field by field: the payload
-        // builder is the only place allowed to decide the wire keys, so a rename
-        // there cannot silently leave a stale duplicate here.
-        ...input.cdd,
       };
       return submitKyc(payload);
     },

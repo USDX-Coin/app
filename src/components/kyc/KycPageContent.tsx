@@ -12,6 +12,7 @@ import { PAGE_HEADING_STICKY } from "@/components/shared/PageHeader";
 import { KycStatusBanner } from "./KycStatusBanner";
 import { KycCddFields } from "./KycCddFields";
 import { KycCddTopUp } from "./KycCddTopUp";
+import { KycSelect } from "./KycSelect";
 import { useSession } from "@/hooks/useSession";
 import { useKyc, type KycDocState } from "@/hooks/useKyc";
 import { useAuthStore } from "@/stores/authStore";
@@ -26,36 +27,54 @@ import {
   type CddErrorField,
   type CddFormState,
 } from "@/lib/kyc/cdd";
+import {
+  EMPTY_IDENTITY_FORM,
+  IDENTITY_OPTIONS,
+  identityDocLabelKey,
+  identityNumberErrorKey,
+  identityNumberLabelKey,
+  identityNumberPlaceholderKey,
+  identityOptionLabelKey,
+  selfieDocLabelKey,
+  toIdentityPayload,
+  validateIdentity,
+  type IdentityFormState,
+  type IdentityType,
+} from "@/lib/kyc/identity";
 import { kycFormMode } from "@/lib/kyc/form-mode";
 import { toast } from "sonner";
 
-const EMPTY_FORM = {
-  firstName: "",
-  lastName: "",
-  dob: "",
-  birthPlace: "",
-  identityNumber: "",
-  addressLine1: "",
-  addressLine2: "",
-};
-
-// /kyc (USDX-152): status banner per state, eager per-file presigned upload with
-// preview + loading, submit disabled until every field and both photos are in,
-// REJECTED → "Submit Ulang" reactivates the form (unlimited resubmit per
+// /kyc (USDX-152): banner status per keadaan, unggah presigned per berkas dengan
+// pratinjau + loading, submit mati sampai setiap field dan kedua foto masuk,
+// REJECTED → "Submit Ulang" mengaktifkan lagi formnya (resubmit tak terbatas per
 // sot/phase-2/week1.md § Status Flow).
 //
-// USDX-545 adds the CDD block (occupation, source of funds, annual income,
-// transaction purpose, PEP, NPWP) as a SECTION of this same single-step form.
+// USDX-545 menambahkan blok CDD sebagai SATU BAGIAN dari form satu langkah ini.
 //
-// RESOLVED 27 Aug 2026 (Wisnu): a customer who is ALREADY VERIFIED but has no CDD
-// on record is notified and allowed to complete it — not gated at transaction
-// time, not left alone. They get `KycCddTopUp`: the seven CDD fields only, submitted
-// through a separate endpoint that leaves their VERIFIED status alone. Which of the
-// two forms (if either) a customer sees lives in `lib/kyc/form-mode.ts` — the rule
-// "VERIFIED never gets the full form" is load-bearing, because the full form's
-// submit sets status back to PENDING.
+// USDX-586 melengkapi form ke Pasal 25 ayat (1) huruf a POJK 8/2023: bagian
+// identitas mendapat `nationality`, `gender`, `maritalStatus`, `mothersMaidenName`
+// (wajib) dan `aliasName` (opsional), `identityType` jadi bisa dipilih (KTP /
+// paspor, Pasal 26 ayat (2)), dan blok CDD mendapat `netWorthRange`,
+// `employerAddress`, `employerPhone`, serta `sourceOfWealth`. Sebelum ini backend
+// sudah mewajibkan sembilan field itu, jadi setiap submit dari app dijawab
+// 422 VALIDATION_ERROR — form ini yang tertinggal, bukan kontraknya.
+//
+// RESOLVED 27 Agu 2026 (Wisnu): nasabah yang SUDAH VERIFIED tapi belum punya CDD
+// diberi tahu dan boleh melengkapinya — tidak digate saat transaksi, tidak pula
+// dibiarkan. Mereka mendapat `KycCddTopUp`: hanya field CDD, dikirim lewat endpoint
+// terpisah yang membiarkan status VERIFIED apa adanya. Form mana (kalau ada) yang
+// dilihat seorang nasabah diputuskan `lib/kyc/form-mode.ts` — aturan "VERIFIED tidak
+// pernah mendapat form penuh" itu menanggung beban, karena submit form penuh
+// mengembalikan status ke PENDING.
+//
+// Lima field identitas baru USDX-586 TIDAK bisa dilengkapi lewat `KycCddTopUp`:
+// kontraknya menaruhnya di bagian identitas `SubmitKycRequest`, bukan di
+// `KycCddFields`, dan `PATCH /api/v2/kyc/cdd` sengaja tidak berkuasa mengubah data
+// identitas yang sudah disetujui. kyc.yaml mencatat itu sebagai lubang yang sudah
+// diketahui dengan jalur penyelesaian di tangan PM (pengkinian data berkala
+// Pasal 51), bukan sesuatu yang ditambal diam-diam dari sisi app.
 export function KycPageContent() {
-  useSession(); // refresh user (emailVerifiedAt / kycStatus) from /api/v2/auth/me
+  useSession(); // refresh user (emailVerifiedAt / kycStatus) dari /api/v2/auth/me
   const user = useAuthStore((s) => s.user);
   const { t } = useLang();
   const {
@@ -73,17 +92,30 @@ export function KycPageContent() {
     submittingCdd,
   } = useKyc();
 
-  const [form, setForm] = useState(EMPTY_FORM);
-  // CDD half of the same form. Separate state object because it has its own
-  // value types (enums + boolean), not just strings.
+  const [form, setForm] = useState<IdentityFormState>(EMPTY_IDENTITY_FORM);
+  // Separuh CDD dari form yang sama. Objek state terpisah karena tipe nilainya
+  // sendiri (enum + boolean), bukan sekadar string.
   const [cdd, setCdd] = useState<CddFormState>(EMPTY_CDD_FORM);
-  const [errors, setErrors] = useState<Record<string, string | undefined>>({});
-  // REJECTED state renders the banner only until the user opts into resubmitting.
+  // Nasabah sudah pernah menekan submit. Sebelum itu form diam saja; sesudahnya
+  // pesan error dihitung ulang tiap render, supaya pesan yang sudah diperbaiki
+  // langsung hilang dan tombolnya hidup lagi.
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  // Nomor identitas yang DITOLAK backend (400 `KYC_IDENTITY_NUMBER_INVALID`).
+  // Disimpan sebagai NILAINYA, bukan sebagai pesan: dengan begitu pesannya hilang
+  // sendiri begitu nasabah mengetik nomor lain, tanpa jalur pembersihan tersendiri
+  // yang bisa lupa dijalankan.
+  const [rejectedIdentityNumber, setRejectedIdentityNumber] = useState<string | null>(null);
+  // Keadaan REJECTED hanya merender banner sampai nasabah memilih mengajukan ulang.
   const [resubmitting, setResubmitting] = useState(false);
 
   const [gateBefore, gateAfter] = t("kyc.gate.body").split("{link}");
 
-  function setField(key: keyof typeof EMPTY_FORM, value: string) {
+  // Kedua setter memakai updater fungsional, BUKAN `{ ...form, [key]: value }` dari
+  // closure. Bukan gaya penulisan: checkbox PEP memanggil `onChange` tiga kali dalam
+  // satu event (pepStatus + dua field yang ditarik kembali), dan versi closure akan
+  // membuat panggilan kedua menulis ulang state hasil panggilan pertama — centangnya
+  // seolah tidak pernah berubah.
+  function setField<K extends keyof IdentityFormState>(key: K, value: IdentityFormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
@@ -91,31 +123,54 @@ export function KycPageContent() {
     setCdd((prev) => ({ ...prev, [key]: value }));
   }
 
-  // Each CDD key maps to its OWN message naming that field ("Pekerjaan wajib
-  // dipilih"), never one generic "please complete the form" — USDX-545 AC. Shared
-  // by both submit paths so the two can never disagree about what is required.
-  function cddErrorMessages(): Record<CddErrorField, string | undefined> {
-    const cddErrors = validateCdd(cdd);
+  // Setiap kunci CDD dipetakan ke pesannya SENDIRI yang menyebut field itu
+  // ("Pekerjaan wajib dipilih"), tidak pernah satu "lengkapi form" yang generik —
+  // AC USDX-545/USDX-586. Dipakai kedua jalur submit supaya keduanya tidak mungkin
+  // berbeda pendapat soal apa yang wajib.
+  function cddErrorMessages(source: CddFormState): Record<CddErrorField, string | undefined> {
+    const cddErrors = validateCdd(source);
     return {
       occupation: cddErrors.occupation && t(cddErrors.occupation),
       sourceOfFunds: cddErrors.sourceOfFunds && t(cddErrors.sourceOfFunds),
       annualIncomeRange: cddErrors.annualIncomeRange && t(cddErrors.annualIncomeRange),
+      netWorthRange: cddErrors.netWorthRange && t(cddErrors.netWorthRange),
       transactionPurpose: cddErrors.transactionPurpose && t(cddErrors.transactionPurpose),
+      sourceOfWealth: cddErrors.sourceOfWealth && t(cddErrors.sourceOfWealth),
       pepRelation: cddErrors.pepRelation && t(cddErrors.pepRelation),
     };
   }
 
-  // CDD-only top-up (already-VERIFIED customer). Calls `submitCdd`, NEVER
-  // `submit` — the latter would move a verified customer back to PENDING.
+  // Identitas + CDD + kedua foto, sebagai satu peta field → pesan. `identityNumber`
+  // sengaja lewat `validateIdentity`, bukan pola 16 digit yang ditulis di sini:
+  // aturannya berbeda untuk paspor (Pasal 26 ayat (2)), dan aturan itu hanya boleh
+  // hidup di satu tempat.
+  function fullFormErrors(
+    identity: IdentityFormState,
+    cddForm: CddFormState,
+  ): Record<string, string | undefined> {
+    const identityErrors = validateIdentity(identity);
+    return {
+      ...Object.fromEntries(
+        Object.entries(identityErrors).map(([field, key]) => [field, t(key)]),
+      ),
+      ktp: docs.ktp.objectKey ? undefined : t("kyc.err.ktp"),
+      selfie: docs.selfie.objectKey ? undefined : t("kyc.err.selfie"),
+      ...cddErrorMessages(cddForm),
+    };
+  }
+
+  // Top-up CDD saja (nasabah yang sudah VERIFIED). Memanggil `submitCdd`, TIDAK
+  // PERNAH `submit` — yang terakhir akan mengembalikan nasabah terverifikasi ke
+  // PENDING.
   async function handleCddTopUpSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const nextErrors = cddErrorMessages();
-    setErrors(nextErrors);
-    if (Object.values(nextErrors).some(Boolean)) return;
+    setSubmitAttempted(true);
+    if (Object.values(cddErrorMessages(cdd)).some(Boolean)) return;
 
     try {
       await submitCdd(toCddPayload(cdd));
       setCdd(EMPTY_CDD_FORM);
+      setSubmitAttempted(false);
       toast.success(t("kyc.cdd.topup.saved"));
     } catch (err) {
       toast.error(getErrorMessage(err, t("kyc.cdd.topup.failed")));
@@ -124,40 +179,30 @@ export function KycPageContent() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const nextErrors: Record<string, string | undefined> = {
-      firstName: form.firstName.trim() ? undefined : t("kyc.err.firstName"),
-      lastName: form.lastName.trim() ? undefined : t("kyc.err.lastName"),
-      dob: form.dob ? undefined : t("kyc.err.dob"),
-      birthPlace: form.birthPlace.trim() ? undefined : t("kyc.err.birthPlace"),
-      identityNumber: /^\d{16}$/.test(form.identityNumber) ? undefined : t("kyc.err.nik"),
-      addressLine1: form.addressLine1.trim() ? undefined : t("kyc.err.address"),
-      ktp: docs.ktp.objectKey ? undefined : t("kyc.err.ktp"),
-      selfie: docs.selfie.objectKey ? undefined : t("kyc.err.selfie"),
-      ...cddErrorMessages(),
-    };
-    setErrors(nextErrors);
-    if (Object.values(nextErrors).some(Boolean)) return;
+    setSubmitAttempted(true);
+    if (Object.values(fullFormErrors(form, cdd)).some(Boolean)) return;
 
     try {
       await submit({
-        firstName: form.firstName.trim(),
-        lastName: form.lastName.trim(),
-        dob: form.dob,
-        birthPlace: form.birthPlace.trim(),
-        identityNumber: form.identityNumber,
-        addressLine1: form.addressLine1.trim(),
-        addressLine2: form.addressLine2.trim() || null,
+        // Kedua payload dibangun builder-nya masing-masing, bukan disusun ulang di
+        // sini: hanya `toIdentityPayload`/`toCddPayload` yang boleh memutuskan kunci
+        // wire dan normalisasi `null`-nya.
+        identity: toIdentityPayload(form),
         cdd: toCddPayload(cdd),
       });
       setResubmitting(false);
-      setForm(EMPTY_FORM);
+      setForm(EMPTY_IDENTITY_FORM);
       setCdd(EMPTY_CDD_FORM);
+      setSubmitAttempted(false);
+      setRejectedIdentityNumber(null);
       clearUploads();
       toast.success(t("kyc.submitted"));
     } catch (err) {
       if (isApiError(err)) {
         if (err.code === "KYC_IDENTITY_NUMBER_INVALID") {
-          setErrors((prev) => ({ ...prev, identityNumber: t("kyc.err.nik") }));
+          // Backend menolak nomor yang lolos aturan lokal (mis. NIK 16 digit yang
+          // tidak terdaftar). Tandai nomornya, bukan pesannya — lihat state-nya.
+          setRejectedIdentityNumber(form.identityNumber);
           return;
         }
         if (err.code === "KYC_FILE_NOT_FOUND" || err.code === "KYC_FILE_INVALID") {
@@ -166,7 +211,7 @@ export function KycPageContent() {
           return;
         }
         if (err.status === 409) {
-          // Race: already PENDING / VERIFIED (e.g. another tab) — re-sync the banner.
+          // Balapan: sudah PENDING / VERIFIED (mis. dari tab lain) — sinkronkan banner.
           refreshStatus();
           return;
         }
@@ -175,7 +220,7 @@ export function KycPageContent() {
     }
   }
 
-  // requireEmailVerified — Phase 1 users migrate via Forgot password.
+  // requireEmailVerified — user Phase 1 bermigrasi lewat Forgot password.
   if (user && !isEmailVerified(user)) {
     return (
       <div className="mx-auto w-full max-w-xl">
@@ -204,18 +249,33 @@ export function KycPageContent() {
     );
   }
 
-  // Form visibility per state (USDX-152 + USDX-545): UNVERIFIED active; PENDING
-  // visible but disabled; REJECTED hidden until "Submit Ulang"; VERIFIED gets the
-  // CDD-only top-up while its CDD is missing, and nothing once it is complete.
+  // Tampilnya form per keadaan (USDX-152 + USDX-545): UNVERIFIED aktif; PENDING
+  // terlihat tapi mati; REJECTED tersembunyi sampai "Submit Ulang"; VERIFIED
+  // mendapat top-up CDD selama CDD-nya belum ada, dan tidak apa-apa setelah lengkap.
   const formDisabled = status.status === "PENDING" || submitting;
   const formMode = kycFormMode(status, resubmitting);
   const showForm = formMode === "full";
 
-  // Unchanged from USDX-152: the identity block + both photos gate the button.
-  // The CDD block is deliberately NOT part of this gate — a disabled button can
-  // only say "something is missing", and USDX-545 requires an error that NAMES the
-  // missing field. CDD is therefore checked on submit, where it can produce one
-  // message per field.
+  // Pesan error DITURUNKAN dari state form tiap render, bukan disimpan. Menyimpannya
+  // berarti menyalin state form ke tempat kedua yang bisa basi — dan pesan yang sudah
+  // diperbaiki nasabah akan bertahan di layar sampai submit berikutnya.
+  const errors: Record<string, string | undefined> = submitAttempted
+    ? formMode === "cdd-only"
+      ? cddErrorMessages(cdd)
+      : fullFormErrors(form, cdd)
+    : {};
+  if (!errors.identityNumber && rejectedIdentityNumber === form.identityNumber) {
+    errors.identityNumber = t(identityNumberErrorKey(form.identityType));
+  }
+  const hasErrors = Object.values(errors).some(Boolean);
+
+  // Tidak berubah sejak USDX-152: blok identitas dasar + kedua foto menggerbangi
+  // tombol. Field WAJIB BARU (kewarganegaraan, jenis kelamin, status perkawinan,
+  // nama gadis ibu kandung, net worth, sumber kekayaan) sengaja TIDAK ikut di sini —
+  // tombol mati hanya bisa berkata "ada yang kurang", sedangkan tiket menuntut pesan
+  // yang MENYEBUT field-nya. Karena itu field baru diperiksa saat submit, tempat ia
+  // bisa memunculkan satu pesan per field; setelah percobaan submit pertama,
+  // `hasErrors` di bawah yang mematikan tombolnya sampai semuanya diperbaiki.
   const allFilled =
     form.firstName.trim() !== "" &&
     form.lastName.trim() !== "" &&
@@ -226,10 +286,10 @@ export function KycPageContent() {
     uploadsReady;
 
   return (
-    // `w-full`: flex item of the dashboard scroll wrapper — `mx-auto` cancels the
-    // default stretch, so the column would otherwise shrink to its content width.
+    // `w-full`: item flex dari pembungkus scroll dashboard — `mx-auto` membatalkan
+    // stretch default, tanpa ini kolomnya menyusut selebar isinya.
     <div className="mx-auto w-full max-w-xl space-y-6">
-      {/* Sticky so the long KYC form scrolls under its own title. */}
+      {/* Sticky supaya form KYC yang panjang menggulir di bawah judulnya sendiri. */}
       <div className={PAGE_HEADING_STICKY}>
         <h1 className="text-2xl font-semibold text-foreground">{t("kyc.title")}</h1>
         <p className="mt-1 text-sm text-muted-foreground">{t("kyc.subtitle")}</p>
@@ -254,6 +314,18 @@ export function KycPageContent() {
       {showForm && (
         <form onSubmit={handleSubmit}>
           <fieldset disabled={formDisabled} className="space-y-4 disabled:opacity-60">
+            {/* Judul bagian identitas — pasangan judul blok CDD di bawah. Formnya
+                panjang sejak USDX-586, dan dua kelompok bernama membuatnya terbaca
+                sebagai dua pertanyaan, bukan satu borang. */}
+            <div>
+              <h2 className="text-sm font-semibold text-foreground">
+                {t("kyc.identity.sectionTitle")}
+              </h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t("kyc.identity.sectionHint")}
+              </p>
+            </div>
+
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <Label htmlFor="firstName">{t("kyc.firstName")}</Label>
@@ -277,6 +349,24 @@ export function KycPageContent() {
                 />
                 <FieldError message={errors.lastName} />
               </div>
+            </div>
+
+            {/* Alias — "nama lengkap termasuk nama alias, JIKA ADA" (butir a). Kosong
+                adalah jawaban lengkap, bukan pengajuan yang kurang, jadi tidak pernah
+                divalidasi dan labelnya menyebut opsional. */}
+            <div>
+              <Label htmlFor="aliasName">{t("kyc.aliasName")}</Label>
+              <Input
+                id="aliasName"
+                autoComplete="off"
+                placeholder={t("kyc.aliasNamePh")}
+                value={form.aliasName}
+                onChange={(e) => setField("aliasName", e.target.value)}
+                className="mt-1.5"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <Label htmlFor="dob">{t("kyc.dob")}</Label>
                 <Input
@@ -300,37 +390,103 @@ export function KycPageContent() {
                 />
                 <FieldError message={errors.birthPlace} />
               </div>
+              <KycSelect
+                id="gender"
+                label={t("kyc.gender")}
+                value={form.gender}
+                options={IDENTITY_OPTIONS.gender}
+                labelKey={(v) => identityOptionLabelKey("gender", v)}
+                error={errors.gender}
+                onChange={(v) => setField("gender", v as IdentityFormState["gender"])}
+              />
+              <KycSelect
+                id="maritalStatus"
+                label={t("kyc.maritalStatus")}
+                value={form.maritalStatus}
+                options={IDENTITY_OPTIONS.maritalStatus}
+                labelKey={(v) => identityOptionLabelKey("maritalStatus", v)}
+                error={errors.maritalStatus}
+                onChange={(v) =>
+                  setField("maritalStatus", v as IdentityFormState["maritalStatus"])
+                }
+              />
+            </div>
+
+            {/* Nama gadis ibu kandung — butir j), wajib dan tanpa kualifikasi "jika
+                ada". PII yang perlakuannya lebih ketat daripada nama biasa: di banyak
+                layanan keuangan Indonesia ia masih dipakai sebagai jawaban verifikasi
+                lewat telepon, jadi jangan pernah dipakai sebagai faktor autentikasi
+                di sistem kita sendiri dan jangan pernah dikembalikan ke app. */}
+            <div>
+              <Label htmlFor="mothersMaidenName">{t("kyc.mothersMaidenName")}</Label>
+              <Input
+                id="mothersMaidenName"
+                autoComplete="off"
+                placeholder={t("kyc.mothersMaidenNamePh")}
+                value={form.mothersMaidenName}
+                onChange={(e) => setField("mothersMaidenName", e.target.value)}
+                className="mt-1.5"
+                aria-invalid={!!errors.mothersMaidenName}
+              />
+              <FieldError message={errors.mothersMaidenName} />
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {/* Jenis identitas kini bisa dipilih (Pasal 26 ayat (2)): KTP untuk WNI,
+                  paspor untuk WNA. Mengubahnya ikut mengubah label, placeholder, dan
+                  aturan panjang nomor identitas di bawah. */}
+              <KycSelect
+                id="identityType"
+                label={t("kyc.identityType")}
+                value={form.identityType}
+                options={IDENTITY_OPTIONS.identityType}
+                labelKey={(v) => identityOptionLabelKey("identityType", v)}
+                onChange={(v) => setField("identityType", v as IdentityType)}
+              />
+              {/* Kewarganegaraan — butir e), dan BUKAN duplikat `country` di bawah:
+                  `country` adalah negara alamat tinggal, ini kewarganegaraan orangnya.
+                  WNI yang tinggal di Singapura punya nationality ID dan country SG.
+                  Kotak teks dua huruf, bukan daftar negara: kontraknya meminta kode
+                  ISO 3166-1 alpha-2 dan repo ini belum punya daftar negara — mengarang
+                  daftarnya di form kepatuhan justru masalah yang tiket ini perbaiki. */}
               <div>
-                <Label htmlFor="identityType">{t("kyc.identityType")}</Label>
+                <Label htmlFor="nationality">{t("kyc.nationality")}</Label>
                 <Input
-                  id="identityType"
-                  value="KTP"
-                  readOnly
-                  aria-readonly="true"
-                  className="mt-1.5 bg-muted/50 text-muted-foreground"
+                  id="nationality"
+                  autoComplete="off"
+                  maxLength={2}
+                  placeholder={t("kyc.nationalityPh")}
+                  value={form.nationality}
+                  onChange={(e) => setField("nationality", e.target.value.toUpperCase())}
+                  className="mt-1.5 uppercase"
+                  aria-invalid={!!errors.nationality}
                 />
-              </div>
-              <div>
-                <Label htmlFor="country">{t("kyc.country")}</Label>
-                <Input
-                  id="country"
-                  value="ID"
-                  readOnly
-                  aria-readonly="true"
-                  className="mt-1.5 bg-muted/50 text-muted-foreground"
-                />
+                <p className="mt-1 text-xs text-muted-foreground">{t("kyc.nationalityHint")}</p>
+                <FieldError message={errors.nationality} />
               </div>
             </div>
 
             <div>
-              <Label htmlFor="identityNumber">{t("kyc.identityNumber")}</Label>
+              <Label htmlFor="country">{t("kyc.country")}</Label>
+              <Input
+                id="country"
+                value="ID"
+                readOnly
+                aria-readonly="true"
+                className="mt-1.5 bg-muted/50 text-muted-foreground"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="identityNumber">
+                {t(identityNumberLabelKey(form.identityType))}
+              </Label>
               <Input
                 id="identityNumber"
-                inputMode="numeric"
-                placeholder={t("kyc.identityNumberPh")}
+                // Paspor alfanumerik — memaksa keypad angka di sana akan menyembunyikan
+                // huruf yang justru dibutuhkan.
+                inputMode={form.identityType === "KTP" ? "numeric" : "text"}
+                placeholder={t(identityNumberPlaceholderKey(form.identityType))}
                 value={form.identityNumber}
                 onChange={(e) => setField("identityNumber", e.target.value)}
                 className="mt-1.5"
@@ -366,14 +522,14 @@ export function KycPageContent() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <DocField
                 kind="ktp"
-                label={t("kyc.ktpPhoto")}
+                label={t(identityDocLabelKey(form.identityType))}
                 doc={docs.ktp}
                 requiredError={errors.ktp}
                 onSelect={selectDoc}
               />
               <DocField
                 kind="selfie"
-                label={t("kyc.selfiePhoto")}
+                label={t(selfieDocLabelKey(form.identityType))}
                 doc={docs.selfie}
                 requiredError={errors.selfie}
                 onSelect={selectDoc}
@@ -382,7 +538,7 @@ export function KycPageContent() {
 
             <Button
               type="submit"
-              disabled={!allFilled || uploadsBusy || submitting || formDisabled}
+              disabled={!allFilled || uploadsBusy || submitting || formDisabled || hasErrors}
               className="w-full brand-gradient text-white"
             >
               {submitting
@@ -426,10 +582,10 @@ function DocField({
   return (
     <div>
       <Label htmlFor={`${kind}File`}>{label}</Label>
-      {/* One dropzone card per document: placeholder while empty, the photo once
-          chosen. Clicking the card (re)opens the file picker — no separate
-          input + preview rows. The real input stays in the DOM (sr-only) so
-          tests and assistive tech keep targeting #ktpFile / #selfieFile. */}
+      {/* Satu kartu dropzone per dokumen: placeholder selagi kosong, fotonya begitu
+          dipilih. Mengklik kartu membuka (lagi) pemilih berkas — bukan baris input +
+          pratinjau terpisah. Input aslinya tetap ada di DOM (sr-only) supaya test dan
+          teknologi bantu tetap menyasar #ktpFile / #selfieFile. */}
       <label
         htmlFor={`${kind}File`}
         className={cn(
@@ -445,8 +601,8 @@ function DocField({
             alt={label}
             className="size-full object-cover"
             onError={(e) => {
-              // HEIC previews aren't renderable in most browsers — hide gracefully;
-              // the status row below still confirms the upload state.
+              // Pratinjau HEIC tidak bisa dirender kebanyakan browser — sembunyikan
+              // dengan anggun; baris status di bawah tetap menegaskan keadaan unggahan.
               (e.target as HTMLImageElement).style.display = "none";
             }}
           />

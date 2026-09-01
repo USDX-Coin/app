@@ -11,8 +11,13 @@ import type { CddErrorField, CddFormState } from "@/lib/kyc/cdd";
 // These customers passed KYC under the standard in force at the time — KTP,
 // selfie, Disdukcapil — and were simply never asked the due-diligence questions.
 // So this view:
-//   - asks for the SEVEN CDD FIELDS AND NOTHING ELSE. Identity is already
-//     accepted; re-requesting it would be treating a top-up as a re-application.
+//   - asks for the CDD BLOCK AND NOTHING ELSE (tujuh field, jadi sebelas sejak
+//     USDX-586). Identitas sudah diterima; memintanya lagi berarti memperlakukan
+//     top-up sebagai pengajuan ulang. Lima field identitas baru USDX-586 SENGAJA
+//     tidak ada di sini: kontraknya menaruhnya di `SubmitKycRequest`, dan
+//     `PATCH /api/v2/kyc/cdd` tidak boleh berkuasa mengubah identitas yang sudah
+//     disetujui tanpa review — lubang yang sudah diketahui, jalurnya keputusan PM
+//     (pengkinian data berkala Pasal 51).
 //   - submits through `submitCdd` (PATCH /api/v2/kyc/cdd), never through the full
 //     KYC submit, so the customer's VERIFIED status and submission_count are
 //     untouched. See lib/kyc/form-mode.ts.

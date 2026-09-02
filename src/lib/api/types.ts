@@ -1,10 +1,13 @@
 import type { AmountCurrency, ConsumerOrderType, EntityType } from "@/types";
 import type {
   AnnualIncomeRange,
+  NetWorthRange,
   Occupation,
   SourceOfFunds,
+  SourceOfWealth,
   TransactionPurpose,
 } from "@/lib/kyc/cdd";
+import type { Gender, IdentityType, MaritalStatus } from "@/lib/kyc/identity";
 
 // ── Auth (openapi auth.yaml — Auth v2 / consumer) ──────────────────────────
 export interface LoginRequest {
@@ -49,57 +52,76 @@ export interface ChangePasswordRequest {
 }
 
 // ── KYC (openapi kyc.yaml — consumer) ──────────────────────────────────────
-export type IdentityType = "KTP" | "DRIVER_LICENSE";
+// `IdentityType` hidup di `@/lib/kyc/identity` bersama daftar nilai + validasinya,
+// dan di-re-export di sini supaya modul yang hanya bicara soal bentuk wire tidak
+// perlu tahu asalnya.
+export type { IdentityType };
 
 export interface SubmitKycRequest {
+  // --- Identitas (kyc.yaml § SubmitKycRequest, POJK 8/2023 Pasal 25 (1) a) ------
   firstName: string;
   lastName: string;
+  // PII, nullable — butir a) "termasuk nama alias, JIKA ADA".
+  aliasName: string | null;
   dob: string; // YYYY-MM-DD
   birthPlace: string;
   identityType: IdentityType;
   identityNumber: string;
-  country: string; // ISO 3166-1 alpha-2; "ID" in Week 1
+  // Kewarganegaraan (butir e), ISO 3166-1 alpha-2 huruf besar. BUKAN duplikat
+  // `country`: itu negara alamat tinggal (butir c), ini kewarganegaraan orangnya.
+  nationality: string;
+  gender: Gender;
+  maritalStatus: MaritalStatus;
+  // PII. Wajib — butir j) tidak punya kualifikasi "jika ada".
+  mothersMaidenName: string;
+  country: string; // ISO 3166-1 alpha-2; "ID" di Phase 2 awal
   addressLine1: string;
   addressLine2: string | null;
   ktpObjectKey: string;
   selfieObjectKey: string;
 
-  // --- CDD block (USDX-545) --------------------------------------------------
-  // AWAITING BACKEND: the consumer contract (sot/api/kyc.yaml SubmitKycRequest)
-  // does not carry these yet — the endpoint is being extended in parallel under
-  // the same ticket. Field NAMES are the camelCase spelling of the reference
-  // columns in `backend/src/database/schema/partner/partner-customer-kyc.ts`
-  // (`source_of_funds` → `sourceOfFunds`, …), matching how every existing field
-  // on THIS endpoint is spelled (`first_name` → `firstName`,
-  // `identity_number` → `identityNumber`). Enum VALUES are byte-identical to the
-  // schema. If the backend lands snake_case keys instead, only this interface and
-  // `toCddPayload` change.
+  // --- Blok CDD (USDX-545, diperluas USDX-586) ---------------------------------
+  // Bentuknya persis `KycCddFields` di kyc.yaml — satu deklarasi di sana dipakai
+  // dua endpoint, jadi bidang di bawah harus identik dengan `SubmitKycCddRequest`.
   occupation: Occupation;
   sourceOfFunds: SourceOfFunds;
   annualIncomeRange: AnnualIncomeRange;
+  netWorthRange: NetWorthRange;
   transactionPurpose: TransactionPurpose;
+  // Nullable: opsional secara umum, WAJIB saat `pepStatus` true (Pasal 37 (1) d).
+  sourceOfWealth: SourceOfWealth | null;
+  // PII, nullable: butir g) "tempat kerja, JIKA ADA".
+  employerAddress: string | null;
+  employerPhone: string | null;
   pepStatus: boolean;
-  // PII, nullable: only sent when pepStatus is true.
+  // PII, nullable: hanya dikirim saat pepStatus true.
   pepRelation: string | null;
-  // PII, nullable: optional — only customers who have an NPWP.
+  // PII, nullable: opsional — hanya nasabah yang punya NPWP.
   npwp: string | null;
 }
 
 /**
- * Body of the CDD-only top-up (USDX-545): a customer whose identity is ALREADY
- * VERIFIED filling in the due-diligence answers that were never asked of them.
+ * Body top-up CDD (USDX-545): nasabah yang identitasnya SUDAH VERIFIED mengisi
+ * jawaban due diligence yang tidak pernah ditanyakan kepadanya.
  *
- * Exactly the CDD subset of `SubmitKycRequest` — no identity, no object keys.
- * Sending it through the normal submit endpoint is not an option: that endpoint
- * sets `status = PENDING`, which would knock a verified customer back into review.
+ * Persis subset CDD dari `SubmitKycRequest` — tanpa identitas, tanpa object key.
+ * Mengirimnya lewat endpoint submit biasa bukan pilihan: endpoint itu menulis
+ * `status = PENDING`, yang akan menjatuhkan nasabah terverifikasi kembali ke antrean
+ * review.
  *
- * AWAITING BACKEND — see § Backend Integration Notes on the PR.
+ * Lima field identitas baru USDX-586 sengaja TIDAK ada di sini: kyc.yaml menaruhnya
+ * di bagian identitas `SubmitKycRequest`, dan endpoint ini tidak boleh berkuasa
+ * mengubah data identitas yang sudah disetujui tanpa review.
  */
 export interface SubmitKycCddRequest {
   occupation: Occupation;
   sourceOfFunds: SourceOfFunds;
   annualIncomeRange: AnnualIncomeRange;
+  netWorthRange: NetWorthRange;
   transactionPurpose: TransactionPurpose;
+  sourceOfWealth: SourceOfWealth | null;
+  employerAddress: string | null;
+  employerPhone: string | null;
   pepStatus: boolean;
   pepRelation: string | null;
   npwp: string | null;

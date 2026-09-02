@@ -2,9 +2,11 @@ import { describe, test, expect, vi, beforeEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { createWrapper } from "../../helpers/test-utils";
 import { toCddPayload, EMPTY_CDD_FORM, type CddFormState } from "@/lib/kyc/cdd";
+import { toIdentityPayload, EMPTY_IDENTITY_FORM } from "@/lib/kyc/identity";
 
-// USDX-545 — the CDD block must actually reach POST /api/v2/kyc. Mocks the API
-// layer so this exercises the hook's payload assembly, not the network.
+// USDX-545 — the CDD block must actually reach POST /api/v2/kyc. USDX-586 adds the
+// five new identity fields to the same assertion. Mocks the API layer so this
+// exercises the hook's payload assembly, not the network.
 const statusMock = vi.fn();
 const submitMock = vi.fn();
 const submitCddMock = vi.fn();
@@ -21,21 +23,25 @@ vi.mock("@/lib/api/kyc-api", () => ({
 
 import { useKyc, type KycSubmitInput } from "@/hooks/useKyc";
 
-const IDENTITY: Omit<KycSubmitInput, "cdd"> = {
+const IDENTITY: KycSubmitInput["identity"] = toIdentityPayload({
+  ...EMPTY_IDENTITY_FORM,
   firstName: "Budi",
   lastName: "Santoso",
   dob: "1995-03-15",
   birthPlace: "Jakarta",
   identityNumber: "3171234567890123",
+  gender: "LAKI_LAKI",
+  maritalStatus: "KAWIN",
+  mothersMaidenName: "Siti Aminah",
   addressLine1: "Jl. Sudirman No. 1",
-  addressLine2: null,
-};
+});
 
 const CDD: CddFormState = {
   ...EMPTY_CDD_FORM,
-  occupation: "SELF_EMPLOYED",
+  occupation: "WIRASWASTA",
   sourceOfFunds: "BUSINESS",
   annualIncomeRange: "FROM_500M_TO_1B",
+  netWorthRange: "FROM_500M_TO_2B",
   transactionPurpose: "REMITTANCE",
 };
 
@@ -84,36 +90,47 @@ describe("useKyc submit", () => {
       await withUploads(result);
 
       await act(async () => {
-        await result.current.submit({ ...IDENTITY, cdd: toCddPayload(CDD) });
+        await result.current.submit({ identity: IDENTITY, cdd: toCddPayload(CDD) });
       });
 
       expect(submitMock).toHaveBeenCalledTimes(1);
       expect(submitMock.mock.calls[0][0]).toMatchObject({
-        occupation: "SELF_EMPLOYED",
+        occupation: "WIRASWASTA",
         sourceOfFunds: "BUSINESS",
         annualIncomeRange: "FROM_500M_TO_1B",
+        netWorthRange: "FROM_500M_TO_2B",
         transactionPurpose: "REMITTANCE",
+        sourceOfWealth: null,
+        employerAddress: null,
+        employerPhone: null,
         pepStatus: false,
         pepRelation: null,
         npwp: null,
       });
     });
 
-    test("regression: the pre-USDX-545 identity payload is unchanged", async () => {
+    test("sends every identity field the contract requires", async () => {
       const { result } = renderHook(() => useKyc(), { wrapper: createWrapper() });
       await withUploads(result);
 
       await act(async () => {
-        await result.current.submit({ ...IDENTITY, cdd: toCddPayload(CDD) });
+        await result.current.submit({ identity: IDENTITY, cdd: toCddPayload(CDD) });
       });
 
       expect(submitMock.mock.calls[0][0]).toMatchObject({
         firstName: "Budi",
         lastName: "Santoso",
+        // Optional per Art. 25(1)(a)(1)(a) "including alias, IF ANY" — null, not "".
+        aliasName: null,
         dob: "1995-03-15",
         birthPlace: "Jakarta",
         identityType: "KTP",
         identityNumber: "3171234567890123",
+        // USDX-586: citizenship, and NOT the same key as `country` below.
+        nationality: "ID",
+        gender: "LAKI_LAKI",
+        maritalStatus: "KAWIN",
+        mothersMaidenName: "Siti Aminah",
         country: "ID",
         addressLine1: "Jl. Sudirman No. 1",
         addressLine2: null,
@@ -128,7 +145,7 @@ describe("useKyc submit", () => {
 
       await act(async () => {
         await result.current.submit({
-          ...IDENTITY,
+          identity: IDENTITY,
           cdd: toCddPayload({ ...CDD, pepStatus: true, pepRelation: "Ayah - anggota DPRD" }),
         });
       });
@@ -147,7 +164,7 @@ describe("useKyc submit", () => {
 
       await act(async () => {
         await result.current.submit({
-          ...IDENTITY,
+          identity: IDENTITY,
           // typed, then the checkbox was un-ticked
           cdd: toCddPayload({ ...CDD, pepStatus: false, pepRelation: "Ayah - anggota DPRD" }),
         });
@@ -164,7 +181,7 @@ describe("useKyc submit", () => {
       await withUploads(result);
 
       await act(async () => {
-        await result.current.submit({ ...IDENTITY, cdd: toCddPayload({ ...CDD, npwp: "" }) });
+        await result.current.submit({ identity: IDENTITY, cdd: toCddPayload({ ...CDD, npwp: "" }) });
       });
 
       expect(submitMock.mock.calls[0][0]).toHaveProperty("npwp", null);
@@ -176,7 +193,7 @@ describe("useKyc submit", () => {
 
       await act(async () => {
         await result.current.submit({
-          ...IDENTITY,
+          identity: IDENTITY,
           cdd: toCddPayload({
             ...CDD,
             pepStatus: true,
@@ -200,7 +217,7 @@ describe("useKyc submit", () => {
 // what must NOT happen.
 describe("useKyc submitCdd (VERIFIED top-up)", () => {
   describe("positive", () => {
-    test("sends exactly the seven CDD fields to the CDD endpoint", async () => {
+    test("sends exactly the eleven CDD fields to the CDD endpoint", async () => {
       statusMock.mockResolvedValue({ status: "VERIFIED", cddComplete: false });
       const { result } = renderHook(() => useKyc(), { wrapper: createWrapper() });
 
@@ -210,10 +227,14 @@ describe("useKyc submitCdd (VERIFIED top-up)", () => {
 
       expect(submitCddMock).toHaveBeenCalledTimes(1);
       expect(submitCddMock.mock.calls[0][0]).toEqual({
-        occupation: "SELF_EMPLOYED",
+        occupation: "WIRASWASTA",
         sourceOfFunds: "BUSINESS",
         annualIncomeRange: "FROM_500M_TO_1B",
+        netWorthRange: "FROM_500M_TO_2B",
         transactionPurpose: "REMITTANCE",
+        sourceOfWealth: null,
+        employerAddress: null,
+        employerPhone: null,
         pepStatus: false,
         pepRelation: null,
         npwp: null,
@@ -307,6 +328,11 @@ describe("useKyc submitCdd (VERIFIED top-up)", () => {
         "birthPlace",
         "identityNumber",
         "identityType",
+        "nationality",
+        "gender",
+        "maritalStatus",
+        "mothersMaidenName",
+        "aliasName",
         "addressLine1",
         "ktpObjectKey",
         "selfieObjectKey",

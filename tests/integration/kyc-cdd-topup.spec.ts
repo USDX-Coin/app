@@ -3,6 +3,7 @@ import {
   loginViaStorage,
   forceEnglish,
   forceIndonesian,
+  pickOccupation,
   seedKycStatus,
   seedKycCddComplete,
 } from "../helpers/playwright-utils";
@@ -37,9 +38,10 @@ async function gotoVerified(
 const topUp = (page: Page) => page.getByTestId("kyc-cdd-topup");
 
 async function fillCdd(page: Page) {
-  await page.selectOption("#occupation", "CIVIL_SERVANT");
+  await pickOccupation(page, "Pegawai Negeri Sipil (PNS)");
   await page.selectOption("#sourceOfFunds", "SALARY");
   await page.selectOption("#annualIncomeRange", "UNDER_100M");
+  await page.selectOption("#netWorthRange", "UNDER_500M");
   await page.selectOption("#transactionPurpose", "PAYMENT");
 }
 
@@ -64,13 +66,17 @@ test.describe("KYC CDD top-up (VERIFIED customer)", () => {
       // Says what is missing and why, by name.
       await expect(topUp(page)).toContainText("occupation");
       await expect(topUp(page)).toContainText("source of funds");
+      await expect(topUp(page)).toContainText("net worth");
       await expect(topUp(page)).toContainText("NPWP");
-      // All four dropdowns plus NPWP and the PEP box.
+      // Every due-diligence control, plus NPWP, the workplace pair and the PEP box.
       for (const id of [
         "#occupation",
         "#sourceOfFunds",
         "#annualIncomeRange",
+        "#netWorthRange",
         "#transactionPurpose",
+        "#employerAddress",
+        "#employerPhone",
         "#npwp",
         "#pepStatus",
       ]) {
@@ -88,6 +94,15 @@ test.describe("KYC CDD top-up (VERIFIED customer)", () => {
         "Date of Birth",
         "Birth Place",
         "KTP Number",
+        // USDX-586: the five new identity fields are NOT reachable from here either.
+        // kyc.yaml is explicit that PATCH /api/v2/kyc/cdd must not be able to change
+        // approved identity data — that gap is a PM decision (Art. 51 periodic
+        // refresh), not something the app patches from its side.
+        "Nationality",
+        "Gender",
+        "Marital Status",
+        "Mother's Maiden Name",
+        "Alias / Other Name (optional)",
       ]) {
         await expect(page.getByLabel(label)).toHaveCount(0);
       }
@@ -171,6 +186,7 @@ test.describe("KYC CDD top-up (VERIFIED customer)", () => {
       await expect(page.getByText("Occupation is required")).toBeVisible();
       await expect(page.getByText("Source of funds is required")).toBeVisible();
       await expect(page.getByText("Annual income is required")).toBeVisible();
+      await expect(page.getByText("Net worth is required")).toBeVisible();
       await expect(page.getByText("Transaction purpose is required")).toBeVisible();
       await expect(
         page.getByText("your profile details have been saved"),
@@ -185,6 +201,7 @@ test.describe("KYC CDD top-up (VERIFIED customer)", () => {
       await page.getByRole("button", { name: "Save profile details" }).click();
 
       await expect(page.getByText("PEP relationship is required")).toBeVisible();
+      await expect(page.getByText("Source of wealth is required")).toBeVisible();
       await expect(
         page.getByText("your profile details have been saved"),
       ).toBeHidden();
@@ -198,7 +215,7 @@ test.describe("KYC CDD top-up (VERIFIED customer)", () => {
       await gotoVerified(page, { cddComplete: true });
       await expect(page.getByText(VERIFIED_BANNER)).toBeVisible();
       await expect(topUp(page)).toHaveCount(0);
-      await expect(page.locator("#occupation")).toHaveCount(0);
+      await expect(page.getByTestId("occupation-trigger")).toHaveCount(0);
       await expect(
         page.getByRole("link", { name: "Go to Dashboard" }),
       ).toHaveAttribute("href", "/mint");
@@ -207,12 +224,16 @@ test.describe("KYC CDD top-up (VERIFIED customer)", () => {
     test("the PEP relation stays conditional on the top-up form", async ({ page }) => {
       await gotoVerified(page);
       const relation = page.getByLabel("Relationship and office held");
+      const sourceOfWealth = page.locator("#sourceOfWealth");
       await expect(relation).toBeHidden();
+      await expect(sourceOfWealth).toBeHidden();
       const pep = page.getByLabel(/holds a public office/);
       await pep.check();
       await expect(relation).toBeVisible();
+      await expect(sourceOfWealth).toBeVisible();
       await pep.uncheck();
       await expect(relation).toBeHidden();
+      await expect(sourceOfWealth).toBeHidden();
     });
 
     test("NPWP and the PEP relation never reach local or session storage", async ({
@@ -223,6 +244,9 @@ test.describe("KYC CDD top-up (VERIFIED customer)", () => {
       await page.getByLabel("NPWP (optional)").fill(NPWP_SENTINEL);
       await page.getByLabel(/holds a public office/).check();
       await page.getByLabel("Relationship and office held").fill(PEP_SENTINEL);
+      // Wajib begitu PEP dinyatakan (Pasal 37 (1) d) — tanpa ini submit tertahan
+      // dan yang teruji tinggal separuh.
+      await page.selectOption("#sourceOfWealth", "SALARY_ACCUMULATION");
 
       let storage = await dumpWebStorage(page);
       expect(storage).not.toContain(NPWP_SENTINEL);
@@ -243,11 +267,12 @@ test.describe("KYC CDD top-up (VERIFIED customer)", () => {
       await fillCdd(page);
       const text = await page.locator("body").innerText();
       for (const value of [
-        "CIVIL_SERVANT",
+        "PEGAWAI_NEGERI_SIPIL",
         "SALARY",
         "UNDER_100M",
+        "UNDER_500M",
         "PAYMENT",
-        "PRIVATE_EMPLOYEE",
+        "KARYAWAN_SWASTA",
         "FROM_100M_TO_500M",
       ]) {
         expect(text, `enum member ${value} leaked into the UI`).not.toContain(value);
@@ -284,7 +309,7 @@ test.describe("KYC CDD top-up — other states unaffected", () => {
       // The full identity form is what these states get.
       await expect(page.getByLabel("First Name")).toBeVisible();
       await expect(page.locator("#ktpFile")).toHaveCount(1);
-      await expect(page.locator("#occupation")).toBeVisible();
+      await expect(page.getByTestId("occupation-trigger")).toBeVisible();
     });
   }
 });

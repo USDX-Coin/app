@@ -643,7 +643,11 @@ const en: Dict = {
   "kyc.err.selfie": "Selfie photo is required",
   "kyc.err.fileTooLarge": "File is too large (max 5 MB)",
   "kyc.err.fileType": "Only JPG, PNG, or HEIC images are allowed",
+  // Tiga kegagalan unggah yang sengaja dibedakan — masing-masing menuntut tindakan
+  // berbeda. Hanya `uploadFailed` yang mengunggah ulang benar-benar menolong.
   "kyc.err.uploadFailed": "Upload failed — please re-upload your photos",
+  "kyc.err.uploadServer": "Our system is having trouble, not your photo — please try again in a few minutes",
+  "kyc.err.uploadNetwork": "Could not reach the server — check your internet connection, then try again",
   "kyc.submit": "Submit for Verification",
   "kyc.resubmit": "Resubmit",
   "kyc.submitting": "Submitting...",
@@ -1304,7 +1308,11 @@ const id: Dict = {
   "kyc.err.selfie": "Foto selfie wajib diunggah",
   "kyc.err.fileTooLarge": "File terlalu besar (maks 5 MB)",
   "kyc.err.fileType": "Hanya gambar JPG, PNG, atau HEIC yang diperbolehkan",
+  // Tiga kegagalan unggah yang sengaja dibedakan — masing-masing menuntut tindakan
+  // berbeda. Hanya `uploadFailed` yang mengunggah ulang benar-benar menolong.
   "kyc.err.uploadFailed": "Upload gagal — silakan unggah ulang foto Anda",
+  "kyc.err.uploadServer": "Sistem kami sedang bermasalah, bukan foto Anda — silakan coba lagi dalam beberapa menit",
+  "kyc.err.uploadNetwork": "Tidak dapat terhubung ke server — periksa koneksi internet Anda, lalu coba lagi",
   "kyc.submit": "Kirim untuk Verifikasi",
   "kyc.resubmit": "Submit Ulang",
   "kyc.submitting": "Mengirim...",

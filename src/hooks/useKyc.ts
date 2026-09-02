@@ -10,6 +10,7 @@ import {
   uploadToPresignedUrl,
 } from "@/lib/api/kyc-api";
 import type { SubmitKycRequest, PresignedDocKind } from "@/lib/api/types";
+import { isApiError, isPresignedUploadError } from "@/lib/api/errors";
 import { toCddPayload } from "@/lib/kyc/cdd";
 import { toIdentityPayload } from "@/lib/kyc/identity";
 
@@ -21,7 +22,40 @@ export const KYC_STATUS_KEY = ["kyc", "me"] as const;
 export const KYC_MAX_FILE_BYTES = 5 * 1024 * 1024;
 export const KYC_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/heic"];
 
-export type KycDocError = "type" | "size" | "upload" | null;
+// Keadaan error per dokumen. `upload` / `server` / `network` sengaja dipisah:
+// ketiganya menuntut tindakan yang berbeda dari nasabah, dan menyatukannya jadi satu
+// "upload" pernah membuat kegagalan 5xx tetap menyuruh "unggah ulang foto Anda" —
+// nasihat yang tidak akan pernah berhasil (uji manual KYC, 2 September 2026).
+export type KycDocError = "type" | "size" | "upload" | "server" | "network" | null;
+
+// Bagian dari `KycDocError` yang bisa dihasilkan sebuah kegagalan unggah. `type` dan
+// `size` tidak masuk: keduanya ditolak pemeriksaan lokal sebelum ada permintaan.
+type KycUploadError = "upload" | "server" | "network";
+
+// Menerjemahkan error yang dilempar jalur unggah menjadi salah satu keadaan di atas.
+// Hanya tiga cabang di bawah yang bisa dibuktikan dari bentuk error yang memang
+// dilempar jalur ini; selain itu tetap `upload`, nasihat lama yang aman.
+function classifyUploadError(error: unknown): KycUploadError {
+  // Balasan POST /api/v2/storage/presigned-upload. 5xx = sistem kita yang bermasalah
+  // (mis. bucket menolak kredensial server); 4xx = permintaannya yang ditolak, jadi
+  // memilih berkas lagi memang bisa menolong.
+  if (isApiError(error)) return error.status >= 500 ? "server" : "upload";
+
+  // PUT langsung ke bucket. 5xx jelas milik bucket; 401/403 berarti URL presigned yang
+  // ditandatangani backend kita yang ditolak — dua-duanya bukan urusan berkas nasabah.
+  if (isPresignedUploadError(error)) {
+    const ours = error.status >= 500 || error.status === 401 || error.status === 403;
+    return ours ? "server" : "upload";
+  }
+
+  // `fetch` menolak dengan TypeError kalau permintaannya gagal sebelum ada balasan
+  // HTTP sama sekali — offline, DNS gagal, koneksi putus, CORS diblokir. Itu satu-
+  // satunya penanda jaringan yang dijanjikan spesifikasi fetch, jadi hanya itu yang
+  // dipakai; menebak dari teks pesan tidak bisa diandalkan lintas peramban.
+  if (error instanceof TypeError) return "network";
+
+  return "upload";
+}
 
 export interface KycDocState {
   fileName: string | null;
@@ -103,8 +137,13 @@ export function useKyc() {
       });
       await uploadToPresignedUrl(presigned, file);
       patchDoc(kind, { objectKey: presigned.objectKey, uploading: false });
-    } catch {
-      patchDoc(kind, { uploading: false, error: "upload" });
+    } catch (error) {
+      // Jangan telan error-nya. Repo ini belum punya jalur pelaporan error, jadi
+      // devtools adalah satu-satunya tempat penyebab aslinya masih bisa dilihat dan
+      // dilaporkan ke tim. Yang dicatat cuma jenis dokumen + error-nya — berkas dan
+      // isinya tidak pernah ikut (data pribadi tidak boleh masuk log).
+      console.error(`[useKyc] unggah dokumen ${kind} gagal:`, error);
+      patchDoc(kind, { uploading: false, error: classifyUploadError(error) });
     }
   }
 

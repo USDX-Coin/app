@@ -9,6 +9,27 @@ export function isApiError(error: unknown): error is ApiError {
   return error instanceof ApiError;
 }
 
+// Dilempar `uploadToPresignedUrl` saat bucket menjawab PUT presigned dengan status
+// non-2xx. Sengaja BUKAN `ApiError`: yang itu khusus balasan `/api/v2/*` yang
+// berformat envelope SoT dan punya `code`, sedangkan ini datang dari origin bucket
+// dan hanya membawa status HTTP. Statusnya disimpan supaya pemanggil bisa
+// membedakan "berkasnya yang ditolak" (mengunggah ulang masuk akal) dari "bucket
+// atau URL presigned-nya yang bermasalah" (mengunggah ulang tidak akan menolong) —
+// lihat `classifyUploadError` di hooks/useKyc.
+export class PresignedUploadError extends Error {
+  status: number;
+
+  constructor(status: number) {
+    super(`Presigned upload failed (${status})`);
+    this.name = "PresignedUploadError";
+    this.status = status;
+  }
+}
+
+export function isPresignedUploadError(error: unknown): error is PresignedUploadError {
+  return error instanceof PresignedUploadError;
+}
+
 export function getErrorMessage(error: unknown, fallback = "Something went wrong"): string {
   if (isApiError(error)) return error.message || fallback;
   if (error instanceof Error) return error.message || fallback;

@@ -4,6 +4,7 @@
 
 import { env } from "@/lib/env";
 import { apiFetch } from "./client";
+import { PresignedUploadError } from "./errors";
 import type { KycMyStatus } from "@/types";
 import type {
   SubmitKycRequest,
@@ -64,6 +65,9 @@ export async function uploadToPresignedUrl(
     body: file,
   });
   if (!response.ok) {
-    throw new Error(`Upload failed (${response.status})`);
+    // Statusnya ikut dilempar, bukan cuma dijadikan teks pesan: pemanggil harus bisa
+    // membedakan bucket yang menolak berkasnya (4xx) dari bucket yang sedang rusak
+    // atau menolak URL presigned kita (5xx / 401 / 403).
+    throw new PresignedUploadError(response.status);
   }
 }

@@ -1,8 +1,11 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { describe, test, expect, vi, beforeEach, afterEach, type MockInstance } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { createWrapper } from "../../helpers/test-utils";
 import { toCddPayload, EMPTY_CDD_FORM, type CddFormState } from "@/lib/kyc/cdd";
 import { toIdentityPayload, EMPTY_IDENTITY_FORM } from "@/lib/kyc/identity";
+import { ApiError } from "@/lib/api/client";
+import { PresignedUploadError } from "@/lib/api/errors";
+import { dictionaries, type Lang } from "@/lib/i18n/dictionaries";
 
 // USDX-545 — the CDD block must actually reach POST /api/v2/kyc. USDX-586 adds the
 // five new identity fields to the same assertion. Mocks the API layer so this
@@ -363,6 +366,181 @@ describe("useKyc submitCdd (VERIFIED top-up)", () => {
         .join("|");
       expect(dump).not.toContain("PEPSENTINEL");
       expect(dump).not.toContain("NPWPSENTINEL");
+    });
+  });
+});
+
+// Ditemukan saat uji manual KYC, 2 September 2026: bucket dev menolak kredensial
+// server, `POST /api/v2/storage/presigned-upload` menjawab 500, dan layar tetap
+// menyuruh "unggah ulang foto Anda" — perbuatan yang tidak akan pernah berhasil.
+// Penyebabnya `catch` tanpa parameter di `selectDoc`: setiap kegagalan diperas jadi
+// satu keadaan `error: "upload"` dan error aslinya dibuang. Blok di bawah mengunci
+// pembedaan penyebabnya sekaligus menjaga error tetap tercatat.
+describe("useKyc selectDoc — klasifikasi kegagalan unggah", () => {
+  let consoleError: MockInstance<typeof console.error>;
+
+  beforeEach(() => {
+    consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleError.mockRestore();
+  });
+
+  /** Pilih satu berkas KTP dan tunggu unggahannya selesai (berhasil atau gagal). */
+  async function selectKtp(result: { current: ReturnType<typeof useKyc> }) {
+    await act(async () => {
+      await result.current.selectDoc("ktp", pngFile());
+    });
+  }
+
+  describe("positive", () => {
+    test("presigned-upload 500 → keadaan 'server', bukan suruhan mengunggah ulang", async () => {
+      presignMock.mockRejectedValueOnce(new ApiError(500, "INTERNAL_ERROR", "boom"));
+      const { result } = renderHook(() => useKyc(), { wrapper: createWrapper() });
+
+      await selectKtp(result);
+
+      expect(result.current.docs.ktp.error).toBe("server");
+      expect(result.current.docs.ktp.uploading).toBe(false);
+      expect(result.current.docs.ktp.objectKey).toBeNull();
+    });
+
+    test("bucket menolak berkasnya (PUT 415) → keadaan 'upload', unggah ulang memang masuk akal", async () => {
+      uploadMock.mockRejectedValueOnce(new PresignedUploadError(415));
+      const { result } = renderHook(() => useKyc(), { wrapper: createWrapper() });
+
+      await selectKtp(result);
+
+      expect(result.current.docs.ktp.error).toBe("upload");
+    });
+
+    test("permintaan tidak pernah sampai ke server → keadaan 'network'", async () => {
+      // `fetch` menolak dengan TypeError kalau permintaannya gagal sebelum ada
+      // balasan HTTP (offline, DNS gagal, koneksi putus).
+      presignMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+      const { result } = renderHook(() => useKyc(), { wrapper: createWrapper() });
+
+      await selectKtp(result);
+
+      expect(result.current.docs.ktp.error).toBe("network");
+    });
+  });
+
+  describe("negative", () => {
+    test("error tidak ditelan — penyebab aslinya tetap tercatat di console", async () => {
+      const cause = new ApiError(500, "INTERNAL_ERROR", "bucket credentials rejected");
+      presignMock.mockRejectedValueOnce(cause);
+      const { result } = renderHook(() => useKyc(), { wrapper: createWrapper() });
+
+      await selectKtp(result);
+
+      expect(consoleError).toHaveBeenCalled();
+      expect(consoleError.mock.calls.flat()).toContain(cause);
+    });
+
+    test("berkas nasabah tidak ikut masuk log", async () => {
+      presignMock.mockRejectedValueOnce(new ApiError(500, "INTERNAL_ERROR", "boom"));
+      const { result } = renderHook(() => useKyc(), { wrapper: createWrapper() });
+
+      await selectKtp(result);
+
+      const logged = consoleError.mock.calls.flat();
+      expect(logged.some((arg) => arg instanceof File || arg instanceof Blob)).toBe(false);
+    });
+  });
+
+  describe("edge cases", () => {
+    test("4xx dari presigned-upload tetap 'upload' — permintaannya yang ditolak", async () => {
+      presignMock.mockRejectedValueOnce(new ApiError(422, "VALIDATION_ERROR", "sizeBytes"));
+      const { result } = renderHook(() => useKyc(), { wrapper: createWrapper() });
+
+      await selectKtp(result);
+
+      expect(result.current.docs.ktp.error).toBe("upload");
+    });
+
+    test("bucket menolak URL presigned (PUT 403) → 'server', bukan salah berkasnya", async () => {
+      uploadMock.mockRejectedValueOnce(new PresignedUploadError(403));
+      const { result } = renderHook(() => useKyc(), { wrapper: createWrapper() });
+
+      await selectKtp(result);
+
+      expect(result.current.docs.ktp.error).toBe("server");
+    });
+
+    test("bucket 502 saat PUT → 'server'", async () => {
+      uploadMock.mockRejectedValueOnce(new PresignedUploadError(502));
+      const { result } = renderHook(() => useKyc(), { wrapper: createWrapper() });
+
+      await selectKtp(result);
+
+      expect(result.current.docs.ktp.error).toBe("server");
+    });
+
+    test("error yang tidak dikenali jatuh ke 'upload' — nasihat lama yang aman", async () => {
+      presignMock.mockRejectedValueOnce(new Error("entah apa"));
+      const { result } = renderHook(() => useKyc(), { wrapper: createWrapper() });
+
+      await selectKtp(result);
+
+      expect(result.current.docs.ktp.error).toBe("upload");
+    });
+
+    test("memilih berkas baru menghapus keadaan error sebelumnya", async () => {
+      presignMock.mockRejectedValueOnce(new ApiError(500, "INTERNAL_ERROR", "boom"));
+      const { result } = renderHook(() => useKyc(), { wrapper: createWrapper() });
+      await selectKtp(result);
+      expect(result.current.docs.ktp.error).toBe("server");
+
+      await selectKtp(result);
+
+      await waitFor(() => expect(result.current.docs.ktp.error).toBeNull());
+      expect(result.current.docs.ktp.objectKey).toBe("kyc/usr_1/ktp/x.png");
+    });
+  });
+});
+
+// Syarat ketiga tiket: tiap keadaan error dokumen punya pesannya sendiri, dan
+// pesan itu ada di SEMUA bahasa yang didukung `dictionaries` — `t()` mengembalikan
+// kunci mentahnya kalau tidak ketemu, jadi kunci yang lupa ditambahkan tidak
+// terlihat sampai ada nasabah yang melihat "kyc.err.uploadServer" di layar.
+describe("pesan kesalahan dokumen KYC (i18n)", () => {
+  const DOC_ERROR_KEYS = [
+    "kyc.err.fileType",
+    "kyc.err.fileTooLarge",
+    "kyc.err.uploadFailed",
+    "kyc.err.uploadServer",
+    "kyc.err.uploadNetwork",
+  ];
+  const LANGS = Object.keys(dictionaries) as Lang[];
+
+  describe("positive", () => {
+    test("setiap bahasa punya pesan untuk setiap keadaan error dokumen", () => {
+      for (const lang of LANGS) {
+        for (const key of DOC_ERROR_KEYS) {
+          expect(dictionaries[lang][key], `${lang} kehilangan ${key}`).toBeTruthy();
+        }
+      }
+    });
+  });
+
+  describe("negative", () => {
+    test("pesan kesalahan server tidak menyuruh nasabah mengunggah ulang", () => {
+      for (const lang of LANGS) {
+        expect(dictionaries[lang]["kyc.err.uploadServer"]).not.toMatch(
+          /unggah ulang|re-?upload|upload again/i,
+        );
+      }
+    });
+  });
+
+  describe("edge cases", () => {
+    test("kelima pesan berbeda satu sama lain — kalau sama, pembedaannya percuma", () => {
+      for (const lang of LANGS) {
+        const messages = DOC_ERROR_KEYS.map((key) => dictionaries[lang][key]);
+        expect(new Set(messages).size).toBe(DOC_ERROR_KEYS.length);
+      }
     });
   });
 });

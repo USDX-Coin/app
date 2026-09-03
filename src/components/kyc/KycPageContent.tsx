@@ -14,7 +14,7 @@ import { KycCddFields } from "./KycCddFields";
 import { KycCddTopUp } from "./KycCddTopUp";
 import { KycSelect } from "./KycSelect";
 import { useSession } from "@/hooks/useSession";
-import { useKyc, type KycDocState } from "@/hooks/useKyc";
+import { useKyc, type KycDocError, type KycDocState } from "@/hooks/useKyc";
 import { useAuthStore } from "@/stores/authStore";
 import { useLang } from "@/providers/LanguageProvider";
 import { isEmailVerified } from "@/lib/auth/guards";
@@ -554,6 +554,18 @@ export function KycPageContent() {
   );
 }
 
+// Satu pesan per keadaan error dokumen. Ditulis sebagai peta, bukan rantai ternary,
+// supaya TypeScript memaksa setiap keadaan baru di `KycDocError` punya pesannya
+// sendiri — keadaan yang lupa dipetakan dulu diam-diam ikut memakai pesan "unggah
+// ulang", yang justru salah untuk kegagalan sisi server.
+const DOC_ERROR_MESSAGE_KEY: Record<NonNullable<KycDocError>, string> = {
+  type: "kyc.err.fileType",
+  size: "kyc.err.fileTooLarge",
+  upload: "kyc.err.uploadFailed",
+  server: "kyc.err.uploadServer",
+  network: "kyc.err.uploadNetwork",
+};
+
 function DocField({
   kind,
   label,
@@ -568,14 +580,7 @@ function DocField({
   onSelect: (kind: PresignedDocKind, file: File | null) => void;
 }) {
   const { t } = useLang();
-  const docError =
-    doc.error === "type"
-      ? t("kyc.err.fileType")
-      : doc.error === "size"
-        ? t("kyc.err.fileTooLarge")
-        : doc.error === "upload"
-          ? t("kyc.err.uploadFailed")
-          : undefined;
+  const docError = doc.error ? t(DOC_ERROR_MESSAGE_KEY[doc.error]) : undefined;
 
   const showPreview = !!doc.previewUrl && !doc.error;
 

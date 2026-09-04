@@ -61,7 +61,7 @@ export function BridgeContent() {
   }
 
   const rows = [
-    { label: t("sum.youWillBridge"), value: (<><img src="/image/usdx-logo.png" alt="" className="size-5 rounded-full" /> USDX</>) },
+    { label: t("sum.youWillBridge"), value: (<><img src="/image/usdx-coin.svg" alt="" className="size-5 rounded-full" /> USDX</>) },
     { label: t("sum.from"), value: (<>{from && <img src={from.icon} alt="" className="size-4 rounded-sm" />}{from?.name}</>) },
     { label: t("sum.to"), value: (<>{to && <img src={to.icon} alt="" className="size-4 rounded-sm" />}{to?.name}</>) },
     { label: t("sum.recipient"), value: truncateAddress(address) },

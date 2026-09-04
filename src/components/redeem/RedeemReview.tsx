@@ -70,7 +70,7 @@ export function RedeemReview({ open, onOpenChange }: RedeemReviewProps) {
 
         <div className="mt-2 flex flex-col gap-3">
           <Row label={t("sum.youWillRedeem")}>
-            <img src="/image/usdx-logo.png" alt="" className="size-5 rounded-full" />
+            <img src="/image/usdx-coin.svg" alt="" className="size-5 rounded-full" />
             {formatAmount(amountUsdx)} USDX
           </Row>
           <Row label={t("sum.network")}>

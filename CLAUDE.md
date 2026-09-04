@@ -20,17 +20,44 @@ Demo credentials: `demo@usdx.com` / `Demo1234`
 
 | Layer | Technology |
 |-------|-----------|
-| Framework | Next.js 15 (App Router, Turbopack) |
+| Framework | Next.js 16 (App Router, Turbopack) |
 | Language | TypeScript (strict) |
 | Styling | TailwindCSS v4 + shadcn/ui (New York) |
 | Client State | Zustand 5 (persist to localStorage) |
 | Server State | TanStack Query 5 |
 | Wallet | RainbowKit 2 + Wagmi 2 + Viem 2 |
 | Unit Tests | Vitest 4 + Testing Library |
-| E2E/Integration | Playwright 1.58 |
+| E2E/Integration | Playwright 1.61 |
 | Package Manager | pnpm |
 
-Brand color: `#1eaed5`
+## Design System
+
+Brand: maroon `#800000` → `#ac0004` dengan aksen gold `#f7a100`. (Nilai `#1eaed5`
+di dokumen ini sebelumnya sudah lama tidak dipakai.)
+
+Token di `src/app/globals.css` dipisah dua kelompok, dan pembagiannya penting:
+
+- **Warna permukaan** (`--primary`, `--destructive`, `--success`, `--warning`) —
+  untuk fill: tombol, pill, ikon, tint. Rasio kontrasnya memang tidak perlu 4,5:1.
+- **Warna teks** (`--primary-text`, `--destructive-text`, `--success-text`,
+  `--warning-text`, `--muted-text`, `--info-text`, `--focus-ring`, `--on-gold`) —
+  untuk apa pun yang dibaca. Semuanya lolos WCAG AA di kedua tema.
+
+Memakai warna permukaan untuk teks adalah bug: `--primary` hanya 1,59:1 di atas
+kartu gelap. Pola pemisahan ini sama dengan `--primary` vs `--primary-foreground`
+milik shadcn.
+
+**Motion**: durasi bernama `--dur-1..5` (90/150/220/320/600 ms) dan easing
+`--ease-standard|enter|exit`. Tailwind v4 tidak punya namespace `--duration-*`,
+jadi dipakai lewat `duration-(--dur-3)`. Preset spring untuk Animate UI ada di
+`src/lib/motion.ts` — jangan tulis angka spring di komponen. Aturannya: keluar
+selalu lebih cepat daripada masuk.
+
+**Logo**: pakai `/image/usdx-coin.svg` (vektor, 2,3 kB). `usdx-logo.png` hanya
+tersisa sebagai cadangan favicon. **`Logo.svg` adalah logo LAMA — jangan dipakai.**
+
+Spesifikasi lengkap ada di file Figma `USDX (Copy)` → page `DS · Standar 2026-09`,
+dan catatan auditnya di `catatan/audit-ui-2026-09-03/`.
 
 ## Architecture
 

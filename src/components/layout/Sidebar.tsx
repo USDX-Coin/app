@@ -166,7 +166,7 @@ export function Sidebar({
       <div className="flex items-center justify-between">
         <DropdownMenu>
           <DropdownMenuTrigger className="flex items-center gap-1.5 outline-none">
-            <img src="/image/usdx-logo.png" alt="USDX" className="size-8 rounded-full" />
+            <img src="/image/usdx-coin.svg" alt="USDX" className="size-8 rounded-full" />
             <span className="max-w-[150px] truncate text-base font-medium tracking-tight">{name}</span>
             <ChevronsUpDown className="size-5 text-sidebar-muted" />
           </DropdownMenuTrigger>

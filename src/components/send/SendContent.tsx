@@ -55,7 +55,7 @@ export function SendContent() {
   }
 
   const rows = [
-    { label: t("sum.youWillSend"), value: (<><img src="/image/usdx-logo.png" alt="" className="size-5 rounded-full" /> USDX</>) },
+    { label: t("sum.youWillSend"), value: (<><img src="/image/usdx-coin.svg" alt="" className="size-5 rounded-full" /> USDX</>) },
     { label: t("sum.network"), value: (<>{chain && <img src={chain.icon} alt="" className="size-4 rounded-sm" />}{chain?.name}</>) },
     { label: t("sum.recipient"), value: truncateAddress(address) },
     { label: t("sum.amount"), value: `${formatAmount(amountNum)} USDX` },

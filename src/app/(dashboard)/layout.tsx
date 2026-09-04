@@ -90,7 +90,7 @@ export default function DashboardLayout({
           {/* Mobile top bar */}
           <header className="flex h-14 items-center justify-between border-b border-border bg-sidebar px-4 md:hidden">
             <div className="flex items-center gap-2">
-              <img src="/image/usdx-logo.png" alt="USDX" className="size-7 rounded-full" />
+              <img src="/image/usdx-coin.svg" alt="USDX" className="size-7 rounded-full" />
               <span className="max-w-[160px] truncate text-sm font-medium text-foreground">
                 {name}
               </span>

@@ -98,7 +98,7 @@ export function MintForm() {
   const usdxChip = (
     <div className="flex shrink-0 items-center gap-2 rounded-full bg-primary py-1.5 pl-1.5 pr-3 text-white">
       <span className="relative inline-block size-8 shrink-0">
-        <img src="/image/usdx-logo.png" alt="" className="size-8 rounded-full" />
+        <img src="/image/usdx-coin.svg" alt="" className="size-8 rounded-full" />
         {selectedChain && (
           <img
             src={selectedChain.icon}

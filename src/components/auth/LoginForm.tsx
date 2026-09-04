@@ -2,19 +2,27 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Field, FieldHelp, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { FieldError } from "@/components/ui/field-error";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group";
+import { LinkInline } from "@/components/ui/link-inline";
 import { useAuth } from "@/hooks/useAuth";
 import { useCooldown, DEFAULT_COOLDOWN_SECONDS } from "@/hooks/useCooldown";
 import { useLang } from "@/providers/LanguageProvider";
-import { validateEmail } from "@/lib/validations";
+import { translateValidation, validateEmail } from "@/lib/validations";
 import {
-  getErrorMessage,
+  getFailureText,
   getRateLimitSeconds,
   isAccountSuspended,
   isEmailNotVerified,
+  isInvalidCredentials,
 } from "@/lib/api/errors";
 import { formatDuration } from "@/lib/utils";
 import { Eye, EyeOff } from "lucide-react";
@@ -26,6 +34,8 @@ export function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  // Validators hand back i18n keys, not sentences (finding D1) — the key is
+  // what we keep, so the message re-translates when the language changes.
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   // Set when the backend returns 403 EMAIL_NOT_VERIFIED — Phase 1 users migrate via
   // the "Forgot password" flow (sot/phase-2/week1.md § Migrasi User Phase 1).
@@ -41,7 +51,7 @@ export function LoginForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const emailErr = validateEmail(email);
-    const passwordErr = !password ? t("auth.login.passwordRequired") : null;
+    const passwordErr = !password ? "auth.login.passwordRequired" : null;
     if (emailErr || passwordErr) {
       setErrors({ email: emailErr ?? undefined, password: passwordErr ?? undefined });
       return;
@@ -62,11 +72,21 @@ export function LoginForm() {
       }
       const retryAfter = getRateLimitSeconds(err);
       if (retryAfter !== null) {
+        // The countdown now lives on the button itself, so the throttle needs no
+        // toast of its own — two of them fired at once before (finding B11).
         cooldown.start(retryAfter > 0 ? retryAfter : DEFAULT_COOLDOWN_SECONDS);
-        toast.error(t("auth.tooManyAttempts"));
         return;
       }
-      toast.error(getErrorMessage(err, t("auth.login.failed")));
+      // A wrong email/password pair is the one failure the user can act on, so it
+      // says so. B3 banned the backend's RAW words from this toast, not the
+      // reason itself — "Login gagal" alone sends people to Forgot password.
+      if (isInvalidCredentials(err)) {
+        toast.error(t("auth.login.invalidCredentials"));
+        return;
+      }
+      // Never the backend's own words: a 500 used to put "boom" in this toast
+      // and a dead network put "Failed to fetch" (finding B3).
+      toast.error(getFailureText(t, err, "auth.login.failed"));
     }
   }
 
@@ -76,93 +96,86 @@ export function LoginForm() {
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">
           {t("auth.login.title")}
         </h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-text">
           {t("auth.login.newTo")}{" "}
-          <Link href="/register" className="font-medium text-gold underline-offset-2 hover:underline">
-            {t("auth.login.createAccount")}
-          </Link>
+          <LinkInline asChild>
+            <Link href="/register">{t("auth.login.createAccount")}</Link>
+          </LinkInline>
         </p>
       </div>
 
       {needsVerification && (
-        <div
-          role="alert"
-          className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200"
-        >
+        <Alert tone="warning">
           {verifyBefore}
-          <Link href="/forgot-password" className="font-medium underline underline-offset-2">
-            {t("auth.login.forgotLinkText")}
-          </Link>
+          <LinkInline asChild>
+            <Link href="/forgot-password">{t("auth.login.forgotLinkText")}</Link>
+          </LinkInline>
           {verifyAfter}
-        </div>
+        </Alert>
       )}
 
-      {suspended && (
-        <div
-          role="alert"
-          className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-900 dark:border-red-700/60 dark:bg-red-950/40 dark:text-red-200"
-        >
-          {t("auth.login.suspended")}
-        </div>
-      )}
+      {suspended && <Alert tone="danger">{t("auth.login.suspended")}</Alert>}
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="email">{t("auth.email")}</Label>
+        <Field>
+          <FieldLabel htmlFor="email">{t("auth.email")}</FieldLabel>
           <Input
             id="email"
             type="email"
+            autoComplete="email"
             placeholder={t("auth.emailPh")}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="h-11"
             aria-invalid={!!errors.email}
+            aria-describedby="email-error"
           />
-          <FieldError message={errors.email} />
-        </div>
+          <FieldHelp id="email" error={translateValidation(t, errors.email)} />
+        </Field>
 
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="password">{t("auth.password")}</Label>
-            <Link
-              href="/forgot-password"
-              className="text-sm font-medium text-gold underline-offset-2 hover:underline"
-            >
-              {t("auth.login.forgot")}
-            </Link>
+        <Field>
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <FieldLabel htmlFor="password">{t("auth.password")}</FieldLabel>
+            <Button variant="link" size="sm" className="-mr-3" asChild>
+              <Link href="/forgot-password">{t("auth.login.forgot")}</Link>
+            </Button>
           </div>
-          <div className="relative">
-            <Input
+          <InputGroup>
+            <InputGroupInput
               id="password"
               type={showPassword ? "text" : "password"}
-              placeholder="••••••••"
+              autoComplete="current-password"
+              placeholder={t("auth.passwordPh")}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               aria-invalid={!!errors.password}
-              className="h-11 pr-10"
+              aria-describedby="password-error"
             />
-            <button
-              type="button"
-              aria-label={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              onClick={() => setShowPassword(!showPassword)}
-            >
-              {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-            </button>
-          </div>
-          <FieldError message={errors.password} />
-        </div>
+            <InputGroupAddon align="inline-end">
+              <InputGroupButton
+                size="icon"
+                aria-label={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? <EyeOff /> : <Eye />}
+              </InputGroupButton>
+            </InputGroupAddon>
+          </InputGroup>
+          <FieldHelp id="password" error={translateValidation(t, errors.password)} />
+        </Field>
 
         <Button
           type="submit"
-          disabled={loginLoading || cooldown.active}
-          className="brand-gradient h-11 w-full text-white hover:opacity-95"
+          variant="brand"
+          size="lg"
+          className="w-full"
+          loading={loginLoading}
+          loadingLabel={t("auth.login.submitting")}
+          cooldownSeconds={cooldown.remaining}
+          cooldownLabel={t("auth.tryAgainIn", {
+            duration: formatDuration(cooldown.remaining, lang),
+          })}
         >
-          {cooldown.active
-            ? t("auth.tryAgainIn", { duration: formatDuration(cooldown.remaining, lang) })
-            : loginLoading
-              ? t("auth.login.submitting")
-              : t("auth.login.submit")}
+          {t("auth.login.submit")}
         </Button>
       </form>
 
@@ -172,14 +185,18 @@ export function LoginForm() {
             <div className="w-full border-t border-border" />
           </div>
           <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-background px-2 text-muted-foreground">
+            <span className="bg-background px-2 text-muted-text">
               {t("auth.login.orContinue")}
             </span>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <Button variant="outline" disabled className="h-11">Google</Button>
-          <Button variant="outline" disabled className="h-11">Web3 Wallet</Button>
+          <Button variant="outline" size="lg" disabled>
+            Google
+          </Button>
+          <Button variant="outline" size="lg" disabled>
+            Web3 Wallet
+          </Button>
         </div>
       </div>
     </div>

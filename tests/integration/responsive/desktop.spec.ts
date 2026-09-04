@@ -22,8 +22,12 @@ test.describe("Desktop Responsive (1280x720)", () => {
     await expect(page.getByText("You will mint")).toBeVisible({ timeout: 15000 });
 
     await expect(page.getByRole("button", { name: /Demo User/ })).toBeVisible();
-    await expect(page.getByText("Total Saldo")).toBeVisible();
-    await expect(page.getByText("Selected Language")).toBeVisible();
+    await expect(page.getByText("Total balance")).toBeVisible();
+    // An aria-label on the language button, never visible text — `getByText`
+    // could not have matched it. The name also carries the current language.
+    await expect(
+      page.getByRole("button", { name: /Selected Language: English/ })
+    ).toBeVisible();
   });
 
   test("history shows full table", async ({ page }) => {

@@ -13,16 +13,26 @@
 
 import { useState } from "react";
 import dynamic from "next/dynamic";
-import { Loader2 } from "lucide-react";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Alert } from "@/components/ui/alert";
+import { Spinner } from "@/components/ui/spinner";
 import { parseScannedAddress } from "@/lib/validations";
 import { useLang } from "@/providers/LanguageProvider";
 import type { IDetectedBarcode, IScannerError } from "@yudiel/react-qr-scanner";
 
+// The camera plate is literally black and its spinner literally white: this is
+// the viewfinder, not a surface, and it must not follow the theme — a light-mode
+// plate would flash white for the moment before the video stream arrives.
 function ScannerLoading() {
   return (
     <div className="flex aspect-square items-center justify-center bg-black">
-      <Loader2 className="size-6 animate-spin text-white/70" />
+      <Spinner className="size-6 text-white/70" />
     </div>
   );
 }
@@ -88,18 +98,20 @@ export function AddressScannerDialog({ open, onOpenChange, onScanned }: AddressS
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[380px]">
-        <DialogTitle className="text-base font-medium text-foreground">
-          {t("scan.title")}
-        </DialogTitle>
+      <DialogContent size="md">
+        <DialogHeader>
+          <DialogTitle>{t("scan.title")}</DialogTitle>
+        </DialogHeader>
 
-        <div className="mt-2 flex flex-col gap-3">
+        {/* A square viewfinder plus the hint is taller than a 320×568 screen once
+            the browser chrome is in; the body scrolls so the hint stays reachable. */}
+        <DialogBody className="pb-6">
           {cameraError ? (
-            <p className="rounded-md bg-muted p-6 text-center text-sm text-muted-foreground">
-              {cameraError}
-            </p>
+            // A camera that cannot start is a state that persists until the user
+            // changes something, so it is an Alert, not a toast.
+            <Alert tone="warning">{cameraError}</Alert>
           ) : (
-            <div className="overflow-hidden rounded-lg bg-black [&_video]:aspect-square [&_video]:w-full [&_video]:object-cover">
+            <div className="overflow-hidden rounded-xl bg-black [&_video]:aspect-square [&_video]:w-full [&_video]:object-cover">
               <Scanner
                 onScan={handleScan}
                 onError={handleError}
@@ -110,14 +122,10 @@ export function AddressScannerDialog({ open, onOpenChange, onScanned }: AddressS
             </div>
           )}
 
-          <p className="text-center text-xs text-muted-foreground">{t("scan.hint")}</p>
+          <p className="text-center text-xs text-muted-text">{t("scan.hint")}</p>
 
-          {scanError && (
-            <p role="alert" className="text-center text-sm text-destructive">
-              {scanError}
-            </p>
-          )}
-        </div>
+          {scanError && <Alert tone="danger">{scanError}</Alert>}
+        </DialogBody>
       </DialogContent>
     </Dialog>
   );

@@ -14,10 +14,10 @@ test.beforeEach(async ({ page }) => {
 
 async function fillForm(page: Page, amount = "100") {
   await page.getByPlaceholder("0", { exact: true }).fill(amount);
-  await page.getByRole("button", { name: "Select bank" }).click();
+  await page.getByRole("combobox", { name: "Select bank" }).click();
   await page.getByText("BCA", { exact: true }).click();
-  await page.getByPlaceholder("Enter account number").fill("1234563210");
-  await page.getByPlaceholder("Enter holder name").fill("SINGGIH BRILIAN TARA");
+  await page.getByPlaceholder("1234567890").fill("1234563210");
+  await page.getByPlaceholder("As printed on the passbook").fill("SINGGIH BRILIAN TARA");
 }
 
 test.describe("Redeem Page", () => {
@@ -25,7 +25,7 @@ test.describe("Redeem Page", () => {
     test("shows the form locked to Polygon with the live sell rate", async ({ page }) => {
       await expect(page.getByText("1 USDX ≈ 15,680 IDR")).toBeVisible();
       await expect(page.locator('img[src="/icon/polygon.svg"]').first()).toBeVisible();
-      await expect(page.getByRole("button", { name: "Select bank" })).toBeVisible();
+      await expect(page.getByRole("combobox", { name: "Select bank" })).toBeVisible();
     });
 
     test("previews the fee breakdown and net payout", async ({ page }) => {
@@ -56,13 +56,20 @@ test.describe("Redeem Page", () => {
 
     test("shows the min amount error", async ({ page }) => {
       await page.getByPlaceholder("0", { exact: true }).fill("1");
-      await expect(page.getByText("Minimum amount is 10 USDX")).toBeVisible();
+      await expect(page.getByText("Minimum redeem is 10 USDX")).toBeVisible();
     });
 
-    test("no global connect-wallet button on the page chrome", async ({ page }) => {
-      // Connect is contextual — there's no standalone connect button anywhere;
-      // it only opens (RainbowKit / seam) when "Redeem" is clicked (W2 principle).
-      await expect(page.getByRole("button", { name: "Connect Wallet" })).toHaveCount(0);
+    test("the only connect-wallet control is the contextual one in the form", async ({
+      page,
+    }) => {
+      // W2 principle: no connect button in the app SHELL. The one control that
+      // does exist sits beside the form title (USDX-249) and is what the
+      // contextual-connect test above clicks — asserting zero on the whole page
+      // contradicted the design this test is meant to protect.
+      await expect(page.getByRole("button", { name: "Connect Wallet" })).toHaveCount(1);
+      await expect(
+        page.locator("aside").getByRole("button", { name: /connect/i })
+      ).toHaveCount(0);
     });
   });
 

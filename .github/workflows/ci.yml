@@ -19,7 +19,77 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Dependency audit — blocking gate high+ (USDX-381 / OWASP-A06)
-        run: pnpm audit --audit-level=high
+        shell: bash
+        run: |
+          # Gerbang ini memanggil registry.npmjs.org, jadi ia bisa merah karena dua
+          # sebab yang sangat berbeda: ADA kerentanan high+, atau registry-nya tidak
+          # terjangkau. Sebelumnya keduanya diperlakukan sama, dan timeout registry
+          # memerahkan CI tiga kali dalam sehari tanpa ada yang salah di kode.
+          #
+          # Bahayanya bukan waktu yang terbuang: kalau gerbang keamanan sering merah
+          # karena jaringan, gerbang merah yang BENERAN ikut diabaikan.
+          #
+          # Jadi: kerentanan tetap menutup gerbang; kegagalan jaringan dicoba ulang,
+          # lalu dilaporkan keras-keras tanpa memblokir.
+          #
+          # `timeout` menanggung beban biaya. Tanpa itu `pnpm audit` menggantung sampai
+          # socket timeout bawaannya (±4 menit) sebelum menyerah, dikali tiga percobaan
+          # = 13,5 menit menit Actions yang hampir seluruhnya cuma menunggu koneksi yang
+          # memang tidak akan datang. Registry yang sehat menjawab dalam hitungan detik
+          # (43 dtk pada run terburuk yang tercatat), jadi 45 detik tidak akan pernah
+          # memotong audit yang sungguhan berjalan — ia hanya memotong penantian.
+          # Exit code 124 dari `timeout` sengaja tidak dibedakan: ia jatuh ke cabang
+          # "registry tak terjangkau" di bawah, yang memang penanganan yang benar.
+          set +e
+          attempt=1
+          max=3
+          per_try_seconds=45
+          # Runner-nya ubuntu-latest, jadi `timeout` (coreutils) selalu ada. Guard ini
+          # untuk kalau job ini suatu saat dipindah ke runner lain: lebih baik lambat
+          # seperti sebelumnya daripada gerbang keamanan yang gagal jalan.
+          if command -v timeout >/dev/null 2>&1; then
+            run_audit() { timeout "${per_try_seconds}s" pnpm audit --audit-level=high 2>&1; }
+          else
+            echo "::warning title=Dependency audit::\`timeout\` tidak tersedia — audit berjalan tanpa batas waktu per percobaan."
+            run_audit() { pnpm audit --audit-level=high 2>&1; }
+          fi
+          while [ "$attempt" -le "$max" ]; do
+            out="$(run_audit)"
+            code=$?
+            echo "$out"
+
+            if [ "$code" -eq 0 ]; then
+              echo "::notice title=Dependency audit::Tidak ada kerentanan high+ (percobaan $attempt/$max)."
+              exit 0
+            fi
+
+            # pnpm selalu mencetak ringkasan ini saat benar-benar menemukan sesuatu.
+            if echo "$out" | grep -qE "vulnerabilit(y|ies) found"; then
+              echo "::error title=Dependency audit::Kerentanan high+ ditemukan — gerbang ditutup."
+              {
+                echo "### ❌ Dependency audit: kerentanan high+ ditemukan"
+                echo ""
+                echo "Perbaiki dengan menaikkan versi paket atau menambahkan \`pnpm.overrides\` di \`package.json\`."
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
+
+            echo "::warning title=Dependency audit::Registry npm tidak terjangkau (percobaan $attempt/$max)."
+            attempt=$((attempt + 1))
+            if [ "$attempt" -le "$max" ]; then sleep 10; fi
+          done
+
+          echo "::warning title=Dependency audit::Audit TIDAK DIJALANKAN — registry npm tidak terjangkau setelah $max percobaan."
+          {
+            echo "### ⚠️ Dependency audit tidak dijalankan"
+            echo ""
+            echo "\`registry.npmjs.org\` tidak terjangkau setelah **$max percobaan**. Ini kegagalan jaringan, **bukan** hasil audit yang bersih."
+            echo ""
+            echo "Gerbang tidak memblokir merge supaya kegagalan jaringan tidak melatih tim mengabaikan CI merah — tapi audit untuk commit ini **belum pernah benar-benar berjalan**."
+            echo ""
+            echo "Sebelum merge, jalankan lokal: \`pnpm audit --audit-level=high\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
 
   build:
     name: Lint & Build & Test

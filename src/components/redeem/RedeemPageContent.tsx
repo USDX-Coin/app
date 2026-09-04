@@ -37,9 +37,11 @@ export function RedeemPageContent() {
   const header = HEADERS[step];
 
   return (
-    <div className="flex h-full flex-col gap-2">
+    <div className="flex flex-1 flex-col gap-2">
       <PageHeader crumbs={[...header.crumbs]} title={header.title} />
-      <div className="flex flex-1 justify-center pt-8">
+      {/* `items-start`: this row only centers horizontally — without it the
+          default `stretch` pulls the form/tracker card down to the bottom. */}
+      <div className="flex flex-1 items-start justify-center pt-8">
         {step === "form" && <RedeemForm />}
         {step === "tracker" && <RedeemStatus />}
       </div>

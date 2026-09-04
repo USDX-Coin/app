@@ -8,7 +8,8 @@ import { useAuthStore } from "@/stores/authStore";
 import type { KycStatus } from "@/types";
 
 // Action gate for Week 2+ transactions (USDX-153). Pages stay fully explorable;
-// the gate intercepts the primary action (mint/redeem/bridge/send) and opens a
+// the gate intercepts the primary action (mint/redeem — bridge/send are
+// ComingSoon-gated and have no primary action) and opens a
 // per-status dialog instead of the flow until kyc_status = VERIFIED. Status comes
 // from GET /v2/kyc/me (same cache entry as the /kyc page), with the persisted
 // user as fallback while the query is in flight. Suspended / unverified-email

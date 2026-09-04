@@ -2,19 +2,31 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Checkbox, CheckboxField } from "@/components/ui/checkbox";
+import { Field, FieldHelp, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { FieldError } from "@/components/ui/field-error";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group";
+import { LinkInline } from "@/components/ui/link-inline";
+import { PasswordStrength } from "@/components/ui/password-strength";
 import { useAuth } from "@/hooks/useAuth";
 import { useLang } from "@/providers/LanguageProvider";
 import {
+  passwordScore,
+  translateValidation,
   validateEmail,
   validatePassword,
   validateConfirmPassword,
   validatePhone,
+  PASSWORD_RULE_COUNT,
 } from "@/lib/validations";
-import { getErrorMessage, isApiError } from "@/lib/api/errors";
+import { getFailureText, isApiError } from "@/lib/api/errors";
 import { Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 
@@ -23,6 +35,12 @@ import { toast } from "sonner";
 // disabled "Coming soon"), agreeToS. Name + address are collected later at KYC.
 // 409 EMAIL/PHONE_ALREADY_REGISTERED map to inline field errors; 422 renders a
 // form-level alert. On success the hook routes to /register/check-email.
+//
+// Everything in `errors` is an i18n KEY, not a sentence: the validators return
+// keys (finding D1) and so do the two 409 branches, so one `translateValidation`
+// at render time covers every source.
+const STRENGTH_LABELS = ["auth.strength.weak", "auth.strength.medium", "auth.strength.strong"];
+
 export function RegisterForm() {
   const { t } = useLang();
   const { register, registerLoading } = useAuth();
@@ -35,6 +53,11 @@ export function RegisterForm() {
   const [errors, setErrors] = useState<Record<string, string | undefined>>({});
   const [formError, setFormError] = useState<string | null>(null);
 
+  const score = passwordScore(password);
+  // 1–2 weak · 3 fair · 4 strong — the same split PasswordStrength colours by.
+  const strengthLabel =
+    score > 0 ? t(STRENGTH_LABELS[Math.min(Math.ceil(score / 2) - 1, 2)]) : undefined;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const newErrors: Record<string, string | undefined> = {
@@ -42,7 +65,7 @@ export function RegisterForm() {
       phone: validatePhone(phone) ?? undefined,
       password: validatePassword(password) ?? undefined,
       confirmPassword: validateConfirmPassword(password, confirmPassword) ?? undefined,
-      agreeToS: agreeToS ? undefined : t("auth.register.tosRequired"),
+      agreeToS: agreeToS ? undefined : "auth.register.tosRequired",
     };
 
     const hasErrors = Object.values(newErrors).some(Boolean);
@@ -63,167 +86,195 @@ export function RegisterForm() {
       // 409 per-field inline; 422 (e.g. ENTITY_TYPE_NOT_SUPPORTED) form-level.
       if (isApiError(err)) {
         if (err.code === "EMAIL_ALREADY_REGISTERED") {
-          setErrors((prev) => ({ ...prev, email: t("auth.register.emailTaken") }));
+          setErrors((prev) => ({ ...prev, email: "auth.register.emailTaken" }));
           return;
         }
         if (err.code === "PHONE_ALREADY_REGISTERED") {
-          setErrors((prev) => ({ ...prev, phone: t("auth.register.phoneTaken") }));
+          setErrors((prev) => ({ ...prev, phone: "auth.register.phoneTaken" }));
           return;
         }
         if (err.status === 422) {
-          setFormError(err.message);
+          // The 422 body is written for developers; say what the user can do
+          // instead of forwarding it (finding B3).
+          setFormError(t("auth.register.failed"));
           return;
         }
       }
-      toast.error(getErrorMessage(err, t("auth.register.failed")));
+      toast.error(getFailureText(t, err, "auth.register.failed"));
     }
   }
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-primary mb-1">{t("auth.register.title")}</h1>
-      <p className="text-sm text-muted-foreground mb-8">
-        {t("auth.register.haveAccount")}{" "}
-        <Link href="/login" className="text-primary underline">
-          {t("auth.register.login")}
-        </Link>
-      </p>
+    <div className="flex flex-col gap-8">
+      <div className="flex flex-col gap-1.5">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+          {t("auth.register.title")}
+        </h1>
+        <p className="text-sm text-muted-text">
+          {t("auth.register.haveAccount")}{" "}
+          <LinkInline asChild>
+            <Link href="/login">{t("auth.register.login")}</Link>
+          </LinkInline>
+        </p>
+      </div>
 
-      {formError && (
-        <div
-          role="alert"
-          className="mb-6 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-900 dark:border-red-700/60 dark:bg-red-950/40 dark:text-red-200"
-        >
-          {formError}
-        </div>
-      )}
+      {formError && <Alert tone="danger">{formError}</Alert>}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <Label>{t("auth.register.accountType")}</Label>
-          <div className="mt-1.5 grid grid-cols-2 gap-2">
-            <button
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <Field>
+          <FieldLabel>{t("auth.register.accountType")}</FieldLabel>
+          {/* `h-auto min-h-10 flex-wrap px-3`: "Badan Usaha" (87 px) + gap + the gold
+              pill (93 px) needs 188 px of content box. With the stock `px-4` that
+              is EXACTLY what a 220 px button offers from `sm` up and far more than
+              the 132 px each half gets at 320 px, so the pill spilled out of the
+              button and pushed the document to 324 px. `px-3` buys 8 px of slack
+              so the row still reads as one line on tablet and desktop, and
+              `flex-wrap` drops the pill to its own line on a narrow phone instead
+              of overflowing — the same answer `CardChoice` gives at narrow widths.
+              The badge itself never goes away: it is what explains the dead half. */}
+          <div className="grid grid-cols-2 gap-2">
+            <Button
               type="button"
+              variant="outline"
               aria-pressed="true"
-              className="rounded-md border border-primary bg-primary/5 px-3 py-2 text-sm font-medium text-primary"
+              className="h-auto min-h-10 flex-wrap gap-x-2 gap-y-1 px-3 py-1.5 border-primary bg-primary/5 text-primary-text"
             >
               {t("auth.register.individual")}
-            </button>
-            <button
+            </Button>
+            {/* Shown, not hidden: the badge is what explains why it is off (F5). */}
+            <Button
               type="button"
-              disabled
-              aria-disabled="true"
-              className="rounded-md border border-border px-3 py-2 text-sm text-muted-foreground opacity-60"
+              variant="outline"
+              comingSoon
+              comingSoonLabel={t("common.comingSoon")}
+              className="h-auto min-h-10 flex-wrap gap-x-2 gap-y-1 px-3 py-1.5"
             >
               {t("auth.register.legalEntity")}
-              <span className="block text-xs">({t("common.comingSoon")})</span>
-            </button>
+            </Button>
           </div>
-        </div>
+        </Field>
 
-        <div>
-          <Label htmlFor="email">{t("auth.email")}</Label>
+        <Field>
+          <FieldLabel htmlFor="email">{t("auth.email")}</FieldLabel>
           <Input
             id="email"
             type="email"
+            autoComplete="email"
             placeholder={t("auth.register.emailPh")}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="mt-1.5 bg-transparent dark:bg-transparent"
             aria-invalid={!!errors.email}
+            aria-describedby="email-error"
           />
-          <FieldError message={errors.email} />
-        </div>
+          <FieldHelp id="email" error={translateValidation(t, errors.email)} />
+        </Field>
 
-        <div>
-          <Label htmlFor="phone">{t("auth.register.phone")}</Label>
+        <Field>
+          <FieldLabel htmlFor="phone">{t("auth.register.phone")}</FieldLabel>
           <Input
             id="phone"
             type="tel"
             inputMode="tel"
+            autoComplete="tel"
             placeholder={t("auth.register.phonePh")}
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            className="mt-1.5 bg-transparent dark:bg-transparent"
             aria-invalid={!!errors.phone}
+            aria-describedby="phone-error"
           />
-          <FieldError message={errors.phone} />
-        </div>
+          <FieldHelp id="phone" error={translateValidation(t, errors.phone)} />
+        </Field>
 
-        <div>
-          <Label htmlFor="password">{t("auth.password")}</Label>
-          <div className="relative mt-1.5">
-            <Input
+        <Field>
+          <FieldLabel htmlFor="password">{t("auth.password")}</FieldLabel>
+          <InputGroup>
+            <InputGroupInput
               id="password"
               type={showPassword ? "text" : "password"}
+              autoComplete="new-password"
               placeholder={t("auth.register.passwordPh")}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               aria-invalid={!!errors.password}
-              className="bg-transparent dark:bg-transparent"
+              aria-describedby="password-error"
             />
-            <button
-              type="button"
-              aria-label={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              onClick={() => setShowPassword(!showPassword)}
-            >
-              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </button>
-          </div>
-          <FieldError message={errors.password} />
-        </div>
+            <InputGroupAddon align="inline-end">
+              <InputGroupButton
+                size="icon"
+                aria-label={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? <EyeOff /> : <Eye />}
+              </InputGroupButton>
+            </InputGroupAddon>
+          </InputGroup>
+          {/* The rules are shown as they are met, not as a paragraph under an
+              empty box — placeholder Versi 4, case 3. */}
+          <PasswordStrength
+            className="pt-1"
+            score={score}
+            total={PASSWORD_RULE_COUNT}
+            label={strengthLabel}
+          />
+          <FieldHelp id="password" error={translateValidation(t, errors.password)} />
+        </Field>
 
-        <div>
-          <Label htmlFor="confirmPassword">{t("auth.register.confirmPassword")}</Label>
-          <div className="relative mt-1.5">
-            <Input
+        <Field>
+          <FieldLabel htmlFor="confirmPassword">{t("auth.register.confirmPassword")}</FieldLabel>
+          <InputGroup>
+            <InputGroupInput
               id="confirmPassword"
               type={showPassword ? "text" : "password"}
+              autoComplete="new-password"
               placeholder={t("auth.register.confirmPasswordPh")}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               aria-invalid={!!errors.confirmPassword}
-              className="bg-transparent dark:bg-transparent"
+              aria-describedby="confirmPassword-error"
             />
-            <button
-              type="button"
-              aria-label={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              onClick={() => setShowPassword(!showPassword)}
-            >
-              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </button>
-          </div>
-          <FieldError message={errors.confirmPassword} />
-        </div>
+            <InputGroupAddon align="inline-end">
+              <InputGroupButton
+                size="icon"
+                aria-label={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? <EyeOff /> : <Eye />}
+              </InputGroupButton>
+            </InputGroupAddon>
+          </InputGroup>
+          <FieldHelp
+            id="confirmPassword"
+            error={translateValidation(t, errors.confirmPassword)}
+          />
+        </Field>
 
-        <div>
-          <label htmlFor="agreeToS" className="flex items-start gap-2.5 text-sm text-muted-foreground">
-            <input
+        <Field>
+          {/* 20 px box, 44 px target: the row grows, the control does not (E1). */}
+          <CheckboxField htmlFor="agreeToS" className="text-muted-text">
+            <Checkbox
               id="agreeToS"
-              type="checkbox"
               checked={agreeToS}
-              onChange={(e) => setAgreeToS(e.target.checked)}
+              onCheckedChange={(checked) => setAgreeToS(checked === true)}
               aria-invalid={!!errors.agreeToS}
-              className="mt-0.5 size-4 shrink-0 accent-primary"
+              aria-describedby="agreeToS-error"
             />
             <span>
               {t("auth.register.agreePrefix")}{" "}
-              <Link href="#" className="text-primary underline">
-                {t("auth.register.tos")}
-              </Link>
+              <LinkInline href="#">{t("auth.register.tos")}</LinkInline>
             </span>
-          </label>
-          <FieldError message={errors.agreeToS} />
-        </div>
+          </CheckboxField>
+          <FieldHelp id="agreeToS" error={translateValidation(t, errors.agreeToS)} />
+        </Field>
 
         <Button
           type="submit"
-          className="w-full bg-linear-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary-700"
-          disabled={registerLoading}
+          variant="brand"
+          size="lg"
+          className="w-full"
+          loading={registerLoading}
+          loadingLabel={t("auth.register.submitting")}
         >
-          {registerLoading ? t("auth.register.submitting") : t("auth.register.submit")}
+          {t("auth.register.submit")}
         </Button>
       </form>
     </div>

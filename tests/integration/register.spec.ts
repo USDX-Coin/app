@@ -78,7 +78,7 @@ test.describe("Register Page", () => {
         .fill("Different1");
       await page.getByRole("checkbox").check();
       await page.getByRole("button", { name: "Create Account" }).click();
-      await expect(page.getByText("Passwords do not match")).toBeVisible();
+      await expect(page.getByText("The two passwords are not the same")).toBeVisible();
     });
 
     test("duplicate email shows inline 409 error on the email field", async ({
@@ -123,7 +123,7 @@ test.describe("Register Page", () => {
       await page.getByRole("checkbox").check();
       await page.getByRole("button", { name: "Create Account" }).click();
       await expect(
-        page.getByText("Password must be at least 8 characters")
+        page.getByText("Use at least 8 characters")
       ).toBeVisible();
     });
   });

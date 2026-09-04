@@ -6,8 +6,17 @@ import {
   validateAddress,
   validateConfirmPassword,
   validateFullName,
+  validatePhone,
+  validateBankAccountNumber,
+  validateBankAccountName,
   parseScannedAddress,
+  passwordScore,
+  translateValidation,
 } from "@/lib/validations";
+
+// The contract these tests hold to: a validator returns an **i18n key**, never a
+// sentence. A sentence coming back out of this file is the D1 regression — that
+// is how "Email is required" ended up under an Indonesian label.
 
 describe("validateEmail", () => {
   describe("positive", () => {
@@ -24,22 +33,22 @@ describe("validateEmail", () => {
 
   describe("negative", () => {
     test("rejects empty string", () => {
-      expect(validateEmail("")).toBe("Email is required");
+      expect(validateEmail("")).toBe("validation.email.required");
     });
     test("rejects missing @ symbol", () => {
-      expect(validateEmail("userexample.com")).toBe("Invalid email format");
+      expect(validateEmail("userexample.com")).toBe("validation.email.format");
     });
     test("rejects missing domain", () => {
-      expect(validateEmail("user@")).toBe("Invalid email format");
+      expect(validateEmail("user@")).toBe("validation.email.format");
     });
   });
 
   describe("edge cases", () => {
     test("rejects email with spaces", () => {
-      expect(validateEmail("user @example.com")).toBe("Invalid email format");
+      expect(validateEmail("user @example.com")).toBe("validation.email.format");
     });
     test("rejects double @ symbol", () => {
-      expect(validateEmail("user@@example.com")).toBe("Invalid email format");
+      expect(validateEmail("user@@example.com")).toBe("validation.email.format");
     });
   });
 });
@@ -56,27 +65,19 @@ describe("validatePassword", () => {
 
   describe("negative", () => {
     test("rejects empty password", () => {
-      expect(validatePassword("")).toBe("Password is required");
+      expect(validatePassword("")).toBe("validation.password.required");
     });
     test("rejects short password", () => {
-      expect(validatePassword("Ab1")).toBe(
-        "Password must be at least 8 characters"
-      );
+      expect(validatePassword("Ab1")).toBe("validation.password.minLength");
     });
     test("rejects password without uppercase", () => {
-      expect(validatePassword("abcdef1234")).toBe(
-        "Password must contain an uppercase letter"
-      );
+      expect(validatePassword("abcdef1234")).toBe("validation.password.uppercase");
     });
     test("rejects password without lowercase", () => {
-      expect(validatePassword("ABCDEF1234")).toBe(
-        "Password must contain a lowercase letter"
-      );
+      expect(validatePassword("ABCDEF1234")).toBe("validation.password.lowercase");
     });
     test("rejects password without number", () => {
-      expect(validatePassword("Abcdefghij")).toBe(
-        "Password must contain a number"
-      );
+      expect(validatePassword("Abcdefghij")).toBe("validation.password.number");
     });
   });
 
@@ -84,6 +85,22 @@ describe("validatePassword", () => {
     test("accepts exactly 8 characters meeting all rules", () => {
       expect(validatePassword("Abcdef12")).toBeNull();
     });
+  });
+});
+
+describe("passwordScore", () => {
+  test("counts the rules met, in step with validatePassword", () => {
+    expect(passwordScore("")).toBe(0);
+    expect(passwordScore("abc")).toBe(1); // lowercase only
+    expect(passwordScore("abcdefgh")).toBe(2); // length + lowercase
+    expect(passwordScore("Abcdefgh")).toBe(3); // length + upper + lower
+    expect(passwordScore("Abcdef12")).toBe(4);
+  });
+
+  test("a full score is exactly the set validatePassword accepts", () => {
+    expect(validatePassword("Abcdef12")).toBeNull();
+    expect(passwordScore("Abcdef12")).toBe(4);
+    expect(validatePassword("abcdefgh")).not.toBeNull();
   });
 });
 
@@ -105,28 +122,24 @@ describe("validateAmount", () => {
 
   describe("negative", () => {
     test("rejects empty amount", () => {
-      expect(validateAmount("", "mint")).toBe("Amount is required");
+      expect(validateAmount("", "mint")).toBe("validation.amount.required");
     });
     test("rejects non-numeric string", () => {
-      expect(validateAmount("abc", "mint")).toBe("Invalid amount");
+      expect(validateAmount("abc", "mint")).toBe("validation.amount.invalid");
     });
     test("rejects zero", () => {
-      expect(validateAmount("0", "mint")).toBe(
-        "Amount must be greater than 0"
-      );
+      expect(validateAmount("0", "mint")).toBe("validation.amount.positive");
     });
     test("rejects negative amount", () => {
-      expect(validateAmount("-100", "mint")).toBe(
-        "Amount must be greater than 0"
-      );
+      expect(validateAmount("-100", "mint")).toBe("validation.amount.positive");
     });
     test("rejects amount below minimum", () => {
-      expect(validateAmount("5", "mint")).toBe("Minimum amount is 10 USDX");
+      expect(validateAmount("5", "mint")).toBe("validation.amount.minMint");
+      expect(validateAmount("5", "redeem")).toBe("validation.amount.minRedeem");
     });
     test("rejects amount above maximum", () => {
-      expect(validateAmount("2000000", "mint")).toBe(
-        "Maximum amount is 1,000,000 USDX"
-      );
+      expect(validateAmount("2000000", "mint")).toBe("validation.amount.maxMint");
+      expect(validateAmount("2000000", "redeem")).toBe("validation.amount.maxRedeem");
     });
   });
 
@@ -138,7 +151,7 @@ describe("validateAmount", () => {
       expect(validateAmount("1000000", "mint")).toBeNull();
     });
     test("rejects whitespace-only string", () => {
-      expect(validateAmount("   ", "mint")).toBe("Amount is required");
+      expect(validateAmount("   ", "mint")).toBe("validation.amount.required");
     });
   });
 });
@@ -159,20 +172,18 @@ describe("validateAddress", () => {
 
   describe("negative", () => {
     test("rejects empty address", () => {
-      expect(validateAddress("")).toBe("Destination address is required");
+      expect(validateAddress("")).toBe("validation.address.required");
     });
     test("rejects EVM address with wrong length", () => {
-      expect(validateAddress("0x1234")).toBe(
-        "Invalid EVM address (must be 42 chars)"
-      );
+      expect(validateAddress("0x1234")).toBe("validation.address.evmLength");
     });
     test("rejects EVM address with invalid characters", () => {
       expect(
         validateAddress("0xGGGG567890abcdef1234567890abcdef12345678")
-      ).toBe("Invalid EVM address format");
+      ).toBe("validation.address.evmFormat");
     });
     test("rejects short Solana address", () => {
-      expect(validateAddress("abc")).toBe("Invalid Solana address");
+      expect(validateAddress("abc")).toBe("validation.address.solanaLength");
     });
   });
 
@@ -183,9 +194,7 @@ describe("validateAddress", () => {
       ).toBeNull();
     });
     test("rejects plain text too short for Solana", () => {
-      expect(validateAddress("notanaddress")).toBe(
-        "Invalid Solana address"
-      );
+      expect(validateAddress("notanaddress")).toBe("validation.address.solanaLength");
     });
   });
 });
@@ -200,12 +209,12 @@ describe("validateConfirmPassword", () => {
   describe("negative", () => {
     test("rejects empty confirm password", () => {
       expect(validateConfirmPassword("Password1", "")).toBe(
-        "Please confirm your password"
+        "validation.confirmPassword.required"
       );
     });
     test("rejects mismatched passwords", () => {
       expect(validateConfirmPassword("Password1", "Password2")).toBe(
-        "Passwords do not match"
+        "validation.confirmPassword.mismatch"
       );
     });
   });
@@ -220,22 +229,85 @@ describe("validateFullName", () => {
 
   describe("negative", () => {
     test("rejects empty name", () => {
-      expect(validateFullName("")).toBe("Full name is required");
+      expect(validateFullName("")).toBe("validation.fullName.required");
     });
     test("rejects single character", () => {
-      expect(validateFullName("J")).toBe(
-        "Name must be at least 2 characters"
-      );
+      expect(validateFullName("J")).toBe("validation.fullName.minLength");
     });
   });
 
   describe("edge cases", () => {
     test("rejects whitespace-only name", () => {
-      expect(validateFullName("   ")).toBe("Full name is required");
+      expect(validateFullName("   ")).toBe("validation.fullName.required");
     });
     test("accepts exactly 2 characters", () => {
       expect(validateFullName("Jo")).toBeNull();
     });
+  });
+});
+
+describe("validatePhone", () => {
+  test("accepts Indonesian mobile numbers in every accepted prefix", () => {
+    expect(validatePhone("081234567890")).toBeNull();
+    expect(validatePhone("+6281234567890")).toBeNull();
+    expect(validatePhone("0812 3456 7890")).toBeNull();
+  });
+
+  test("rejects an empty or non-Indonesian number", () => {
+    expect(validatePhone("")).toBe("validation.phone.required");
+    expect(validatePhone("   ")).toBe("validation.phone.required");
+    expect(validatePhone("+15551234567")).toBe("validation.phone.format");
+  });
+});
+
+describe("validateBankAccountNumber", () => {
+  test("accepts 6–20 digits", () => {
+    expect(validateBankAccountNumber("123456")).toBeNull();
+    expect(validateBankAccountNumber("12345678901234567890")).toBeNull();
+  });
+
+  test("rejects empty, too short, and non-digits", () => {
+    expect(validateBankAccountNumber("")).toBe("validation.bankAccountNumber.required");
+    expect(validateBankAccountNumber("12345")).toBe("validation.bankAccountNumber.digits");
+    expect(validateBankAccountNumber("12345a")).toBe("validation.bankAccountNumber.digits");
+  });
+});
+
+describe("validateBankAccountName", () => {
+  test("accepts a name of two characters or more", () => {
+    expect(validateBankAccountName("Jo")).toBeNull();
+  });
+
+  test("rejects empty and single-character names", () => {
+    expect(validateBankAccountName("  ")).toBe("validation.bankAccountName.required");
+    expect(validateBankAccountName("J")).toBe("validation.bankAccountName.minLength");
+  });
+});
+
+describe("translateValidation", () => {
+  // Stands in for `useLang().t` — records what the component would ask for.
+  const t = (key: string, vars?: Record<string, string>) =>
+    vars ? `${key}|${JSON.stringify(vars)}` : key;
+
+  test("passes a null key straight through", () => {
+    expect(translateValidation(t, null)).toBeNull();
+    expect(translateValidation(t, validateEmail("user@example.com"))).toBeNull();
+  });
+
+  test("translates a plain key without variables", () => {
+    expect(translateValidation(t, validateEmail(""))).toBe("validation.email.required");
+  });
+
+  test("supplies the bound from constants.ts, not from the dictionary", () => {
+    expect(translateValidation(t, validatePassword("Ab1"))).toBe(
+      'validation.password.minLength|{"min":"8"}'
+    );
+    expect(translateValidation(t, validateAmount("5", "mint"))).toBe(
+      'validation.amount.minMint|{"amount":"10"}'
+    );
+    expect(translateValidation(t, validateAmount("2000000", "redeem"))).toBe(
+      'validation.amount.maxRedeem|{"amount":"1,000,000"}'
+    );
   });
 });
 
@@ -268,5 +340,48 @@ describe("parseScannedAddress", () => {
       expect(parseScannedAddress(ADDR + "ab")).toBeNull(); // too long
       expect(parseScannedAddress("0xZZZ" + ADDR.slice(5))).toBeNull(); // non-hex
     });
+  });
+});
+
+describe("dictionary coverage", () => {
+  test("every key a validator can return exists in both languages", async () => {
+    const { dictionaries } = await import("@/lib/i18n/dictionaries");
+    const returned = [
+      validateEmail(""),
+      validateEmail("nope"),
+      validatePassword(""),
+      validatePassword("Ab1"),
+      validatePassword("abcdef1234"),
+      validatePassword("ABCDEF1234"),
+      validatePassword("Abcdefghij"),
+      validateConfirmPassword("a", ""),
+      validateConfirmPassword("a", "b"),
+      validateAmount("", "mint"),
+      validateAmount("abc", "mint"),
+      validateAmount("0", "mint"),
+      validateAmount("5", "mint"),
+      validateAmount("2000000", "mint"),
+      validateAmount("5", "redeem"),
+      validateAmount("2000000", "redeem"),
+      validateAddress(""),
+      validateAddress("0x1234"),
+      validateAddress("0xGGGG567890abcdef1234567890abcdef12345678"),
+      validateAddress("abc"),
+      validateAddress("0OIl".repeat(8)),
+      validateFullName(""),
+      validateFullName("J"),
+      validatePhone(""),
+      validatePhone("+15551234567"),
+      validateBankAccountNumber(""),
+      validateBankAccountNumber("1"),
+      validateBankAccountName(""),
+      validateBankAccountName("J"),
+    ].filter((key): key is string => key !== null);
+
+    expect(returned.length).toBeGreaterThan(0);
+    for (const key of new Set(returned)) {
+      expect(dictionaries.id[key], `missing id: ${key}`).toBeTruthy();
+      expect(dictionaries.en[key], `missing en: ${key}`).toBeTruthy();
+    }
   });
 });

@@ -13,9 +13,19 @@
 //   so the form auto-fills the editable bank/number/name fields (manual path).
 
 import { useState } from "react";
-import { Check, Landmark, Loader2, Plus, Trash2, X } from "lucide-react";
+import { Check, Landmark, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import { Spinner } from "@/components/ui/spinner";
 import { AddBankAccountModal } from "./AddBankAccountModal";
 import { useBankAccounts, useDeleteBankAccount } from "@/hooks/useBankAccounts";
 import { useLang } from "@/providers/LanguageProvider";
@@ -63,99 +73,112 @@ export function BankAccountPicker({ open, onOpenChange, onApply }: BankAccountPi
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[420px]">
-        <DialogTitle className="text-lg font-medium text-foreground">
-          {t("bankbook.pickTitle")}
-        </DialogTitle>
-        <div className="mt-2 flex flex-col gap-2">
+      {/* `lg` because a row here carries three values — bank, number, holder —
+          and wrapping them onto three lines is what makes a saved account hard
+          to recognise at a glance. The body scrolls; "Tambah rekening" stays
+          pinned in the footer (A8). */}
+      <DialogContent size="lg">
+        <DialogHeader>
+          <DialogTitle>{t("bankbook.pickTitle")}</DialogTitle>
+        </DialogHeader>
+
+        <DialogBody className="gap-2">
           {isLoading ? (
             <div className="flex justify-center py-8">
-              <Loader2 className="size-5 animate-spin text-muted-foreground" />
+              <Spinner className="size-5 text-muted-text" aria-label={t("common.processing")} />
             </div>
           ) : entries && entries.length > 0 ? (
-            <ul className="flex max-h-[320px] flex-col gap-1.5 overflow-y-auto">
+            <ul className="flex flex-col gap-1.5">
               {entries.map((entry) => {
                 const bankName = entry.bankName;
                 return (
                   <li
                     key={entry.id}
-                    className="flex items-center gap-2 rounded-lg border border-border p-2 transition-colors hover:bg-accent"
+                    className="flex items-center gap-2 rounded-xl border border-border p-2 transition-control pointer-fine:hover:bg-accent"
                   >
-                    <button
-                      type="button"
+                    {/* Ghost with its own hover switched off: the row (`li`) owns
+                        the hover, and a second layer would light up only the left
+                        half of a row the user is pointing at as a whole. */}
+                    <Button
+                      variant="ghost"
                       onClick={() => {
                         onApply({ mode: "saved", account: toSelected(entry) });
                         onOpenChange(false);
                       }}
-                      className="flex min-w-0 flex-1 items-center gap-3 p-1 text-left"
+                      className="h-auto min-w-0 shrink flex-1 justify-start gap-3 p-1 text-left pointer-fine:hover:bg-transparent active:bg-transparent"
                     >
-                      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-text">
                         <Landmark className="size-4" />
                       </span>
                       <span className="flex min-w-0 flex-col">
                         <span className="truncate text-sm font-medium text-foreground">
                           {entry.label || bankName}
                         </span>
-                        <span className="truncate text-xs text-muted-foreground">
+                        <span className="truncate text-xs text-muted-text">
                           {bankName} · {entry.accountNumber} · {entry.accountName}
                         </span>
                       </span>
-                    </button>
+                    </Button>
 
                     {confirmDeleteId === entry.id ? (
                       <span className="flex shrink-0 items-center gap-1">
-                        <span className="mr-1 text-xs text-muted-foreground">
+                        <span className="mr-1 text-xs text-muted-text">
                           {t("addrbook.deleteConfirm")}
                         </span>
-                        <button
-                          type="button"
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
                           onClick={() => handleDelete(entry.id)}
-                          disabled={deleteMutation.isPending}
+                          loading={deleteMutation.isPending}
                           aria-label={t("addrbook.deleteAria")}
-                          className="flex size-8 items-center justify-center rounded-md text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+                          className="text-destructive-text pointer-fine:hover:bg-destructive/10"
                         >
-                          {deleteMutation.isPending ? (
-                            <Loader2 className="size-4 animate-spin" />
-                          ) : (
-                            <Check className="size-4" />
-                          )}
-                        </button>
-                        <button
-                          type="button"
+                          <Check />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
                           onClick={() => setConfirmDeleteId(null)}
                           disabled={deleteMutation.isPending}
                           aria-label={t("common.cancel")}
-                          className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50"
+                          className="text-muted-text"
                         >
-                          <X className="size-4" />
-                        </button>
+                          <X />
+                        </Button>
                       </span>
                     ) : (
-                      <button
-                        type="button"
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
                         onClick={() => setConfirmDeleteId(entry.id)}
                         aria-label={t("addrbook.deleteAria")}
-                        className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                        className="shrink-0 text-muted-text pointer-fine:hover:bg-destructive/10 pointer-fine:hover:text-destructive-text"
                       >
-                        <Trash2 className="size-4" />
-                      </button>
+                        <Trash2 />
+                      </Button>
                     )}
                   </li>
                 );
               })}
             </ul>
           ) : (
-            <p className="py-8 text-center text-sm text-muted-foreground">{t("bankbook.empty")}</p>
+            <Empty className="min-h-40 py-4">
+              <EmptyHeader>
+                <EmptyMedia kind="empty">
+                  <Landmark />
+                </EmptyMedia>
+                <EmptyTitle>{t("bankbook.emptyTitle")}</EmptyTitle>
+                <EmptyDescription>{t("bankbook.emptyDesc")}</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           )}
+        </DialogBody>
 
-          <button
-            type="button"
-            onClick={() => setAddOpen(true)}
-            className="mt-1 flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-border py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent"
-          >
-            <Plus className="size-4" /> {t("bankbook.add")}
-          </button>
-        </div>
+        <DialogFooter>
+          <Button variant="outline" size="lg" className="flex-1" onClick={() => setAddOpen(true)}>
+            <Plus /> {t("bankbook.add")}
+          </Button>
+        </DialogFooter>
 
         <AddBankAccountModal
           open={addOpen}

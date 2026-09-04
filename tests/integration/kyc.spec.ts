@@ -2,6 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 import {
   loginViaStorage,
   forceEnglish,
+  pickOccupation,
   seedKycStatus,
   TEST_PNG,
 } from "../helpers/playwright-utils";
@@ -30,6 +31,18 @@ async function fillForm(page: Page) {
   await page.getByLabel("Birth Place").fill("Jakarta");
   await page.getByLabel("KTP Number").fill("3171234567890123");
   await page.getByLabel("Address", { exact: true }).fill("Jl. Sudirman No. 1");
+  // Identity fields added by USDX-586 (POJK 8/2023 Art. 25(1)(a)) — also required
+  // for a submit to go through. Their own rules live in kyc-identity.spec.ts.
+  await page.selectOption("#gender", "LAKI_LAKI");
+  await page.selectOption("#maritalStatus", "KAWIN");
+  await page.getByLabel("Mother's Maiden Name").fill("Siti Aminah");
+  // CDD block (USDX-545, extended USDX-586) — likewise required. The CDD rules
+  // themselves are covered in kyc-cdd.spec.ts; here it is just form fill.
+  await pickOccupation(page, "Karyawan Swasta");
+  await page.selectOption("#sourceOfFunds", "SALARY");
+  await page.selectOption("#annualIncomeRange", "FROM_100M_TO_500M");
+  await page.selectOption("#netWorthRange", "FROM_500M_TO_2B");
+  await page.selectOption("#transactionPurpose", "INVESTMENT");
 }
 
 async function uploadPhotos(page: Page) {
@@ -160,6 +173,7 @@ test.describe("KYC Responsive (1440)", () => {
     await gotoKyc(page, "UNVERIFIED");
     await expect(page.getByLabel("First Name")).toBeVisible();
     await expect(page.getByLabel("Identity Type")).toHaveValue("KTP");
+    await expect(page.getByLabel("Nationality")).toHaveValue("ID");
     await expect(page.getByLabel("Country")).toHaveValue("ID");
     await expect(
       page.getByRole("button", { name: "Submit for Verification" })

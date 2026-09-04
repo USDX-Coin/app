@@ -14,10 +14,27 @@
 import { useState } from "react";
 import { ScanLine } from "lucide-react";
 import { toast } from "sonner";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Field, FieldHelp, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group";
 import { AddressScannerDialog } from "@/components/mint/AddressScannerDialog";
 import { useAddAddressBook } from "@/hooks/useAddressBook";
-import { validateAddress } from "@/lib/validations";
+import { translateValidation, validateAddress } from "@/lib/validations";
 import { hasErrorCode, isValidationError } from "@/lib/api/errors";
 import { useLang } from "@/providers/LanguageProvider";
 
@@ -38,7 +55,9 @@ export function AddWalletModal({ open, onOpenChange, onAdded }: AddWalletModalPr
   const addMutation = useAddAddressBook();
 
   // Inline validity (errors only shown once the field has input, like MintForm).
+  // `validateAddress` returns an i18n key, not a sentence (finding D1).
   const addressError = address ? validateAddress(address.trim()) : null;
+  const addressErrorText = translateValidation(t, addressError);
   const labelValid = label.trim().length > 0 && label.trim().length <= LABEL_MAX;
   const isValid = !addressError && address.trim() !== "" && labelValid;
 
@@ -77,81 +96,77 @@ export function AddWalletModal({ open, onOpenChange, onAdded }: AddWalletModalPr
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[440px]">
-        <DialogTitle className="text-base font-medium text-foreground">
-          {t("addrbook.addTitle")}
-        </DialogTitle>
+      <DialogContent size="md">
+        <DialogHeader>
+          <DialogTitle>{t("addrbook.addTitle")}</DialogTitle>
+        </DialogHeader>
 
-        <div className="mt-2 flex flex-col gap-4">
-          {/* Wallet Address + scan-QR icon (scanner deferred to a follow-up) */}
-          <div className="flex flex-col gap-2">
-            <label htmlFor="addr-address" className="text-sm font-medium text-muted-foreground">
-              {t("addrbook.fieldAddress")}
-            </label>
-            <div className="flex items-center gap-2.5 rounded-md bg-muted p-3">
-              <input
+        <DialogBody className="gap-4">
+          {/* Wallet address + scan QR */}
+          <Field>
+            <FieldLabel htmlFor="addr-address">{t("addrbook.fieldAddress")}</FieldLabel>
+            <InputGroup>
+              <InputGroupInput
                 id="addr-address"
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 placeholder={t("addrbook.fieldAddressPh")}
                 autoComplete="off"
                 spellCheck={false}
-                className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                aria-invalid={!!addressErrorText}
               />
-              <button
-                type="button"
-                onClick={() => setScanOpen(true)}
-                aria-label={t("scan.open")}
-                className="text-muted-foreground transition-colors hover:text-foreground"
-              >
-                <ScanLine className="size-4 shrink-0" />
-              </button>
-            </div>
-            {addressError && <p className="text-sm text-destructive">{addressError}</p>}
-          </div>
+              <InputGroupAddon align="inline-end">
+                <InputGroupButton
+                  size="icon"
+                  onClick={() => setScanOpen(true)}
+                  aria-label={t("scan.open")}
+                >
+                  <ScanLine />
+                </InputGroupButton>
+              </InputGroupAddon>
+            </InputGroup>
+            <FieldHelp id="addr-address" error={addressErrorText} />
+          </Field>
 
           {/* Label (required, max 50) */}
-          <div className="flex flex-col gap-2">
-            <label htmlFor="addr-label" className="text-sm font-medium text-muted-foreground">
-              {t("addrbook.fieldLabel")}
-            </label>
-            <div className="flex items-center gap-2.5 rounded-md bg-muted p-3">
-              <input
-                id="addr-label"
-                value={label}
-                onChange={(e) => setLabel(e.target.value)}
-                placeholder={t("addrbook.fieldLabelPh")}
-                maxLength={LABEL_MAX}
-                className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-              />
-            </div>
-          </div>
+          <Field>
+            <FieldLabel htmlFor="addr-label">{t("addrbook.fieldLabel")}</FieldLabel>
+            <Input
+              id="addr-label"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder={t("addrbook.fieldLabelPh")}
+              maxLength={LABEL_MAX}
+            />
+          </Field>
 
-          {submitError && (
-            <p role="alert" className="text-sm text-destructive">
-              {submitError}
-            </p>
-          )}
+          {/* A failed submit keeps the dialog open and stays inside it — a toast
+              would take the message away from the form that produced it. */}
+          {submitError && <Alert tone="danger">{submitError}</Alert>}
+        </DialogBody>
 
-          <div className="mt-1 flex gap-3">
-            <button
-              type="button"
-              onClick={() => handleOpenChange(false)}
-              disabled={addMutation.isPending}
-              className="flex h-[42px] flex-1 items-center justify-center rounded-lg border border-border text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50"
-            >
-              {t("common.cancel")}
-            </button>
-            <button
-              type="button"
-              onClick={handleAdd}
-              disabled={!isValid || addMutation.isPending}
-              className="brand-gradient flex h-[42px] flex-1 items-center justify-center rounded-lg text-sm font-medium text-white transition-opacity disabled:opacity-50"
-            >
-              {addMutation.isPending ? t("common.processing") : t("addrbook.submit")}
-            </button>
-          </div>
-        </div>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            size="lg"
+            className="flex-1"
+            onClick={() => handleOpenChange(false)}
+            disabled={addMutation.isPending}
+          >
+            {t("common.cancel")}
+          </Button>
+          <Button
+            variant="brand"
+            size="lg"
+            className="flex-1"
+            onClick={handleAdd}
+            disabled={!isValid}
+            loading={addMutation.isPending}
+            loadingLabel={t("common.processing")}
+          >
+            {t("addrbook.submit")}
+          </Button>
+        </DialogFooter>
 
         <AddressScannerDialog
           open={scanOpen}

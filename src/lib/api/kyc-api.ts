@@ -4,15 +4,18 @@
 
 import { env } from "@/lib/env";
 import { apiFetch } from "./client";
+import { PresignedUploadError } from "./errors";
 import type { KycMyStatus } from "@/types";
 import type {
   SubmitKycRequest,
+  SubmitKycCddRequest,
   PresignedUploadRequest,
   PresignedUploadResult,
 } from "./types";
 import {
   mockGetMyKycStatus,
   mockSubmitKyc,
+  mockSubmitKycCdd,
   mockPresignedUpload,
 } from "./mock-api";
 
@@ -24,6 +27,19 @@ export async function getMyKycStatus(): Promise<KycMyStatus> {
 export async function submitKyc(req: SubmitKycRequest): Promise<KycMyStatus> {
   if (env.useMock) return mockSubmitKyc(req);
   return apiFetch<KycMyStatus>("/api/v2/kyc", { method: "POST", body: req });
+}
+
+/**
+ * CDD-only top-up for an already-VERIFIED customer (USDX-545). A DIFFERENT
+ * endpoint from `submitKyc` on purpose: this one must leave `kyc.status`,
+ * `users.kyc_status` and `submission_count` untouched. Routing it through
+ * `POST /api/v2/kyc` would set the customer back to PENDING.
+ *
+ * AWAITING BACKEND: `PATCH /api/v2/kyc/cdd` does not exist yet.
+ */
+export async function submitKycCdd(req: SubmitKycCddRequest): Promise<KycMyStatus> {
+  if (env.useMock) return mockSubmitKycCdd(req);
+  return apiFetch<KycMyStatus>("/api/v2/kyc/cdd", { method: "PATCH", body: req });
 }
 
 export async function requestPresignedUpload(
@@ -49,6 +65,9 @@ export async function uploadToPresignedUrl(
     body: file,
   });
   if (!response.ok) {
-    throw new Error(`Upload failed (${response.status})`);
+    // Statusnya ikut dilempar, bukan cuma dijadikan teks pesan: pemanggil harus bisa
+    // membedakan bucket yang menolak berkasnya (4xx) dari bucket yang sedang rusak
+    // atau menolak URL presigned kita (5xx / 401 / 403).
+    throw new PresignedUploadError(response.status);
   }
 }

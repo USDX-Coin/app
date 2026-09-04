@@ -4,11 +4,41 @@ import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/providers/LanguageProvider";
 
-/** Breadcrumb + page title. `crumbs` and `title` are i18n keys. */
-export function PageHeader({ crumbs, title }: { crumbs: string[]; title: string }) {
+/**
+ * Sticky shell for a dashboard page heading — apply to the FIRST element inside
+ * the page root so the title stays visible while the page body scrolls under it
+ * (`(dashboard)/layout.tsx` owns the single scroll area).
+ *
+ * - `-mt-5 pt-5 md:-mt-6 md:pt-6` swallows the scroll wrapper's top padding and
+ *   re-adds it inside the heading, so the opaque strip reaches the top edge of
+ *   the card and nothing peeks out above the title while scrolling.
+ * - `bg-card` (not a translucent/blur fill) so scrolled content is fully hidden
+ *   in both light and dark themes. Horizontal padding stays on the wrapper, so
+ *   no content can pass beside the heading either.
+ * - `z-10` sits under popovers/dropdowns (`z-50`), above page content.
+ */
+export const PAGE_HEADING_STICKY =
+  "sticky top-0 z-10 -mt-5 bg-card pt-5 pb-3 md:-mt-6 md:pt-6";
+
+/**
+ * Breadcrumb + page title. `crumbs` and `title` are i18n keys.
+ *
+ * `badge` sits on the title line — it is where the "SEGERA HADIR" pill goes on a
+ * route that only serves a coming-soon page, so the label is visible before the
+ * user scrolls (F3: those pages used to open with no marker at all).
+ */
+export function PageHeader({
+  crumbs,
+  title,
+  badge,
+}: {
+  crumbs: string[];
+  title: string;
+  badge?: React.ReactNode;
+}) {
   const { t } = useLang();
   return (
-    <div className="flex w-full flex-col gap-2">
+    <div className={cn(PAGE_HEADING_STICKY, "flex w-full flex-col gap-2")}>
       <div className="flex items-center gap-1 text-sm">
         {crumbs.map((c, i) => (
           <span key={c} className="flex items-center gap-1">
@@ -19,7 +49,10 @@ export function PageHeader({ crumbs, title }: { crumbs: string[]; title: string 
           </span>
         ))}
       </div>
-      <h1 className="text-xl font-medium tracking-tight text-foreground">{t(title)}</h1>
+      <div className="flex items-center gap-2">
+        <h1 className="text-xl font-medium tracking-tight text-foreground">{t(title)}</h1>
+        {badge}
+      </div>
     </div>
   );
 }

@@ -40,7 +40,7 @@ test.describe("Forgot Password Page", () => {
       // fires) but fails the app's stricter regex (requires a TLD).
       await page.getByPlaceholder("Enter your email").fill("user@domain");
       await page.getByRole("button", { name: "Send Reset Link" }).click();
-      await expect(page.getByText("Invalid email format")).toBeVisible();
+      await expect(page.getByText("Enter a valid email address")).toBeVisible();
     });
   });
 
@@ -55,8 +55,8 @@ test.describe("Forgot Password Page", () => {
       await seedRetryAfter(page, 76451); // 21h14m until the daily window resets
       await page.addInitScript(() => localStorage.setItem("usdx-lang", "id"));
       await page.reload();
-      await page.getByPlaceholder("Masukkan email Anda").fill("demo@usdx.com");
-      await page.getByRole("button", { name: "Kirim Link Reset" }).click();
+      await page.getByPlaceholder("nama@email.com").fill("demo@usdx.com");
+      await page.getByRole("button", { name: "Kirim tautan" }).click();
       const cooldownButton = page.getByRole("button", {
         name: "Coba lagi dalam sekitar 22 jam",
       });
@@ -69,8 +69,8 @@ test.describe("Forgot Password Page", () => {
       await seedRetryAfter(page, 300);
       await page.addInitScript(() => localStorage.setItem("usdx-lang", "id"));
       await page.reload();
-      await page.getByPlaceholder("Masukkan email Anda").fill("demo@usdx.com");
-      await page.getByRole("button", { name: "Kirim Link Reset" }).click();
+      await page.getByPlaceholder("nama@email.com").fill("demo@usdx.com");
+      await page.getByRole("button", { name: "Kirim tautan" }).click();
       await expect(
         page.getByRole("button", { name: "Coba lagi dalam 5 menit" })
       ).toBeVisible({ timeout: 10000 });

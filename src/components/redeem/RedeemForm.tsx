@@ -11,16 +11,26 @@ import { ArrowUpDown, BookText, Landmark, Wallet } from "lucide-react";
 import { useRedeem } from "@/hooks/useRedeem";
 import { useKycGate } from "@/hooks/useKycGate";
 import { formatAmount, formatIDR, truncateAddress } from "@/lib/utils";
+import { translateValidation } from "@/lib/validations";
 import { getChainById } from "@/lib/chains";
 import { REDEEM_CHAIN_ID } from "@/lib/constants";
 import { useLang } from "@/providers/LanguageProvider";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Field, FieldHelp, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { KycGateDialog } from "@/components/kyc/KycGateDialog";
 import { BankSelect } from "./BankSelect";
 import { BankAccountPicker, type BankFill } from "./BankAccountPicker";
 import { RedeemReview } from "./RedeemReview";
 
+// The amount is a real `Input` with its own box stripped off — the border and
+// background belong to the AmountBox around it, the focus ring stays on the
+// control. The bare `<input outline-none>` it replaces showed no keyboard focus
+// at all (finding E2).
 const AMOUNT_INPUT_CLASS =
-  "min-w-0 flex-1 bg-transparent text-right text-2xl font-semibold tracking-tight text-foreground outline-none placeholder:text-muted-foreground";
+  "h-auto min-w-0 flex-1 rounded-md border-0 bg-transparent px-1 py-0 text-right text-2xl font-semibold tracking-tight md:text-2xl dark:bg-transparent pointer-fine:hover:border-transparent";
 
 // One amount row: a currency chip on the left, and either the editable input
 // (when the user denominates in this currency) or the computed counter-value.
@@ -48,21 +58,17 @@ function AmountBox({
   return (
     <div className="flex flex-col gap-4 rounded-xl bg-muted p-4">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-medium text-muted-foreground">{label}</p>
+        <p className="text-sm font-medium text-muted-text">{label}</p>
         {isInput && onMax && (
-          <button
-            type="button"
-            onClick={onMax}
-            className="rounded-md bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/20"
-          >
+          <Button type="button" variant="ghost" size="sm" onClick={onMax}>
             {maxLabel}
-          </button>
+          </Button>
         )}
       </div>
       <div className="flex items-center justify-between gap-2">
         {chip}
         {isInput ? (
-          <input
+          <Input
             inputMode="decimal"
             placeholder="0"
             value={value}
@@ -81,7 +87,7 @@ function AmountBox({
 function BreakdownRow({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
     <div className="flex items-center justify-between gap-3 text-sm">
-      <span className={strong ? "font-medium text-foreground" : "text-muted-foreground"}>{label}</span>
+      <span className={strong ? "font-medium text-foreground" : "text-muted-text"}>{label}</span>
       <span className={strong ? "font-semibold text-foreground" : "font-medium text-foreground"}>{value}</span>
     </div>
   );
@@ -153,6 +159,12 @@ export function RedeemForm() {
   const canMax = isWalletConnected && balanceUsdx != null && balanceUsdx > 0;
   const onMax = canMax ? setMaxAmount : undefined;
 
+  // `useRedeem` passes the validators' i18n keys straight through (validations.ts
+  // returns keys, not sentences — finding D1); they become sentences here.
+  const amountErrorText = translateValidation(t, amountError);
+  const accountNumberErrorText = translateValidation(t, accountNumberError);
+  const accountNameErrorText = translateValidation(t, accountNameError);
+
   // Contextual connect: the first click opens the wallet connect (no global
   // button); once connected the button becomes "Redeem" and opens the Ringkasan.
   function handleRedeem() {
@@ -161,14 +173,14 @@ export function RedeemForm() {
   }
 
   const usdxChip = (
-    <div className="flex shrink-0 items-center gap-2 rounded-full bg-primary py-1.5 pl-1.5 pr-3 text-white">
+    <div className="flex shrink-0 items-center gap-2 rounded-full bg-primary py-1.5 pl-1.5 pr-3 text-primary-foreground">
       <span className="relative inline-block size-8 shrink-0">
-        <img src="/image/usdx-logo.png" alt="" className="size-8 rounded-full" />
+        <img src="/image/usdx-coin.svg" alt="" className="size-8 rounded-full" />
         {selectedChain && (
           <img
             src={selectedChain.icon}
             alt=""
-            className="absolute -bottom-0.5 -right-0.5 size-[14px] rounded-full border border-primary bg-card"
+            className="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full border border-primary bg-card"
           />
         )}
       </span>
@@ -177,8 +189,8 @@ export function RedeemForm() {
   );
 
   const idrChip = (
-    <div className="flex shrink-0 items-center gap-2 rounded-full bg-primary py-1.5 pl-1.5 pr-3 text-white">
-      <span className="flex size-8 items-center justify-center rounded-full bg-gold text-sm font-semibold text-[#1a1a1a]">
+    <div className="flex shrink-0 items-center gap-2 rounded-full bg-primary py-1.5 pl-1.5 pr-3 text-primary-foreground">
+      <span className="flex size-8 items-center justify-center rounded-full bg-gold text-sm font-semibold text-on-gold">
         Rp
       </span>
       <span className="text-base font-semibold tracking-tight">IDR</span>
@@ -216,29 +228,25 @@ export function RedeemForm() {
   );
 
   return (
-    <div className="flex w-full max-w-[500px] flex-col gap-6 rounded-xl border border-border bg-card p-5">
+    <div className="flex w-full max-w-lg flex-col gap-6 rounded-2xl border border-border bg-card p-5">
       {/* Title + contextual wallet control (USDX-249): a Connect button to the
           right of the title until the user connects; once connected it shows the
           address + live USDX balance. Balance is only read AFTER connect (the
           on-chain read is gated on isConnected) — no global connect button. */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-xl font-medium tracking-tight text-foreground">{t("title.redeem")}</h2>
+        <h2 className="text-lg font-semibold tracking-tight text-foreground">{t("title.redeem")}</h2>
         {!isWalletConnected ? (
-          <button
-            type="button"
-            onClick={connectWallet}
-            className="flex h-9 shrink-0 items-center gap-2 rounded-lg bg-primary px-3 text-sm font-medium text-white transition-opacity hover:opacity-90"
-          >
-            <Wallet className="size-4" />
+          <Button type="button" variant="outline" onClick={connectWallet}>
+            <Wallet />
             {t("redeem.connectWallet")}
-          </button>
+          </Button>
         ) : (
           <div className="flex shrink-0 items-center gap-2 rounded-lg border border-border bg-muted px-3 py-1.5 text-sm">
-            <Wallet className="size-4 text-muted-foreground" />
+            <Wallet className="size-4 text-muted-text" />
             <span className="font-medium text-foreground">
               {walletAddress ? truncateAddress(walletAddress) : "—"}
             </span>
-            <span className="text-muted-foreground">·</span>
+            <span className="text-muted-text">·</span>
             {/* Labelled for screen readers; an unknown balance shows "—", not a
                 number and not an endless ellipsis (USDX-396). */}
             <span className="sr-only">{t("redeem.balanceLabel")}</span>
@@ -264,23 +272,34 @@ export function RedeemForm() {
             </>
           )}
 
-          <button
-            type="button"
-            onClick={toggleCurrency}
-            aria-label={t("form.swapCurrency")}
-            className="absolute left-1/2 top-1/2 flex size-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ArrowUpDown className="size-5" />
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={toggleCurrency}
+                aria-label={t("form.swapCurrency")}
+                className="absolute left-1/2 top-1/2 size-11 -translate-x-1/2 -translate-y-1/2 rounded-full"
+              >
+                <ArrowUpDown className="size-5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t("form.swapCurrency")}</TooltipContent>
+          </Tooltip>
         </div>
 
-        {amountError && <p className="-mt-2 text-sm text-destructive">{amountError}</p>}
+        {amountErrorText && (
+          <p role="alert" className="-mt-2 text-sm leading-5 text-destructive-text">
+            {amountErrorText}
+          </p>
+        )}
 
         {/* Exchange rate (live sell rate) */}
         <div className="flex flex-col gap-2">
-          <p className="text-sm font-medium text-muted-foreground">{t("form.exchangeRate")}</p>
+          <p className="text-sm font-medium text-muted-text">{t("form.exchangeRate")}</p>
           {isRateError ? (
-            <p className="text-sm text-destructive">{t("mint.rateError")}</p>
+            <p role="alert" className="text-sm leading-5 text-destructive-text">{t("mint.rateError")}</p>
           ) : (
             <p className="text-base font-medium tracking-tight text-foreground">
               1 USDX ≈ {effectiveSellRate ? formatAmount(effectiveSellRate) : "…"} IDR
@@ -294,20 +313,22 @@ export function RedeemForm() {
             "Change" clears the reference and returns to manual entry. */}
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-medium text-muted-foreground">{t("form.toThisBank")}</p>
-            <button
+            <p className="text-sm font-medium text-muted-text">{t("form.toThisBank")}</p>
+            <Button
               type="button"
+              variant="link"
+              size="sm"
+              className="-mr-3"
               onClick={() => setBankPickerOpen(true)}
-              className="flex items-center gap-1.5 text-sm font-medium text-gold underline-offset-2 hover:underline"
             >
-              <BookText className="size-4" />
+              <BookText />
               {t("bankbook.choose")}
-            </button>
+            </Button>
           </div>
 
           {savedAccount ? (
             <div className="flex items-center gap-3 rounded-xl bg-muted p-3">
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-card text-muted-foreground">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-card text-muted-text">
                 <Landmark className="size-4" />
               </span>
               <div className="flex min-w-0 flex-1 flex-col">
@@ -315,51 +336,47 @@ export function RedeemForm() {
                   <span className="truncate text-sm font-medium text-foreground">
                     {savedAccount.bankName}
                   </span>
-                  <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
-                    {t("bankbook.savedBadge")}
-                  </span>
+                  <Badge tone="neutral">{t("bankbook.savedBadge")}</Badge>
                 </span>
-                <span className="truncate text-xs text-muted-foreground">
+                <span className="truncate text-xs text-muted-text">
                   {savedAccount.accountNumber} · {savedAccount.accountName}
                 </span>
               </div>
-              <button
-                type="button"
-                onClick={clearSavedAccount}
-                className="shrink-0 text-sm font-medium text-gold underline-offset-2 hover:underline"
-              >
+              <Button type="button" variant="link" size="sm" className="-mr-3" onClick={clearSavedAccount}>
                 {t("bankbook.change")}
-              </button>
+              </Button>
             </div>
           ) : (
             <>
-              <div className="flex flex-col gap-1.5">
-                <span className="text-xs font-medium text-muted-foreground">{t("form.bank")}</span>
-                <BankSelect value={bankCode} onSelect={setBankCode} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <span className="text-xs font-medium text-muted-foreground">{t("modal.accountNumber")}</span>
-                <input
+              <Field>
+                <FieldLabel htmlFor="redeem-bank">{t("form.bank")}</FieldLabel>
+                <BankSelect id="redeem-bank" value={bankCode} onSelect={setBankCode} />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="redeem-account-number">{t("modal.accountNumber")}</FieldLabel>
+                <Input
+                  id="redeem-account-number"
                   inputMode="numeric"
                   placeholder={t("modal.accountNumberPh")}
                   value={bankAccountNumber}
                   onChange={(e) => onAccountNumberChange(e.target.value)}
-                  aria-label={t("modal.accountNumber")}
-                  className="rounded-md bg-muted p-3 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                  aria-invalid={!!accountNumberErrorText}
+                  aria-describedby="redeem-account-number-error"
                 />
-                {accountNumberError && <p className="text-sm text-destructive">{accountNumberError}</p>}
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <span className="text-xs font-medium text-muted-foreground">{t("modal.holderName")}</span>
-                <input
+                <FieldHelp id="redeem-account-number" error={accountNumberErrorText} />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="redeem-account-name">{t("modal.holderName")}</FieldLabel>
+                <Input
+                  id="redeem-account-name"
                   placeholder={t("modal.holderNamePh")}
                   value={bankAccountName}
                   onChange={(e) => setBankAccountName(e.target.value)}
-                  aria-label={t("modal.holderName")}
-                  className="rounded-md bg-muted p-3 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                  aria-invalid={!!accountNameErrorText}
+                  aria-describedby="redeem-account-name-error"
                 />
-                {accountNameError && <p className="text-sm text-destructive">{accountNameError}</p>}
-              </div>
+                <FieldHelp id="redeem-account-name" error={accountNameErrorText} />
+              </Field>
             </>
           )}
         </div>
@@ -372,7 +389,9 @@ export function RedeemForm() {
             <BreakdownRow label={t("redeem.disbursementFee")} value={`− ${formatIDR(disbursementFeeIdr)}`} />
             <div className="my-1 border-t border-border" />
             <BreakdownRow label={t("redeem.netPayout")} value={formatIDR(netPayoutIdr)} strong />
-            {belowMinPayout && <p className="text-sm text-destructive">{t("redeem.minPayout")}</p>}
+            {belowMinPayout && (
+              <p role="alert" className="text-sm leading-5 text-destructive-text">{t("redeem.minPayout")}</p>
+            )}
           </div>
         )}
       </div>
@@ -381,14 +400,15 @@ export function RedeemForm() {
           connect (when needed) then the Ringkasan (week3.md § Form Redeem).
           Non-VERIFIED stays clickable so the KYC gate dialog can explain the lock
           (USDX-153); form validation only gates VERIFIED users. */}
-      <button
+      <Button
         type="button"
+        variant="brand"
+        size="lg"
         disabled={gate.verified && !isFormValid}
         onClick={() => gate.guard(handleRedeem)}
-        className="brand-gradient flex h-[42px] items-center justify-center rounded-lg text-sm font-medium text-white transition-opacity disabled:opacity-50"
       >
         {t("btn.redeem")}
-      </button>
+      </Button>
 
       <KycGateDialog
         open={gate.open}

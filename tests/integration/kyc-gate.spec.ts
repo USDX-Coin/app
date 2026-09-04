@@ -7,9 +7,10 @@ import {
 } from "../helpers/playwright-utils";
 
 // USDX-153: KYC status tracker on /mint (dashboard home) + transaction action
-// gate. Pages stay fully explorable; the primary action (mint/redeem/bridge/
-// send) opens a per-status dialog until kyc_status = VERIFIED. Status is seeded
-// through the mock seam (usdx-mock-kyc-status) + the persisted auth user.
+// gate. Pages stay fully explorable; the primary action (mint/redeem) opens a
+// per-status dialog until kyc_status = VERIFIED. Status is seeded through the
+// mock seam (usdx-mock-kyc-status) + the persisted auth user. Bridge/Send are
+// ComingSoon-gated, so they have no primary action to gate.
 
 const VALID_ADDRESS = "0xabcdef1234567890abcdef1234567890abcdef12";
 type Status = "UNVERIFIED" | "PENDING" | "VERIFIED" | "REJECTED";
@@ -37,7 +38,7 @@ test.describe("KYC Status Tracker (/mint)", () => {
 
       await page.getByPlaceholder("0", { exact: true }).fill("100");
       await page
-        .getByPlaceholder("Select destination address")
+        .getByPlaceholder("0x5DC489Ad05Efc")
         .fill(VALID_ADDRESS);
       await page.getByRole("button", { name: "Mint", exact: true }).click();
       // VERIFIED proceeds without the KYC gate — the Ringkasan review modal opens.
@@ -125,26 +126,38 @@ test.describe("Transaction Action Gate", () => {
       await expect(page).toHaveURL(/\/kyc$/);
     });
 
-    test("redeem, bridge, and send actions are gated too", async ({ page }) => {
+    test("redeem action is gated too", async ({ page }) => {
       await gotoWithStatus(page, "UNVERIFIED", "/redeem");
       await page
         .getByRole("button", { name: "Redeem", exact: true })
         .click({ timeout: 15000 });
       await expect(dialog(page)).toContainText("Complete KYC first");
-      await page.keyboard.press("Escape");
+    });
 
-      await page.goto("/bridge");
-      await page
-        .getByRole("button", { name: "Bridge", exact: true })
-        .click({ timeout: 15000 });
-      await expect(dialog(page)).toContainText("Complete KYC first");
-      await page.keyboard.press("Escape");
+    // Bridge and Send are gated behind ComingSoon until their backends exist —
+    // the old forms faked success locally without any API call. Scoped to
+    // <main>: the sidebar keeps both items as "Coming Soon" teasers, so the
+    // phrase also appears in the page chrome (see sidebar-nav.spec.ts).
+    test("bridge and send render ComingSoon instead of the fake forms", async ({
+      page,
+    }) => {
+      const main = page.getByRole("main");
+
+      await gotoWithStatus(page, "VERIFIED", "/bridge");
+      await expect(
+        main.getByText("Coming soon", { exact: true })
+      ).toBeVisible({ timeout: 15000 });
+      await expect(
+        main.getByRole("button", { name: "Bridge", exact: true })
+      ).toHaveCount(0);
 
       await page.goto("/send");
-      await page
-        .getByRole("button", { name: "Send", exact: true })
-        .click({ timeout: 15000 });
-      await expect(dialog(page)).toContainText("Complete KYC first");
+      await expect(
+        main.getByText("Coming soon", { exact: true })
+      ).toBeVisible({ timeout: 15000 });
+      await expect(
+        main.getByRole("button", { name: "Send", exact: true })
+      ).toHaveCount(0);
     });
   });
 
@@ -163,7 +176,10 @@ test.describe("Transaction Action Gate", () => {
   });
 });
 
-test.describe("Header identity + logout", () => {
+// Identity and logout live in the Sidebar account menu (`ui/menu-profil.tsx`).
+// The old `layout/Header.tsx` this block was named after is gone — it had no
+// importers left once the sidebar took over the account row.
+test.describe("Sidebar identity + logout", () => {
   test.describe("positive", () => {
     test("shows users.name when present", async ({ page }) => {
       await forceEnglish(page);
@@ -190,10 +206,19 @@ test.describe("Header identity + logout", () => {
       await forceEnglish(page);
       await loginViaStorage(page);
       await page.goto("/mint");
+      // Target the VISIBLE name, not a generic label: the account button has no
+      // aria-label any more, precisely so a screen reader announces who is
+      // signed in (WCAG 2.5.3) instead of "Account menu".
       await page
         .getByRole("button", { name: /Demo User/ })
         .click({ timeout: 15000 });
-      await page.getByRole("menuitem", { name: "Logout" }).click();
+      await page.getByRole("menuitem", { name: "Log out" }).click();
+      // Logging out asks first (PR 2, F.4) — the menu item opens a dialog, it
+      // does not end the session on its own.
+      await page
+        .getByRole("dialog")
+        .getByRole("button", { name: "Log out" })
+        .click();
       await expect(page).toHaveURL(/\/login$/);
 
       // Session is gone: protected routes bounce back to /login.

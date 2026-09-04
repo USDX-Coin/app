@@ -4,7 +4,6 @@
 
 - `(auth)/` — Unauthenticated pages (login, register, forgot-password). Uses `AuthLayout` (split screen).
 - `(dashboard)/` — Authenticated pages (mint, redeem, transactions, profile). Uses dashboard layout (sidebar + header). Redirects to `/login` if not authenticated.
-- `payment/` — Standalone mock payment gateway page (no sidebar).
 
 ## Auth Guard
 

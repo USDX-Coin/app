@@ -1,4 +1,13 @@
 import type { AmountCurrency, ConsumerOrderType, EntityType } from "@/types";
+import type {
+  AnnualIncomeRange,
+  NetWorthRange,
+  Occupation,
+  SourceOfFunds,
+  SourceOfWealth,
+  TransactionPurpose,
+} from "@/lib/kyc/cdd";
+import type { Gender, IdentityType, MaritalStatus } from "@/lib/kyc/identity";
 
 // ── Auth (openapi auth.yaml — Auth v2 / consumer) ──────────────────────────
 export interface LoginRequest {
@@ -43,20 +52,79 @@ export interface ChangePasswordRequest {
 }
 
 // ── KYC (openapi kyc.yaml — consumer) ──────────────────────────────────────
-export type IdentityType = "KTP" | "DRIVER_LICENSE";
+// `IdentityType` hidup di `@/lib/kyc/identity` bersama daftar nilai + validasinya,
+// dan di-re-export di sini supaya modul yang hanya bicara soal bentuk wire tidak
+// perlu tahu asalnya.
+export type { IdentityType };
 
 export interface SubmitKycRequest {
+  // --- Identitas (kyc.yaml § SubmitKycRequest, POJK 8/2023 Pasal 25 (1) a) ------
   firstName: string;
   lastName: string;
+  // PII, nullable — butir a) "termasuk nama alias, JIKA ADA".
+  aliasName: string | null;
   dob: string; // YYYY-MM-DD
   birthPlace: string;
   identityType: IdentityType;
   identityNumber: string;
-  country: string; // ISO 3166-1 alpha-2; "ID" in Week 1
+  // Kewarganegaraan (butir e), ISO 3166-1 alpha-2 huruf besar. BUKAN duplikat
+  // `country`: itu negara alamat tinggal (butir c), ini kewarganegaraan orangnya.
+  nationality: string;
+  gender: Gender;
+  maritalStatus: MaritalStatus;
+  // PII. Wajib — butir j) tidak punya kualifikasi "jika ada".
+  mothersMaidenName: string;
+  country: string; // ISO 3166-1 alpha-2; "ID" di Phase 2 awal
   addressLine1: string;
   addressLine2: string | null;
   ktpObjectKey: string;
   selfieObjectKey: string;
+
+  // --- Blok CDD (USDX-545, diperluas USDX-586) ---------------------------------
+  // Bentuknya persis `KycCddFields` di kyc.yaml — satu deklarasi di sana dipakai
+  // dua endpoint, jadi bidang di bawah harus identik dengan `SubmitKycCddRequest`.
+  occupation: Occupation;
+  sourceOfFunds: SourceOfFunds;
+  annualIncomeRange: AnnualIncomeRange;
+  netWorthRange: NetWorthRange;
+  transactionPurpose: TransactionPurpose;
+  // Nullable: opsional secara umum, WAJIB saat `pepStatus` true (Pasal 37 (1) d).
+  sourceOfWealth: SourceOfWealth | null;
+  // PII, nullable: butir g) "tempat kerja, JIKA ADA".
+  employerAddress: string | null;
+  employerPhone: string | null;
+  pepStatus: boolean;
+  // PII, nullable: hanya dikirim saat pepStatus true.
+  pepRelation: string | null;
+  // PII, nullable: opsional — hanya nasabah yang punya NPWP.
+  npwp: string | null;
+}
+
+/**
+ * Body top-up CDD (USDX-545): nasabah yang identitasnya SUDAH VERIFIED mengisi
+ * jawaban due diligence yang tidak pernah ditanyakan kepadanya.
+ *
+ * Persis subset CDD dari `SubmitKycRequest` — tanpa identitas, tanpa object key.
+ * Mengirimnya lewat endpoint submit biasa bukan pilihan: endpoint itu menulis
+ * `status = PENDING`, yang akan menjatuhkan nasabah terverifikasi kembali ke antrean
+ * review.
+ *
+ * Lima field identitas baru USDX-586 sengaja TIDAK ada di sini: kyc.yaml menaruhnya
+ * di bagian identitas `SubmitKycRequest`, dan endpoint ini tidak boleh berkuasa
+ * mengubah data identitas yang sudah disetujui tanpa review.
+ */
+export interface SubmitKycCddRequest {
+  occupation: Occupation;
+  sourceOfFunds: SourceOfFunds;
+  annualIncomeRange: AnnualIncomeRange;
+  netWorthRange: NetWorthRange;
+  transactionPurpose: TransactionPurpose;
+  sourceOfWealth: SourceOfWealth | null;
+  employerAddress: string | null;
+  employerPhone: string | null;
+  pepStatus: boolean;
+  pepRelation: string | null;
+  npwp: string | null;
 }
 
 // ── Storage (openapi storage.yaml — consumer) ──────────────────────────────

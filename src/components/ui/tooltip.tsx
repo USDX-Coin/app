@@ -1,56 +1,112 @@
 "use client"
 
 import * as React from "react"
-import { Tooltip as TooltipPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
+import {
+  Tooltip as TooltipPrimitive,
+  TooltipArrow as TooltipArrowPrimitive,
+  TooltipContent as TooltipContentPrimitive,
+  TooltipPortal,
+  TooltipProvider as TooltipProviderPrimitive,
+  TooltipTrigger as TooltipTriggerPrimitive,
+} from "@/components/animate-ui/primitives/radix/tooltip"
 
+/**
+ * Tooltip — a name or a value on hover, nothing more. No actions, and never
+ * information the user cannot get any other way: touch has no hover, so the
+ * same text is always on the trigger's `aria-label` and the full value is
+ * always copyable somewhere.
+ *
+ * Not for buttons that already show their label — repeating a visible word is
+ * noise. It is for icon-only buttons and for truncated values.
+ *
+ * Colours are inverted against the theme (`bg-foreground` / `text-background`),
+ * which is the highest contrast available without inventing a token.
+ */
 function TooltipProvider({
-  delayDuration = 0,
+  delayDuration = 300,
+  skipDelayDuration = 100,
   ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
+}: React.ComponentProps<typeof TooltipProviderPrimitive>) {
   return (
-    <TooltipPrimitive.Provider
-      data-slot="tooltip-provider"
+    <TooltipProviderPrimitive
       delayDuration={delayDuration}
+      skipDelayDuration={skipDelayDuration}
       {...props}
     />
   )
 }
 
+/**
+ * Carries its own provider so a tooltip works wherever it is dropped. Radix
+ * allows nested providers, and a root-level one would still be honoured.
+ */
 function Tooltip({
+  delayDuration,
   ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Root>) {
-  return <TooltipPrimitive.Root data-slot="tooltip" {...props} />
+}: React.ComponentProps<typeof TooltipPrimitive>) {
+  return (
+    <TooltipProvider>
+      <TooltipPrimitive data-slot="tooltip" delayDuration={delayDuration} {...props} />
+    </TooltipProvider>
+  )
 }
 
-function TooltipTrigger({
-  ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
-  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
+function TooltipTrigger(props: React.ComponentProps<typeof TooltipTriggerPrimitive>) {
+  return <TooltipTriggerPrimitive data-slot="tooltip-trigger" {...props} />
 }
+
+const offsets = {
+  top: { y: 4 },
+  bottom: { y: -4 },
+  left: { x: 4 },
+  right: { x: -4 },
+} as const
 
 function TooltipContent({
   className,
-  sideOffset = 0,
   children,
+  side = "top",
+  sideOffset = 4,
+  mono = false,
+  showArrow = true,
   ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Content>) {
+}: React.ComponentProps<typeof TooltipContentPrimitive> & {
+  /** Hashes, VA numbers, wallet addresses — wraps at 280 px. */
+  mono?: boolean
+  showArrow?: boolean
+}) {
+  const from = offsets[side as keyof typeof offsets] ?? offsets.top
+
   return (
-    <TooltipPrimitive.Portal>
-      <TooltipPrimitive.Content
+    <TooltipPortal>
+      <TooltipContentPrimitive
         data-slot="tooltip-content"
+        side={side}
         sideOffset={sideOffset}
         className={cn(
-          "z-50 w-fit origin-(--radix-tooltip-content-transform-origin) animate-in rounded-md bg-foreground px-3 py-1.5 text-xs text-balance text-background fade-in-0 zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
+          "z-50 rounded-md bg-foreground px-2.5 py-1.5 text-xs leading-4 text-background",
+          mono && "max-w-[280px] font-mono break-all",
           className
         )}
+        initial={{ opacity: 0, scale: 0.98, ...from }}
+        animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
         {...props}
       >
         {children}
-        <TooltipPrimitive.Arrow className="z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px] bg-foreground fill-foreground" />
-      </TooltipPrimitive.Content>
-    </TooltipPrimitive.Portal>
+        {showArrow && (
+          <TooltipArrowPrimitive
+            data-slot="tooltip-arrow"
+            width={16}
+            height={8}
+            className="fill-foreground"
+          />
+        )}
+      </TooltipContentPrimitive>
+    </TooltipPortal>
   )
 }
 

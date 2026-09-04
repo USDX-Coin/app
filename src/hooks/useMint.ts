@@ -91,6 +91,16 @@ export function useMint() {
       }),
     onSuccess: async (order) => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      // Latch the handoff BEFORE leaving. Two jobs:
+      //  1. Keeps "Lanjut Pembayaran" disabled for the whole navigation window.
+      //     `isPending` can't: it flips back to idle as soon as this callback
+      //     returns, while the cross-origin load is still in flight — a second
+      //     click in that gap creates a second order with a second VA.
+      //  2. Marks this page as "already handed off", so if the browser later
+      //     restores it from the back-forward cache (Back from checkout),
+      //     `useMintHandoffReset` knows to wipe the form + modal instead of
+      //     handing the user a live confirm button for an order they paid.
+      store.beginHandoff();
       // Cross-origin handoff ke checkout own-hosted (repo `checkout`). location.href
       // (push, bukan replace) → tombol "Kembali" di checkout balik ke /mint. Auth =
       // one-time code lewat URL hash `#code=` (USDX-378, WSTG-CLNT-12): backend
@@ -127,11 +137,18 @@ export function useMint() {
     chainId: store.chainId,
     selectedChain,
     reset: store.reset,
+    // Ringkasan modal visibility — store-owned so `reset()` closes it too
+    reviewOpen: store.reviewOpen,
+    setReviewOpen: store.setReviewOpen,
     // rate
     rate: rateQuery.data ?? null,
     effectiveBuyRate,
     isRateLoading: rateQuery.isLoading,
     isRateError: rateQuery.isError,
+    // A failed rate load needs an action, not just a sentence (finding B8):
+    // the form renders a "Coba lagi" button that calls this.
+    isRateFetching: rateQuery.isFetching,
+    refetchRate: rateQuery.refetch,
     // derived amounts
     enteredAmount,
     amountUsdx,
@@ -143,6 +160,10 @@ export function useMint() {
     // submit (create order → redirect to checkout)
     submitMint: () => createMutation.mutateAsync(),
     isCreating: createMutation.isPending,
+    // The order exists and the browser is on its way to checkout.
+    isHandingOff: store.handoffPending,
+    // What the confirm button must actually be gated on: creating OR handing off.
+    isSubmitting: createMutation.isPending || store.handoffPending,
     createErrorKey: mintErrorKey(createMutation.error),
     resetCreateError: createMutation.reset,
   };

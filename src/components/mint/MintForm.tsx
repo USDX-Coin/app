@@ -5,14 +5,31 @@ import { ArrowUpDown, BookText, ScanLine } from "lucide-react";
 import { useMint } from "@/hooks/useMint";
 import { useKycGate } from "@/hooks/useKycGate";
 import { formatAmount } from "@/lib/utils";
+import { translateValidation } from "@/lib/validations";
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Field, FieldHelp, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { KycGateDialog } from "@/components/kyc/KycGateDialog";
 import { MintReview } from "@/components/mint/MintReview";
 import { AddressBookPicker } from "@/components/mint/AddressBookPicker";
 import { AddressScannerDialog } from "@/components/mint/AddressScannerDialog";
+import { MintFormSkeleton } from "@/components/mint/MintFormSkeleton";
 import { useLang } from "@/providers/LanguageProvider";
 
+// The amount is a real `Input`, stripped of its own box because it already sits
+// in one: the border and background belong to the AmountBox, the focus ring
+// stays on the control. (Before this it was a bare `<input>` with `outline-none`
+// — the field showed no keyboard focus at all, finding E2.)
 const AMOUNT_INPUT_CLASS =
-  "min-w-0 flex-1 bg-transparent text-right text-2xl font-semibold tracking-tight text-foreground outline-none placeholder:text-muted-foreground";
+  "h-auto min-w-0 flex-1 rounded-md border-0 bg-transparent px-1 py-0 text-right text-2xl font-semibold tracking-tight md:text-2xl dark:bg-transparent pointer-fine:hover:border-transparent";
 
 // One amount row: a currency chip (logo + ticker) on the left, and either the
 // editable input (when the user denominates in this currency) or the computed
@@ -37,11 +54,11 @@ function AmountBox({
 }) {
   return (
     <div className="flex flex-col gap-4 rounded-xl bg-muted p-4">
-      <p className="text-sm font-medium text-muted-foreground">{label}</p>
+      <p className="text-sm font-medium text-muted-text">{label}</p>
       <div className="flex items-center justify-between gap-2">
         {chip}
         {isInput ? (
-          <input
+          <Input
             inputMode="decimal"
             placeholder="0"
             value={value}
@@ -71,36 +88,52 @@ export function MintForm() {
     effectiveBuyRate,
     isRateLoading,
     isRateError,
+    isRateFetching,
+    refetchRate,
     destinationAddress,
     setDestinationAddress,
     amountError,
     addressError,
     isFormValid,
     selectedChain,
+    // Ringkasan visibility is store state, not component state: the
+    // post-handoff reset has to be able to close it from outside React.
+    reviewOpen,
+    setReviewOpen,
   } = useMint();
 
-  const [reviewOpen, setReviewOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const gate = useKycGate();
 
+  // First rate read, nothing cached: show the card's shape rather than an empty
+  // card (B12 — Mint had no loading state). `isLoading` is false on every later
+  // refetch, so this is the first paint only; after that only derived values
+  // wait. All hooks above have already run, so the early return is safe.
+  if (isRateLoading && !effectiveBuyRate) return <MintFormSkeleton />;
+
   const onAmountChange = (value: string) => setAmount(value.replace(/[^0-9.]/g, ""));
   const usdxDisplay = isRateLoading && amount ? "…" : amountUsdx > 0 ? formatAmount(amountUsdx) : "0";
   const idrDisplay = isRateLoading && amount ? "…" : subtotalIdr > 0 ? formatAmount(subtotalIdr) : "0";
+
+  // The hooks hand back i18n keys (validations.ts returns keys, not sentences —
+  // finding D1); the sentence is made here, where the language is known.
+  const amountErrorText = translateValidation(t, amountError);
+  const addressErrorText = translateValidation(t, addressError);
 
   // Which currency the amount is denominated in. The denominated box is the
   // editable one and sits on top; its counter-value sits below.
   const isUsd = amountCurrency === "USD";
 
   const usdxChip = (
-    <div className="flex shrink-0 items-center gap-2 rounded-full bg-primary py-1.5 pl-1.5 pr-3 text-white">
+    <div className="flex shrink-0 items-center gap-2 rounded-full bg-primary py-1.5 pl-1.5 pr-3 text-primary-foreground">
       <span className="relative inline-block size-8 shrink-0">
-        <img src="/image/usdx-logo.png" alt="" className="size-8 rounded-full" />
+        <img src="/image/usdx-coin.svg" alt="" className="size-8 rounded-full" />
         {selectedChain && (
           <img
             src={selectedChain.icon}
             alt=""
-            className="absolute -bottom-0.5 -right-0.5 size-[14px] rounded-full border border-primary bg-card"
+            className="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full border border-primary bg-card"
           />
         )}
       </span>
@@ -109,8 +142,8 @@ export function MintForm() {
   );
 
   const idrChip = (
-    <div className="flex shrink-0 items-center gap-2 rounded-full bg-primary py-1.5 pl-1.5 pr-3 text-white">
-      <span className="flex size-8 items-center justify-center rounded-full bg-gold text-sm font-semibold text-[#1a1a1a]">
+    <div className="flex shrink-0 items-center gap-2 rounded-full bg-primary py-1.5 pl-1.5 pr-3 text-primary-foreground">
+      <span className="flex size-8 items-center justify-center rounded-full bg-gold text-sm font-semibold text-on-gold">
         Rp
       </span>
       <span className="text-base font-semibold tracking-tight">IDR</span>
@@ -145,8 +178,8 @@ export function MintForm() {
   );
 
   return (
-    <div className="flex w-full max-w-[500px] flex-col gap-6 rounded-xl border border-border bg-card p-5">
-      <h2 className="text-xl font-medium tracking-tight text-foreground">{t("title.mint")}</h2>
+    <div className="flex w-full max-w-lg flex-col gap-6 rounded-2xl border border-border bg-card p-5">
+      <h2 className="text-lg font-semibold tracking-tight text-foreground">{t("title.mint")}</h2>
 
       <div className="flex flex-col gap-4">
         {/* Amount boxes with center currency swap. Toggling the denomination
@@ -166,23 +199,51 @@ export function MintForm() {
           )}
 
           {/* Swap which currency you denominate the amount in (USDX ↔ IDR) */}
-          <button
-            type="button"
-            onClick={toggleCurrency}
-            aria-label={t("form.swapCurrency")}
-            className="absolute left-1/2 top-1/2 flex size-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ArrowUpDown className="size-5" />
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={toggleCurrency}
+                aria-label={t("form.swapCurrency")}
+                className="absolute left-1/2 top-1/2 size-11 -translate-x-1/2 -translate-y-1/2 rounded-full"
+              >
+                <ArrowUpDown className="size-5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t("form.swapCurrency")}</TooltipContent>
+          </Tooltip>
         </div>
 
-        {amountError && <p className="-mt-2 text-sm text-destructive">{amountError}</p>}
+        {amountErrorText && (
+          <p role="alert" className="-mt-2 text-sm leading-5 text-destructive-text">
+            {amountErrorText}
+          </p>
+        )}
 
-        {/* Exchange rate (live) */}
+        {/* Exchange rate (live). A failed load now carries the action it asks
+            for — "Coba lagi" used to be a sentence with nothing to click (B8). */}
         <div className="flex flex-col gap-2">
-          <p className="text-sm font-medium text-muted-foreground">{t("form.exchangeRate")}</p>
+          <p className="text-sm font-medium text-muted-text">{t("form.exchangeRate")}</p>
           {isRateError ? (
-            <p className="text-sm text-destructive">{t("mint.rateError")}</p>
+            <Alert
+              tone="danger"
+              shape="strip"
+              action={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => refetchRate()}
+                  loading={isRateFetching}
+                  loadingLabel={t("common.processing")}
+                >
+                  {t("common.retry")}
+                </Button>
+              }
+            >
+              {t("mint.rateError")}
+            </Alert>
           ) : (
             <p className="text-base font-medium tracking-tight text-foreground">
               1 USDX ≈ {effectiveBuyRate ? formatAmount(effectiveBuyRate) : "…"} IDR
@@ -191,56 +252,70 @@ export function MintForm() {
         </div>
 
         {/* Destination address — manual / pick from address book / scan (W3) */}
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between text-sm font-medium">
-            <p className="text-muted-foreground">{t("form.toThisAddress")}</p>
-            <button
+        <Field>
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <FieldLabel htmlFor="mint-address">{t("form.toThisAddress")}</FieldLabel>
+            <Button
               type="button"
+              variant="link"
+              size="sm"
+              className="-mr-3"
               onClick={() => setPickerOpen(true)}
-              className="text-gold underline-offset-2 hover:underline"
             >
               {t("form.addAddressBook")}
-            </button>
+            </Button>
           </div>
-          <div className="flex items-center gap-2.5 rounded-md bg-muted p-3">
-            <input
-              placeholder={t("form.selectDestination")}
+          <InputGroup>
+            <InputGroupInput
+              id="mint-address"
+              placeholder={t("form.addressPh")}
               value={destinationAddress}
               onChange={(e) => setDestinationAddress(e.target.value)}
-              className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-              aria-label={t("form.toThisAddress")}
+              aria-invalid={!!addressErrorText}
+              aria-describedby="mint-address-error"
             />
-            <button
-              type="button"
-              onClick={() => setPickerOpen(true)}
-              aria-label={t("addrbook.pickTitle")}
-              className="text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <BookText className="size-4 shrink-0" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setScanOpen(true)}
-              aria-label={t("scan.open")}
-              className="text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <ScanLine className="size-4 shrink-0" />
-            </button>
-          </div>
-          {addressError && <p className="text-sm text-destructive">{addressError}</p>}
-        </div>
+            <InputGroupAddon align="inline-end">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <InputGroupButton
+                    size="icon"
+                    onClick={() => setPickerOpen(true)}
+                    aria-label={t("addrbook.pickTitle")}
+                  >
+                    <BookText />
+                  </InputGroupButton>
+                </TooltipTrigger>
+                <TooltipContent>{t("addrbook.pickTitle")}</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <InputGroupButton
+                    size="icon"
+                    onClick={() => setScanOpen(true)}
+                    aria-label={t("scan.open")}
+                  >
+                    <ScanLine />
+                  </InputGroupButton>
+                </TooltipTrigger>
+                <TooltipContent>{t("scan.open")}</TooltipContent>
+              </Tooltip>
+            </InputGroupAddon>
+          </InputGroup>
+          <FieldHelp id="mint-address" error={addressErrorText} />
+        </Field>
       </div>
 
       {/* Non-VERIFIED stays clickable so the KYC gate dialog can explain why
           the action is locked (USDX-153); form validation only gates VERIFIED. */}
-      <button
+      <Button
         type="button"
+        variant="brand"
+        size="lg"
         disabled={gate.verified && !isFormValid}
         onClick={() => gate.guard(() => setReviewOpen(true))}
-        className="brand-gradient flex h-[42px] items-center justify-center rounded-lg text-sm font-medium text-white transition-opacity disabled:opacity-50"
       >
         {t("btn.mint")}
-      </button>
+      </Button>
 
       <KycGateDialog
         open={gate.open}

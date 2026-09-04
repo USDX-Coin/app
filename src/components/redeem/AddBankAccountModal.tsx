@@ -20,10 +20,25 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Field, FieldHelp, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { BankSelect } from "./BankSelect";
 import { useAddBankAccount } from "@/hooks/useBankAccounts";
-import { validateBankAccountNumber, validateBankAccountName } from "@/lib/validations";
+import {
+  translateValidation,
+  validateBankAccountNumber,
+  validateBankAccountName,
+} from "@/lib/validations";
 import { hasErrorCode, isValidationError } from "@/lib/api/errors";
 import { useLang } from "@/providers/LanguageProvider";
 import type { BankAccountEntry } from "@/types";
@@ -47,8 +62,11 @@ export function AddBankAccountModal({ open, onOpenChange, onAdded }: AddBankAcco
   const addMutation = useAddBankAccount();
 
   // Inline validity (errors only shown once the field has input, like MintForm).
+  // Both validators return i18n keys, not sentences (finding D1).
   const numberError = accountNumber ? validateBankAccountNumber(accountNumber) : null;
   const nameError = accountName ? validateBankAccountName(accountName) : null;
+  const numberErrorText = translateValidation(t, numberError);
+  const nameErrorText = translateValidation(t, nameError);
   const isValid =
     bankCode !== "" &&
     accountNumber.trim() !== "" &&
@@ -100,91 +118,86 @@ export function AddBankAccountModal({ open, onOpenChange, onAdded }: AddBankAcco
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[440px]">
-        <DialogTitle className="text-base font-medium text-foreground">
-          {t("bankbook.addTitle")}
-        </DialogTitle>
+      <DialogContent size="md">
+        <DialogHeader>
+          <DialogTitle>{t("bankbook.addTitle")}</DialogTitle>
+        </DialogHeader>
 
-        <div className="mt-2 flex flex-col gap-4">
+        <DialogBody className="gap-4">
           {/* Bank */}
-          <div className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-muted-foreground">{t("form.bank")}</span>
+          <Field>
+            <FieldLabel>{t("form.bank")}</FieldLabel>
             <BankSelect value={bankCode} onSelect={setBankCode} />
-          </div>
+          </Field>
 
           {/* Account number */}
-          <div className="flex flex-col gap-2">
-            <label htmlFor="bank-number" className="text-sm font-medium text-muted-foreground">
-              {t("modal.accountNumber")}
-            </label>
-            <input
+          <Field>
+            <FieldLabel htmlFor="bank-number">{t("modal.accountNumber")}</FieldLabel>
+            <Input
               id="bank-number"
               inputMode="numeric"
               value={accountNumber}
               onChange={(e) => setAccountNumber(e.target.value.replace(/[^0-9]/g, ""))}
               placeholder={t("modal.accountNumberPh")}
               autoComplete="off"
-              className="rounded-md bg-muted p-3 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+              aria-invalid={!!numberErrorText}
             />
-            {numberError && <p className="text-sm text-destructive">{numberError}</p>}
-          </div>
+            <FieldHelp id="bank-number" error={numberErrorText} />
+          </Field>
 
           {/* Holder name */}
-          <div className="flex flex-col gap-2">
-            <label htmlFor="bank-name" className="text-sm font-medium text-muted-foreground">
-              {t("modal.holderName")}
-            </label>
-            <input
+          <Field>
+            <FieldLabel htmlFor="bank-name">{t("modal.holderName")}</FieldLabel>
+            <Input
               id="bank-name"
               value={accountName}
               onChange={(e) => setAccountName(e.target.value)}
               placeholder={t("modal.holderNamePh")}
               autoComplete="off"
-              className="rounded-md bg-muted p-3 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+              aria-invalid={!!nameErrorText}
             />
-            {nameError && <p className="text-sm text-destructive">{nameError}</p>}
-          </div>
+            <FieldHelp id="bank-name" error={nameErrorText} />
+          </Field>
 
           {/* Label (optional, max 50) */}
-          <div className="flex flex-col gap-2">
-            <label htmlFor="bank-label" className="text-sm font-medium text-muted-foreground">
-              {t("bankbook.fieldLabel")}
-            </label>
-            <input
+          <Field>
+            <FieldLabel htmlFor="bank-label">{t("bankbook.fieldLabel")}</FieldLabel>
+            <Input
               id="bank-label"
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               placeholder={t("bankbook.fieldLabelPh")}
               maxLength={LABEL_MAX}
-              className="rounded-md bg-muted p-3 text-sm text-foreground outline-none placeholder:text-muted-foreground"
             />
-          </div>
+          </Field>
 
-          {submitError && (
-            <p role="alert" className="text-sm text-destructive">
-              {submitError}
-            </p>
-          )}
+          {/* A failed submit stays inside the dialog: the form that produced the
+              error is the only place the fix can happen. */}
+          {submitError && <Alert tone="danger">{submitError}</Alert>}
+        </DialogBody>
 
-          <div className="mt-1 flex gap-3">
-            <button
-              type="button"
-              onClick={() => handleOpenChange(false)}
-              disabled={addMutation.isPending}
-              className="flex h-[42px] flex-1 items-center justify-center rounded-lg border border-border text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50"
-            >
-              {t("common.cancel")}
-            </button>
-            <button
-              type="button"
-              onClick={handleAdd}
-              disabled={!isValid || addMutation.isPending}
-              className="brand-gradient flex h-[42px] flex-1 items-center justify-center rounded-lg text-sm font-medium text-white transition-opacity disabled:opacity-50"
-            >
-              {addMutation.isPending ? t("common.processing") : t("bankbook.submit")}
-            </button>
-          </div>
-        </div>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            size="lg"
+            className="flex-1"
+            onClick={() => handleOpenChange(false)}
+            disabled={addMutation.isPending}
+          >
+            {t("common.cancel")}
+          </Button>
+          <Button
+            variant="brand"
+            size="lg"
+            className="flex-1"
+            onClick={handleAdd}
+            disabled={!isValid}
+            loading={addMutation.isPending}
+            loadingLabel={t("common.processing")}
+          >
+            {t("bankbook.submit")}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

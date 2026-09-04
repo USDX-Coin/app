@@ -11,7 +11,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Check, ExternalLink, Loader2, X } from "lucide-react";
+import { AlertTriangle, Check, ExternalLink, X } from "lucide-react";
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { LinkInline } from "@/components/ui/link-inline";
+import { Spinner } from "@/components/ui/spinner";
 import { useRedeemStore } from "@/stores/redeemStore";
 import { useRedeemTracker } from "@/hooks/useRedeemTracker";
 import { useRedeemPreconditions } from "@/lib/redeem/wallet";
@@ -60,8 +64,8 @@ export function RedeemStatus() {
 
   if (!order || isLoading) {
     return (
-      <div className="flex w-full max-w-[500px] items-center justify-center rounded-xl border border-border bg-card p-10">
-        <Loader2 className="size-6 animate-spin text-primary" />
+      <div className="flex w-full max-w-lg items-center justify-center rounded-2xl border border-border bg-card p-10">
+        <Spinner className="size-6 text-primary" aria-label={t("common.processing")} />
       </div>
     );
   }
@@ -74,30 +78,29 @@ export function RedeemStatus() {
       : 0;
 
   return (
-    <div className="flex w-full max-w-[500px] flex-col gap-5 rounded-xl border border-border bg-card p-5">
+    <div className="flex w-full max-w-lg flex-col gap-5 rounded-2xl border border-border bg-card p-5">
       <div className="flex flex-col gap-1">
-        <h2 className="text-xl font-medium tracking-tight text-foreground">{t("title.redeemStatus")}</h2>
-        <p className="text-sm text-muted-foreground">
+        <h2 className="text-lg font-semibold tracking-tight text-foreground">{t("title.redeemStatus")}</h2>
+        <p className="text-sm text-muted-text">
           {order.orderNumber}
-          {order.lateBurn && <span className="ml-2 text-gold">{t("redeem.lateBurn")}</span>}
+          {order.lateBurn && <span className="ml-2 text-warning-text">{t("redeem.lateBurn")}</span>}
         </p>
       </div>
 
       {/* Payout is simulated in W3 even against the real backend (USDX-263), so
           the notice tracks env.redeemSimulatedPayout, not just the mock layer. */}
       {(env.useMock || env.redeemSimulatedPayout) && (
-        <p className="rounded-lg bg-[#eef4fb] p-3 text-xs text-muted-foreground dark:bg-[#13243d]">
+        <Alert tone="info" shape="strip">
           {t("redeem.simulationNotice")}
-        </p>
+        </Alert>
       )}
 
       {/* Stale burn: burned past the late-burn grace → payout held for manual
           reconcile (week3.md § Late-burn cutoff, USDX-259). */}
       {order.staleBurn && (
-        <p className="flex items-center gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-foreground">
-          <AlertTriangle className="size-4 shrink-0 text-warning" />
+        <Alert tone="warning" shape="strip">
           {t("redeem.staleBurn")}
-        </p>
+        </Alert>
       )}
 
       {/* Lifecycle stepper */}
@@ -113,16 +116,16 @@ export function RedeemStatus() {
                 <span
                   className={cn(
                     "flex size-7 shrink-0 items-center justify-center rounded-full border",
-                    done && "border-primary bg-primary text-white",
+                    done && "border-primary bg-primary text-primary-foreground",
                     active && "border-primary text-primary",
-                    failed && "border-destructive bg-destructive text-white",
-                    !done && !active && !failed && "border-border text-muted-foreground",
+                    failed && "border-destructive bg-destructive text-destructive-foreground",
+                    !done && !active && !failed && "border-border text-muted-text",
                   )}
                 >
                   {done ? (
                     <Check className="size-4" />
                   ) : active ? (
-                    <Loader2 className="size-4 animate-spin" />
+                    <Spinner className="size-4" />
                   ) : failed ? (
                     <X className="size-4" />
                   ) : (
@@ -134,14 +137,14 @@ export function RedeemStatus() {
                 )}
               </div>
               <div className={cn("flex flex-col pb-5", isLast && "pb-0")}>
-                <span className={cn("text-sm font-medium", active || done ? "text-foreground" : "text-muted-foreground")}>
+                <span className={cn("text-sm font-medium", active || done ? "text-foreground" : "text-muted-text")}>
                   {t(failed ? "redeem.statusExpired" : step.label)}
                 </span>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-muted-text">
                   {t(failed ? "redeem.statusExpiredDesc" : step.desc)}
                 </span>
                 {active && step.key === "AWAITING_BURN" && remainingSec > 0 && (
-                  <span className="mt-1 text-xs text-gold">
+                  <span className="mt-1 text-xs text-warning-text">
                     {t("redeem.expiresIn", { time: formatMMSS(remainingSec) })}
                   </span>
                 )}
@@ -165,50 +168,48 @@ export function RedeemStatus() {
       {/* Burn tx + payout summary */}
       <div className="flex flex-col gap-2 rounded-xl bg-muted p-4 text-sm">
         <div className="flex items-center justify-between gap-3">
-          <span className="text-muted-foreground">{t("sum.youWillRedeem")}</span>
+          <span className="text-muted-text">{t("sum.youWillRedeem")}</span>
           <span className="font-medium text-foreground">{formatAmount(Number(order.amount))} USDX</span>
         </div>
         <div className="flex items-center justify-between gap-3">
-          <span className="text-muted-foreground">{t("sum.bankDestination")}</span>
+          <span className="text-muted-text">{t("sum.bankDestination")}</span>
           <span className="font-medium text-foreground">
             {order.bankName} · {order.bankAccountNumber}
           </span>
         </div>
         <div className="flex items-center justify-between gap-3">
-          <span className="text-muted-foreground">{t("redeem.netPayout")}</span>
+          <span className="text-muted-text">{t("redeem.netPayout")}</span>
           <span className="font-semibold text-foreground">{formatIDR(Number(order.netPayoutIdr))}</span>
         </div>
         {order.burnTxHash && (
           <div className="flex items-center justify-between gap-3 border-t border-border pt-2">
-            <span className="text-muted-foreground">{t("redeem.burnTx")}</span>
-            <a
+            <span className="text-muted-text">{t("redeem.burnTx")}</span>
+            <LinkInline
               href={chain ? `${chain.explorerUrl}/tx/${order.burnTxHash}` : "#"}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1 font-medium text-primary hover:underline"
+              className="flex items-center gap-1 font-medium"
             >
               {truncateAddress(order.burnTxHash, 6)}
               <ExternalLink className="size-3.5" />
-            </a>
+            </LinkInline>
           </div>
         )}
       </div>
 
       <div className="flex gap-3">
-        <button
-          type="button"
-          onClick={reset}
-          className="flex h-[42px] flex-1 items-center justify-center rounded-lg border border-border text-sm font-medium text-foreground transition-colors hover:bg-accent"
-        >
+        <Button type="button" variant="outline" size="lg" className="flex-1" onClick={reset}>
           {t("btn.backToRedeem")}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="brand"
+          size="lg"
+          className="flex-1"
           onClick={() => router.push("/history")}
-          className="brand-gradient flex h-[42px] flex-1 items-center justify-center rounded-lg text-sm font-medium text-white"
         >
           {t("btn.viewHistory")}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -238,7 +239,7 @@ function BurnGate({
   if (burnInFlight) {
     return (
       <p className="flex items-center gap-2 rounded-lg border border-border bg-muted p-3 text-sm text-foreground">
-        <Loader2 className="size-4 shrink-0 animate-spin text-primary" />
+        <Spinner className="shrink-0 text-primary" />
         {t("redeem.burnProcessing")}
       </p>
     );
@@ -252,28 +253,26 @@ function BurnGate({
     pre.address.toLowerCase() === order.userAddress.toLowerCase();
 
   const burnButton = (
-    <button
+    <Button
       type="button"
+      variant="brand"
+      size="lg"
+      className="w-full"
       onClick={onBurn}
       disabled={!pre.canBurn || !walletMatches}
-      className="brand-gradient flex h-[42px] w-full items-center justify-center rounded-lg text-sm font-medium text-white transition-opacity disabled:opacity-50"
     >
       {burnState === "error" ? t("redeem.retryBurn") : t("redeem.burnNow")}
-    </button>
+    </Button>
   );
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
       {!pre.isConnected ? (
-        <button
-          type="button"
-          onClick={pre.connect}
-          className="brand-gradient flex h-[42px] w-full items-center justify-center rounded-lg text-sm font-medium text-white"
-        >
+        <Button type="button" variant="brand" size="lg" className="w-full" onClick={pre.connect}>
           {t("btn.connectWallet")}
-        </button>
+        </Button>
       ) : !walletMatches ? (
-        <p className="flex items-start gap-2 text-sm text-destructive">
+        <p className="flex items-start gap-2 text-sm leading-5 text-destructive-text">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" />
           {t("redeem.walletMismatch", { address: truncateAddress(order.userAddress, 6) })}
         </p>
@@ -283,30 +282,33 @@ function BurnGate({
             <AlertTriangle className="size-4 shrink-0 text-warning" />
             {t("redeem.wrongNetwork")}
           </p>
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
+            className="self-start"
             onClick={pre.switchNetwork}
-            disabled={pre.isSwitchingNetwork}
-            className="self-start rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50"
+            loading={pre.isSwitchingNetwork}
+            loadingLabel={t("redeem.switchingNetwork")}
           >
-            {pre.isSwitchingNetwork ? t("redeem.switchingNetwork") : t("redeem.switchNetwork")}
-          </button>
+            {t("redeem.switchNetwork")}
+          </Button>
         </>
       ) : pre.insufficientBalance ? (
-        <p className="flex items-center gap-2 text-sm text-destructive">
+        <p className="flex items-center gap-2 text-sm leading-5 text-destructive-text">
           <AlertTriangle className="size-4 shrink-0" />
           {t("redeem.insufficientBalance")}
         </p>
       ) : (
         <>
           {pre.lowGasWarning && (
-            <p className="flex items-center gap-2 text-sm text-warning">
+            <p className="flex items-center gap-2 text-sm leading-5 text-warning-text">
               <AlertTriangle className="size-4 shrink-0" />
               {t("redeem.lowGas")}
             </p>
           )}
           {burnState === "error" && burnErrorKey && (
-            <p role="alert" className="text-sm text-destructive">
+            <p role="alert" className="text-sm leading-5 text-destructive-text">
               {t(burnErrorKey)}
             </p>
           )}

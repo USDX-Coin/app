@@ -1,4 +1,12 @@
 @import "tailwindcss";
+/*
+ * Utility animasi Tailwind v4 (`animate-in`, `fade-in-0`, `zoom-in-95`,
+ * `slide-in-from-*`). Kelas-kelas ini sudah dipakai 58× di komponen Radix
+ * (dialog, sheet, dropdown, tooltip, popover) sejak awal, tapi paketnya tidak
+ * pernah terpasang — jadi semua overlay muncul dan hilang seketika tanpa
+ * transisi. Import ini yang menghidupkannya; tidak ada komponen yang diubah.
+ */
+@import "tw-animate-css";
 
 /* Dark mode driven by a `.dark` class on <html> (next-themes attribute="class") */
 @custom-variant dark (&:where(.dark, .dark *));
@@ -17,7 +25,13 @@
   --popover-foreground: #1a1a1a;
 
   --muted: #f0f0f0;
-  --muted-foreground: #777777;
+  /*
+   * Nilai lama #777777 = 4,48:1 di #ffffff — gagal AA tipis. Diperbaiki ke
+   * nilai `--muted-text` supaya kedua nama token aman dipakai untuk teks
+   * (keputusan pemilik produk F.2 jalan b); `--muted-text` di bawah kini
+   * hanya alias.
+   */
+  --muted-foreground: #6b6b6b; /* 5,33:1 di #ffffff · 4,76:1 di #f2f2f2 · 4,68:1 di #f0f0f0 */
   --accent: #f0f0f0;
   --accent-foreground: #1a1a1a;
   --secondary: #f0f0f0;
@@ -25,11 +39,22 @@
 
   --border: #dddddd;
   --input: #e5e5e5;
-  --ring: #800000;
+  /*
+   * `--ring` memegang nilai ring fokus yang sah — sama dengan `--focus-ring`
+   * di bawah, yang kini menjadi alias. Sebelumnya keduanya berbeda di gelap
+   * (#ac0004 = 2,28:1) sehingga kelas bawaan shadcn `ring-ring/50` diam-diam
+   * menghasilkan ring yang tidak terlihat.
+   *
+   * Ring dipakai 2 px OPACITY PENUH, bukan 3 px @50 %. Yang @50 % hanya
+   * 2,10:1 di atas kartu gelap — di bawah 3:1 yang diminta SC 1.4.11, jadi
+   * pengguna keyboard kehilangan jejak fokus di mode gelap. Opacity penuh:
+   * 10,95:1 terang, 4,69:1 gelap (4,08:1 kasus terburuk, di atas `--accent`).
+   */
+  --ring: #800000;             /* 10,95:1 di #ffffff · 9,78:1 di #f2f2f2 */
 
   --sidebar: #ffffff;
   --sidebar-foreground: #1a1a1a;
-  --sidebar-muted: #777777;
+  --sidebar-muted: #6b6b6b;      /* 5,33:1 di #ffffff -- dulu #777777 = 4,48:1, gagal AA */
 
   --primary: #800000;
   --primary-foreground: #ffffff;
@@ -41,10 +66,59 @@
 
   --gold: #f7a100;
 
+  /*
+   * `--destructive` adalah warna PERMUKAAN TINT: latar 10 % Alert, 12 % Badge,
+   * border 30 %, ring keadaan error. Ia terlalu terang untuk jadi permukaan
+   * SOLID — label putih di atas #ef4444 cuma 3,76:1, gagal AA. Jadi tombol
+   * (satu-satunya permukaan destructive yang solid) punya tokennya sendiri,
+   * pola yang sama dengan `--primary` vs `--primary-text`.
+   */
   --destructive: #ef4444;
+  --destructive-surface: #c81e1e; /* label putih 5,74:1 · vs halaman #f2f2f2 5,12:1 */
   --destructive-foreground: #ffffff;
   --success: #16a34a;
   --warning: #d97706;
+
+  /*
+   * ── Warna TEKS, terpisah dari warna PERMUKAAN ────────────────────────────
+   * Nilai di atas dipakai sebagai fill (pill, ikon, tint) dan di situ rasionya
+   * memang tidak perlu 4,5:1. Begitu warna yang sama dipakai untuk teks, ia
+   * gagal WCAG AA — dihitung ulang 4 Sep 2026 di #ffffff: `--destructive`
+   * #ef4444 = 3,76:1, `--success` #16a34a = 3,30:1, `--warning` #d97706 =
+   * 3,19:1; `--primary` #800000 cuma 1,59:1 di atas kartu gelap #1a1a1a.
+   * Ketiganya SENGAJA dibiarkan pada nilai permukaannya; yang digelapkan
+   * justru sisi teksnya.
+   *
+   * Rasio di bawah adalah KASUS TERBURUK, bukan rasio di atas kartu putih.
+   * Teks nada tidak hanya muncul di atas #ffffff: ia duduk di atas tint-nya
+   * sendiri (Alert 10 %, Badge 12 %) yang bisa berlapis di atas #f2f2f2
+   * (halaman) atau #f0f0f0 (kotak `bg-muted` di dalam kartu). Latar tergelap
+   * itulah yang menentukan lulus. Diukur di atas #ffffff saja, keempatnya
+   * tampak lolos (4,83-5,93); diukur di atas tint 12 % / #f0f0f0, semuanya
+   * gagal (3,65 · 3,90 · 3,90 · 4,41). Nilai yang dipakai sekarang lolos di
+   * kesembilan kombinasi latar.
+   *
+   * Jadi teks punya tokennya sendiri. Pola yang sama dipakai shadcn untuk
+   * memisahkan `--primary` dari `--primary-foreground`. Rasio dihitung di
+   * #ffffff (terang) dan #1a1a1a (gelap) — permukaan kartu, tempat teks paling
+   * sering berada.
+   */
+  --primary-text: #800000;          /* 10,95:1 · judul & tautan brand      */
+  --focus-ring: var(--ring);        /* alias · ring fokus 2 px, opacity penuh    */
+  --destructive-text: #b91c1c;      /*  4,89:1 kasus terburuk (tint 12 % di atas #f0f0f0) */
+  --success-text: #166534;          /*  5,54:1 kasus terburuk                        */
+  --warning-text: #92400e;          /*  5,51:1 kasus terburuk                        */
+  --info: #0369a1;                  /* permukaan notice biru               */
+  --info-text: #075985;             /*  5,62:1 kasus terburuk                        */
+  --muted-text: var(--muted-foreground); /* alias · 5,33:1 di kartu        */
+  --on-gold: #1a1a1a;               /*  8,33:1 di atas gold, kedua tema    */
+
+  /*
+   * Sorot yang lewat di skeleton: putih 45 % di atas warna dasarnya. Ditulis
+   * sekali di :root — `.dark` juga mengenai <html>, jadi color-mix ini ikut
+   * dihitung ulang begitu `--accent` berbalik.
+   */
+  --skeleton-highlight: color-mix(in srgb, #ffffff 45%, var(--accent));
 
   color-scheme: light;
 }
@@ -59,7 +133,7 @@
   --popover-foreground: #fafafa;
 
   --muted: #202020;
-  --muted-foreground: #9a9a9a;
+  --muted-foreground: #9a9a9a; /* 6,19:1 di #1a1a1a · 7,04:1 di #0a0a0a · 5,79:1 di #202020 */
   --accent: #262626;
   --accent-foreground: #fafafa;
   --secondary: #202020;
@@ -67,7 +141,7 @@
 
   --border: #2c2c2c;
   --input: #2c2c2c;
-  --ring: #ac0004;
+  --ring: #d65f5f;             /* 4,69:1 di #1a1a1a · 5,34:1 di #0a0a0a (dulu #ac0004 = 2,28:1) */
 
   --sidebar: #000000;
   --sidebar-foreground: #fafafa;
@@ -82,11 +156,56 @@
   --gold: #f7a100;
 
   --destructive: #f87171;
+  --destructive-surface: #f87171; /* label #1a1a1a 6,29:1 — di gelap tint dan permukaan boleh sama */
   --destructive-foreground: #1a1a1a;
   --success: #22c55e;
   --warning: #f59e0b;
 
+  /*
+   * Di gelap, maroon `--primary` #800000 hanya 1,59:1 di atas kartu #1a1a1a —
+   * praktis tidak terbaca. Itu bug yang diwarisi dari file Figma lama, bukan
+   * salah implementasi. Teks brand memakai nilai yang diterangkan; fill tetap
+   * memakai `--primary` supaya tombol dan nav aktif tidak berubah warna.
+   */
+  --primary-text: #d65f5f;          /* 4,69:1 di #1a1a1a */
+  --focus-ring: var(--ring);        /* alias · 4,69:1 di #1a1a1a */
+  --destructive-text: #f87171;      /* 6,29:1 */
+  --success-text: #22c55e;          /* 7,64:1 */
+  --warning-text: #f59e0b;          /* 8,10:1 */
+  --info: #7dd3fc;
+  --info-text: #7dd3fc;             /* 10,44:1 */
+  --muted-text: var(--muted-foreground); /* alias · 6,19:1 di #1a1a1a */
+  --on-gold: #1a1a1a;               /* 8,33:1 di atas gold */
+
   color-scheme: dark;
+}
+
+/*
+ * ── Motion ────────────────────────────────────────────────────────────────
+ * Durasi bernama. Tailwind v4 punya namespace `--ease-*` di `@theme` tapi TIDAK
+ * punya `--duration-*`, jadi durasi hidup sebagai custom property biasa dan
+ * dipakai lewat bentuk resmi `duration-(--dur-3)`.
+ *
+ * Aturannya: keluar selalu lebih cepat daripada masuk — saat sesuatu pergi,
+ * user sudah memutuskan dan tidak perlu menunggu animasinya selesai.
+ */
+:root {
+  --dur-1: 90ms;   /* umpan balik: hover, ring fokus, tekan tombol   */
+  --dur-2: 150ms;  /* keluar: menu, tooltip, toast, pesan error      */
+  --dur-3: 220ms;  /* masuk: menu, popover, error, skeleton→konten   */
+  --dur-4: 320ms;  /* permukaan: dialog, sheet, ganti fase countdown */
+  --dur-5: 600ms;  /* sekali jalan: ceklis sukses, bilah progres     */
+}
+
+/* Hormati preferensi sistem: nol durasi, bukan nol perubahan keadaan. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-1: 0ms;
+    --dur-2: 0ms;
+    --dur-3: 0ms;
+    --dur-4: 0ms;
+    --dur-5: 0ms;
+  }
 }
 
 /* Map flipping CSS vars onto Tailwind color utilities (theme-aware) */
@@ -120,9 +239,21 @@
   --color-gold: var(--gold);
 
   --color-destructive: var(--destructive);
+  --color-destructive-surface: var(--destructive-surface);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-success: var(--success);
   --color-warning: var(--warning);
+
+  /* Warna teks — pakai ini untuk apa pun yang dibaca, bukan yang diisi. */
+  --color-primary-text: var(--primary-text);
+  --color-focus-ring: var(--focus-ring);
+  --color-destructive-text: var(--destructive-text);
+  --color-success-text: var(--success-text);
+  --color-warning-text: var(--warning-text);
+  --color-info: var(--info);
+  --color-info-text: var(--info-text);
+  --color-muted-text: var(--muted-text);
+  --color-on-gold: var(--on-gold);
 }
 
 /* Static brand ramp (maroon). 600–700 = the on-brand interactive shades. */
@@ -149,6 +280,65 @@
   --radius-xl: 0.75rem;
 
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  /*
+   * Easing. `standard` untuk perubahan di tempat (warna, tinggi, lebar bilah);
+   * `enter` mempercepat di awal lalu mendarat pelan; `exit` langsung berangkat
+   * tanpa ragu. Tidak ada satu pun yang memantul — ini aplikasi yang memegang
+   * uang orang, bukan permainan.
+   */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  --animate-shimmer: shimmer 1.6s var(--ease-standard) infinite;
+}
+
+/*
+ * Satu-satunya transisi warna yang boleh ditulis di komponen. Tailwind's
+ * `transition-colors` memakai 150 ms; standar umpan balik kita 90 ms
+ * (`--dur-1`). Menulisnya sebagai @utility berarti angkanya hidup di satu
+ * tempat, bukan tersebar di 42 file.
+ */
+@utility transition-control {
+  transition-property: color, background-color, border-color, box-shadow;
+  transition-duration: var(--dur-1);
+  transition-timing-function: var(--ease-standard);
+}
+
+/*
+ * Perpindahan tema terang↔gelap.
+ *
+ * Kelasnya dipasang ke <html> oleh `ThemeToggle` tepat sebelum `setTheme()`
+ * dan dilepas setelah durasinya habis — jadi transisi ini HANYA hidup saat
+ * tema berganti. Dipasang permanen ke `*`, setiap hover ikut melambat ke
+ * 150 ms padahal standar hover kita 90 ms.
+ *
+ * Hanya properti warna. `all` ikut menganimasikan layout dan membuat
+ * perpindahan terasa berat.
+ *
+ * Reduced motion tidak perlu ditangani di sini: `--dur-2` sudah menjadi 0ms
+ * di blok @media (prefers-reduced-motion) di atas.
+ */
+html.theme-switching,
+html.theme-switching *,
+html.theme-switching *::before,
+html.theme-switching *::after {
+  transition:
+    background-color var(--dur-2) var(--ease-standard),
+    border-color var(--dur-2) var(--ease-standard),
+    color var(--dur-2) var(--ease-standard),
+    fill var(--dur-2) var(--ease-standard),
+    stroke var(--dur-2) var(--ease-standard);
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
 }
 
 body {

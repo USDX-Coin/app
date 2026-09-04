@@ -13,7 +13,7 @@ async function login(page: Page) {
   await page.goto("/login");
   await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible({ timeout: 15000 });
   await page.getByPlaceholder("you@email.com").fill("demo@usdx.com");
-  await page.getByPlaceholder("••••••••").fill("Demo1234");
+  await page.getByPlaceholder("Enter your password").fill("Demo1234");
   await page.getByRole("button", { name: "Login" }).click();
   await expect(page.getByText("You will mint")).toBeVisible({ timeout: 30000 });
 }
@@ -38,7 +38,7 @@ test.describe("Address Book — Add Wallet", () => {
 
       // Modal + picker close; the new address lands in the "To" field.
       await expect(page.getByRole("heading", { name: "Add Wallet", exact: true })).not.toBeVisible();
-      await expect(page.getByPlaceholder("Select destination address")).toHaveValue(NEW_ADDRESS);
+      await expect(page.getByPlaceholder("0x5DC489Ad05Efc")).toHaveValue(NEW_ADDRESS);
 
       // Reopen the picker → the new entry is in the list.
       await page.getByRole("button", { name: "Add address book" }).click();

@@ -34,15 +34,22 @@ test.describe("Auth Flow", () => {
       // Login with the verified demo account (fresh accounts need email verification)
       await page.goto("/login");
       await page.getByPlaceholder("you@email.com").fill("demo@usdx.com");
-      await page.getByPlaceholder("••••••••").fill("Demo1234");
+      await page.getByPlaceholder("Enter your password").fill("Demo1234");
       await page.getByRole("button", { name: "Login" }).click();
       await expect(page.getByText("You will mint")).toBeVisible({
         timeout: 30000,
       });
 
-      // Logout via the sidebar account switcher dropdown
-      await page.getByRole("button", { name: /Demo User/ }).click();
-      await page.getByRole("menuitem", { name: "Logout" }).click();
+      // Logout via the sidebar account menu — with the confirm step (PR 2, F.4).
+      // Matched on the signed-in identity, not a generic label: the button
+      // carries no aria-label, so its accessible name is the name + email it
+      // shows (WCAG 2.5.3).
+      await page.getByRole("button", { name: /demo@usdx\.com/ }).click();
+      await page.getByRole("menuitem", { name: "Log out" }).click();
+      await page
+        .getByRole("dialog")
+        .getByRole("button", { name: "Log out" })
+        .click();
 
       // Should be back on the login page
       await expect(

@@ -60,18 +60,18 @@ test.describe("Reset Password Page", () => {
       await page.getByPlaceholder("Create a new password").fill("NewPass123");
       await page.getByPlaceholder("Confirm your new password").fill("Different1");
       await page.getByRole("button", { name: "Reset Password" }).click();
-      await expect(page.getByText("Passwords do not match")).toBeVisible();
+      await expect(page.getByText("The two passwords are not the same")).toBeVisible();
     });
   });
 
   test.describe("edge cases — adaptive copy (USDX-142)", () => {
-    test("type=activation renders invite copy (default locale: Atur Password)", async ({
+    test("type=activation renders invite copy (default locale: Atur kata sandi)", async ({
       page,
     }) => {
       // No forceEnglish — default Indonesian locale, per the SOT copy example.
       await gotoReset(page, "token=valid-token&type=activation");
-      await expect(page.getByRole("heading", { name: "Atur Password" })).toBeVisible();
-      await expect(page.getByRole("button", { name: "Atur Password" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Atur kata sandi" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Simpan kata sandi" })).toBeVisible();
     });
 
     test("type=activation renders invite copy in English", async ({ page }) => {

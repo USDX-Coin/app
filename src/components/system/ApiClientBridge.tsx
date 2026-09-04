@@ -4,7 +4,9 @@
 // USDX-205). Mounted once, app-wide, so any `apiFetch` call auto-attaches the
 // Bearer token and reacts to cross-cutting auth states — without `client.ts`
 // importing React or the store:
-// - 401 → clear session + bounce to /login.
+// - 401 → clear session + bounce to /login?sesi=habis. The query flag is the
+//   whole point: without it the user lands on a blank login form and reads it
+//   as "my password was wrong" (B2). The login page turns it into a sentence.
 // - 403 ACCOUNT_SUSPENDED → clear session + bounce to a dedicated /suspended
 //   screen. This can surface on *any* authenticated consumer call (base
 //   ConsumerAuthGuard), e.g. a mid-session suspension caught on the /me refresh.
@@ -26,7 +28,7 @@ export function ApiClientBridge() {
         useAuthStore.getState().logout();
         const path = window.location.pathname;
         const onPublicPage = PUBLIC_PREFIXES.some((p) => path.startsWith(p));
-        if (!onPublicPage) window.location.assign("/login");
+        if (!onPublicPage) window.location.assign("/login?sesi=habis");
       },
       onForbidden: (code) => {
         if (code !== "ACCOUNT_SUSPENDED") return;

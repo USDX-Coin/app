@@ -20,10 +20,10 @@ test.describe("Redeem Flow", () => {
 
       // Fill amount + inline bank destination
       await page.getByPlaceholder("0", { exact: true }).fill("100");
-      await page.getByRole("button", { name: "Select bank" }).click();
+      await page.getByRole("combobox", { name: "Select bank" }).click();
       await page.getByText("BCA", { exact: true }).click();
-      await page.getByPlaceholder("Enter account number").fill("1234563210");
-      await page.getByPlaceholder("Enter holder name").fill("SINGGIH BRILIAN TARA");
+      await page.getByPlaceholder("1234567890").fill("1234563210");
+      await page.getByPlaceholder("As printed on the passbook").fill("SINGGIH BRILIAN TARA");
 
       // Contextual connect, then Ringkasan. The CTA is always "Redeem": first
       // click connects (seam), second click (now connected) opens the modal.

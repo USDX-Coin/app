@@ -145,6 +145,10 @@ export function useMint() {
     effectiveBuyRate,
     isRateLoading: rateQuery.isLoading,
     isRateError: rateQuery.isError,
+    // A failed rate load needs an action, not just a sentence (finding B8):
+    // the form renders a "Coba lagi" button that calls this.
+    isRateFetching: rateQuery.isFetching,
+    refetchRate: rateQuery.refetch,
     // derived amounts
     enteredAmount,
     amountUsdx,

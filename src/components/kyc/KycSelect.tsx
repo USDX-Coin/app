@@ -1,19 +1,19 @@
 "use client";
 
-import { Label } from "@/components/ui/label";
-import { FieldError } from "@/components/ui/field-error";
-import { cn } from "@/lib/utils";
+import { Field, FieldHelp, FieldLabel } from "@/components/ui/field";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { useLang } from "@/providers/LanguageProvider";
 
 // Satu dropdown form KYC. Sebelum USDX-586 komponen ini hidup sebagai `CddSelect`
-// di dalam KycCddFields.tsx; diangkat ke berkas sendiri (tanpa mengubah markup atau
-// kelasnya) begitu blok identitas ikut butuh dropdown — supaya identitas dan CDD
-// memakai kontrol yang sama persis, bukan dua salinan className yang bisa melenceng.
+// di dalam KycCddFields.tsx; diangkat ke berkas sendiri begitu blok identitas ikut
+// butuh dropdown — supaya identitas dan CDD memakai kontrol yang sama persis,
+// bukan dua salinan className yang bisa melenceng.
 //
-// `<select>` bawaan, bukan shadcn/Radix Select: `<fieldset disabled>` (keadaan
-// PENDING form ini) merambat ke sana gratis, dan di ponsel nasabah dapat picker OS.
-// Nilai teknis enum HANYA hidup di `value` option; teks yang terlihat selalu hasil
-// `t(...)`.
+// `<select>` bawaan, bukan Radix Select: `<fieldset disabled>` (keadaan PENDING
+// form ini) merambat ke sana gratis, dan di ponsel nasabah dapat picker OS. Sejak
+// PR 2 kelasnya tidak lagi disalin manual — `ui/native-select.tsx` yang memegang
+// tinggi, radius, dan ring fokusnya (temuan C3). Nilai teknis enum HANYA hidup di
+// `value` option; teks yang terlihat selalu hasil `t(...)`.
 //
 // Untuk daftar panjang (99 pekerjaan Permendagri) `<select>` polos tidak lagi bisa
 // dipakai manusia — itu memakai `OccupationCombobox`, bukan komponen ini.
@@ -33,28 +33,24 @@ export function KycSelect({ id, label, value, options, labelKey, error, onChange
   const { t } = useLang();
 
   return (
-    <div>
-      <Label htmlFor={id}>{label}</Label>
-      <select
+    <Field>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <NativeSelect
         id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         aria-invalid={!!error}
-        className={cn(
-          "mt-1.5 h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-input/30",
-          "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
-          "aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40",
-          value === "" && "text-muted-foreground",
-        )}
+        aria-describedby={`${id}-error`}
+        className={value === "" ? "text-muted-text" : undefined}
       >
-        <option value="">{t("kyc.cdd.selectPh")}</option>
+        <NativeSelectOption value="">{t("kyc.cdd.selectPh")}</NativeSelectOption>
         {options.map((option) => (
-          <option key={option} value={option} className="text-foreground">
+          <NativeSelectOption key={option} value={option} className="text-foreground">
             {t(labelKey(option))}
-          </option>
+          </NativeSelectOption>
         ))}
-      </select>
-      <FieldError message={error} />
-    </div>
+      </NativeSelect>
+      <FieldHelp id={id} error={error} />
+    </Field>
   );
 }

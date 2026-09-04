@@ -38,7 +38,7 @@ test.describe("KYC Status Tracker (/mint)", () => {
 
       await page.getByPlaceholder("0", { exact: true }).fill("100");
       await page
-        .getByPlaceholder("Select destination address")
+        .getByPlaceholder("0x5DC489Ad05Efc")
         .fill(VALID_ADDRESS);
       await page.getByRole("button", { name: "Mint", exact: true }).click();
       // VERIFIED proceeds without the KYC gate — the Ringkasan review modal opens.
@@ -176,7 +176,10 @@ test.describe("Transaction Action Gate", () => {
   });
 });
 
-test.describe("Header identity + logout", () => {
+// Identity and logout live in the Sidebar account menu (`ui/menu-profil.tsx`).
+// The old `layout/Header.tsx` this block was named after is gone — it had no
+// importers left once the sidebar took over the account row.
+test.describe("Sidebar identity + logout", () => {
   test.describe("positive", () => {
     test("shows users.name when present", async ({ page }) => {
       await forceEnglish(page);
@@ -203,10 +206,19 @@ test.describe("Header identity + logout", () => {
       await forceEnglish(page);
       await loginViaStorage(page);
       await page.goto("/mint");
+      // Target the VISIBLE name, not a generic label: the account button has no
+      // aria-label any more, precisely so a screen reader announces who is
+      // signed in (WCAG 2.5.3) instead of "Account menu".
       await page
         .getByRole("button", { name: /Demo User/ })
         .click({ timeout: 15000 });
-      await page.getByRole("menuitem", { name: "Logout" }).click();
+      await page.getByRole("menuitem", { name: "Log out" }).click();
+      // Logging out asks first (PR 2, F.4) — the menu item opens a dialog, it
+      // does not end the session on its own.
+      await page
+        .getByRole("dialog")
+        .getByRole("button", { name: "Log out" })
+        .click();
       await expect(page).toHaveURL(/\/login$/);
 
       // Session is gone: protected routes bounce back to /login.

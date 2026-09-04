@@ -95,7 +95,8 @@ test.describe("Change Password (English)", () => {
       await dialog.getByLabel("Confirm new password", { exact: true }).fill("NewPass2");
       await dialog.getByRole("button", { name: "Update Password" }).click();
 
-      await expect(dialog.getByText(/do not match/i)).toBeVisible();
+      // Copy changed with the validation rewrite (D1); the assertion follows it.
+      await expect(dialog.getByText(/are not the same/i)).toBeVisible();
     });
   });
 

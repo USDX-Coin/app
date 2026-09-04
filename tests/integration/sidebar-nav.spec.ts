@@ -95,8 +95,10 @@ test.describe("Sidebar Coming Soon teasers", () => {
       await expect(
         sidebar(page).getByRole("link", { name: "Redeem", exact: true })
       ).toBeVisible();
-      // Exactly two pills in the whole sidebar — Bridge and Send.
-      await expect(sidebar(page).getByText("Coming Soon", { exact: true })).toHaveCount(2);
+      // Three pills in the whole sidebar — Bridge, Send and Settings. Settings
+      // joined them in PR 2: the route serves ComingSoon, and the account menu
+      // links to it, so the row has to say so before the click.
+      await expect(sidebar(page).getByText("Coming Soon", { exact: true })).toHaveCount(3);
     });
   });
 

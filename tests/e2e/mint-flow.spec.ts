@@ -10,7 +10,7 @@ async function login(page: import("@playwright/test").Page) {
   await page.goto("/login");
   await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible({ timeout: 15000 });
   await page.getByPlaceholder("you@email.com").fill("demo@usdx.com");
-  await page.getByPlaceholder("••••••••").fill("Demo1234");
+  await page.getByPlaceholder("Enter your password").fill("Demo1234");
   await page.getByRole("button", { name: "Login" }).click();
   await expect(page.getByText("You will mint")).toBeVisible({ timeout: 30000 });
 }
@@ -30,7 +30,7 @@ test.describe("Mint Flow", () => {
 
       // Fill mint form
       await page.getByPlaceholder("0", { exact: true }).fill("250");
-      await page.getByPlaceholder("Select destination address").fill(VALID_ADDRESS);
+      await page.getByPlaceholder("0x5DC489Ad05Efc").fill(VALID_ADDRESS);
       await page.getByRole("button", { name: "Mint", exact: true }).click();
 
       // Ringkasan (review) modal
@@ -56,7 +56,7 @@ test.describe("Mint Flow", () => {
     test("can cancel the Ringkasan modal and change amount", async ({ page }) => {
       await login(page);
       await page.getByPlaceholder("0", { exact: true }).fill("100");
-      await page.getByPlaceholder("Select destination address").fill(VALID_ADDRESS);
+      await page.getByPlaceholder("0x5DC489Ad05Efc").fill(VALID_ADDRESS);
       await page.getByRole("button", { name: "Mint", exact: true }).click();
       await expect(page.getByText("Transaction Summary")).toBeVisible();
 

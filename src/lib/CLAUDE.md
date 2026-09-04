@@ -7,7 +7,7 @@ Shared utilities, validation rules, constants, chain config, and mock API layer.
 | File | Purpose |
 |------|---------|
 | `utils.ts` | `cn()`, `formatAmount()`, `formatUSD()`, `truncateAddress()`, `parseAmount()` |
-| `validations.ts` | All form validators — return `string \| null` |
+| `validations.ts` | All form validators — return an i18n key or `null`; `translateValidation(t, key)` renders it |
 | `constants.ts` | Exchange rate (1:1), min/max amounts, fee (0.7%), brand color |
 | `chains.ts` | 8 supported chains with id, name, icon, contract address |
 | `api/mock-api.ts` | Mock backend — login, register, transactions, mint/redeem orders |
@@ -19,10 +19,20 @@ Every validator follows this contract:
 
 ```typescript
 function validateX(input: string): string | null
-// null = valid, string = error message
+// null = valid, string = an i18n KEY ("validation.email.required")
 ```
 
-Validators: `validateEmail`, `validatePassword`, `validateAmount`, `validateAddress`, `validateConfirmPassword`, `validateFullName`
+The key is turned into a sentence where the language is known:
+
+```typescript
+const { t } = useLang();
+<FieldHelp error={translateValidation(t, validateEmail(email))} />
+```
+
+`translateValidation` also supplies the numbers a message carries (password minimum,
+mint/redeem bounds) from `constants.ts`, so a limit is never copied into the dictionary.
+
+Validators: `validateEmail`, `validatePassword`, `validateAmount`, `validateAddress`, `validateConfirmPassword`, `validateFullName`, `validatePhone`, `validateBankAccountNumber`, `validateBankAccountName`. `passwordScore` reports how many password rules are met, for `ui/password-strength.tsx`.
 
 Amount validation accepts `"mint" | "redeem"` type parameter for different min/max bounds.
 

@@ -41,8 +41,8 @@ test.describe("History Page", () => {
     });
 
     test("shows redeem rows with net payout, status, and burn tx link", async ({ page }) => {
-      await page.getByRole("button", { name: "All Transaction" }).click();
-      await page.getByRole("button", { name: "Redeem", exact: true }).click();
+      await page.getByRole("tab", { name: "All Transaction" }).click();
+      await page.getByRole("tab", { name: "Redeem", exact: true }).click();
       // Seeded completed redeem: 100 USDX → net Rp 1.547.320 (week3 worked example).
       await expect(page.getByText("Payout complete").first()).toBeVisible();
       await expect(page.getByText("Rp 1.547.320").first()).toBeVisible();
@@ -58,9 +58,9 @@ test.describe("History Page", () => {
 
   test.describe("edge cases", () => {
     test("type filter offers Mint and Redeem (W3 enabled)", async ({ page }) => {
-      await page.getByRole("button", { name: "All Transaction" }).click();
-      await expect(page.getByRole("button", { name: "Minting" })).toBeVisible();
-      const redeem = page.getByRole("button", { name: "Redeem", exact: true });
+      await page.getByRole("tab", { name: "All Transaction" }).click();
+      await expect(page.getByRole("tab", { name: "Minting" })).toBeVisible();
+      const redeem = page.getByRole("tab", { name: "Redeem", exact: true });
       await expect(redeem).toBeVisible();
       await expect(redeem).toBeEnabled();
     });

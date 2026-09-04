@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { FieldError } from "@/components/ui/field-error";
+import { Field, FieldHelp, FieldLabel } from "@/components/ui/field";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Command,
@@ -49,8 +48,8 @@ export function OccupationCombobox({ value, error, onChange }: OccupationCombobo
   const selectedLabel = value ? t(cddOptionLabelKey("occupation", value)) : "";
 
   return (
-    <div>
-      <Label htmlFor="occupation">{t("kyc.cdd.occupation")}</Label>
+    <Field>
+      <FieldLabel htmlFor="occupation">{t("kyc.cdd.occupation")}</FieldLabel>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
@@ -60,12 +59,13 @@ export function OccupationCombobox({ value, error, onChange }: OccupationCombobo
             role="combobox"
             aria-expanded={open}
             aria-invalid={!!error}
+            aria-describedby="occupation-error"
             data-testid="occupation-trigger"
             className={cn(
-              "mt-1.5 h-9 w-full justify-between px-3 font-normal",
+              "h-11 w-full justify-between px-3 font-normal",
               // Sengaja tidak memakai `disabled` sendiri: tombol ini berada di dalam
               // <fieldset disabled> milik form, yang sudah mematikannya secara native.
-              !value && "text-muted-foreground",
+              !value && "text-muted-text",
             )}
           >
             <span className="truncate">{selectedLabel || t("kyc.cdd.occupationPh")}</span>
@@ -112,7 +112,7 @@ export function OccupationCombobox({ value, error, onChange }: OccupationCombobo
           </Command>
         </PopoverContent>
       </Popover>
-      <FieldError message={error} />
-    </div>
+      <FieldHelp id="occupation" error={error} />
+    </Field>
   );
 }

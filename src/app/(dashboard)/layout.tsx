@@ -5,7 +5,10 @@ import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { Loader2, Menu, PanelLeft } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useLang } from "@/providers/LanguageProvider";
 import { useAuthStore } from "@/stores/authStore";
 
 function ShellSpinner() {
@@ -32,6 +35,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const { t } = useLang();
   const { isAuthenticated, user } = useAuthStore();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [desktopHidden, setDesktopHidden] = useState(false);
@@ -61,48 +65,67 @@ export default function DashboardLayout({
       <div className="flex h-screen overflow-hidden bg-background">
         {/* Desktop sidebar */}
         {!desktopHidden && (
-          <aside className="hidden w-[272px] shrink-0 md:block">
+          <aside className="hidden w-68 shrink-0 md:block">
             <Sidebar onCollapse={() => setDesktopHidden(true)} />
           </aside>
         )}
 
         {/* Floating reopen button when sidebar hidden (desktop) */}
         {desktopHidden && (
-          <button
-            type="button"
-            aria-label="Show sidebar"
-            onClick={() => setDesktopHidden(false)}
-            className="absolute left-3 top-3 z-30 hidden rounded-md border border-border bg-card p-2 text-muted-foreground shadow-sm hover:text-foreground md:block"
-          >
-            <PanelLeft className="size-5" />
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label={t("nav.expandSidebar")}
+                onClick={() => setDesktopHidden(false)}
+                className="absolute top-3 left-3 z-30 hidden md:flex"
+              >
+                <PanelLeft className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">{t("nav.expandSidebar")}</TooltipContent>
+          </Tooltip>
         )}
 
-        {/* Mobile drawer */}
+        {/*
+          Mobile drawer. 272 px — the same number as the desktop rail — capped at
+          85 vw, which is exactly what 272 is on a 320 px phone.
+
+          `grid-rows-1` overrides the sheet's own header/body/footer grid: the
+          Sidebar already carries that split, so the drawer hands it the whole
+          height in one row instead of sizing it to its content. Sizing it to its
+          content is what used to clip the nav with nothing to scroll (A3).
+        */}
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-          <SheetContent side="left" className="w-[300px] p-0">
-            <SheetTitle className="sr-only">Navigation</SheetTitle>
-            <Sidebar onNavigate={() => setMobileOpen(false)} />
+          {/* The 85 vw cap stays an arbitrary value on purpose: it is a viewport ratio,
+              not a size on the spacing scale. 272 px of drawer on a 320 px phone
+              would leave 48 px of overlay — too little to aim at to dismiss it. */}
+          <SheetContent side="left" className="w-68 max-w-[85vw] grid-rows-1 p-0">
+            <SheetTitle className="sr-only">{t("nav.menuTitle")}</SheetTitle>
+            <Sidebar onNavigate={() => setMobileOpen(false)} hasOverlayClose />
           </SheetContent>
         </Sheet>
 
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* Mobile top bar */}
-          <header className="flex h-14 items-center justify-between border-b border-border bg-sidebar px-4 md:hidden">
-            <div className="flex items-center gap-2">
-              <img src="/image/usdx-coin.svg" alt="USDX" className="size-7 rounded-full" />
-              <span className="max-w-[160px] truncate text-sm font-medium text-foreground">
-                {name}
-              </span>
-            </div>
-            <button
-              type="button"
-              aria-label="Open menu"
-              onClick={() => setMobileOpen(true)}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <Menu className="size-5" />
-            </button>
+          <header className="flex h-14 items-center gap-2 border-b border-border bg-sidebar px-4 md:hidden">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t("nav.openMenu")}
+                  onClick={() => setMobileOpen(true)}
+                  className="-ml-2 shrink-0 text-muted-text"
+                >
+                  <Menu className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{t("nav.openMenu")}</TooltipContent>
+            </Tooltip>
+            <img src="/image/usdx-coin.svg" alt="USDX" className="size-7 shrink-0 rounded-full" />
+            <span className="max-w-40 truncate text-sm font-medium text-foreground">{name}</span>
           </header>
 
           {/*

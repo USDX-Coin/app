@@ -32,7 +32,7 @@ const VALID_ADDRESS = "0xabcdef1234567890abcdef1234567890abcdef12";
 const CHECKOUT_ORIGIN = "https://mint.usdx.co.id";
 
 const amountInput = (page: Page) => page.getByPlaceholder("0", { exact: true });
-const addressInput = (page: Page) => page.getByPlaceholder("Select destination address");
+const addressInput = (page: Page) => page.getByPlaceholder("0x5DC489Ad05Efc");
 const summary = (page: Page) => page.getByText("Transaction Summary");
 
 /** Checkout is a separate repo/origin — stub it so the handoff lands somewhere controllable. */

@@ -1,6 +1,6 @@
 "use client";
 
-import { Info, Loader2 } from "lucide-react";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useLang } from "@/providers/LanguageProvider";
 import { KycCddFields } from "./KycCddFields";
@@ -39,31 +39,28 @@ export function KycCddTopUp({ form, errors, onChange, onSubmit, submitting }: Ky
 
   return (
     <form onSubmit={onSubmit} data-testid="kyc-cdd-topup">
-      <fieldset disabled={submitting} className="space-y-4 disabled:opacity-60">
-        <div
-          role="status"
-          className="flex items-start gap-3 rounded-lg border border-sky-300 bg-sky-50 p-4 text-sky-900 dark:border-sky-700/60 dark:bg-sky-950/40 dark:text-sky-200"
-        >
-          <Info className="mt-0.5 size-5 shrink-0" />
-          <div>
-            <p className="font-medium">{t("kyc.cdd.topup.title")}</p>
-            <p className="mt-1 text-sm opacity-90">{t("kyc.cdd.topup.body")}</p>
-            {/* Load-bearing sentence, not decoration: it is the difference between
-                an invitation and an ultimatum. Asserted by kyc-cdd-topup.spec.ts. */}
-            <p className="mt-2 text-sm font-medium">{t("kyc.cdd.topup.noGate")}</p>
-          </div>
-        </div>
+      <fieldset disabled={submitting} className="flex flex-col gap-4 disabled:opacity-60">
+        {/* `role="status"` overrides the Alert default `role="alert"`: this notice
+            is present from the first paint, and an assertive role would make a
+            screen reader interrupt itself on page load over an invitation. */}
+        <Alert tone="info" role="status" title={t("kyc.cdd.topup.title")}>
+          <span className="block">{t("kyc.cdd.topup.body")}</span>
+          {/* Load-bearing sentence, not decoration: it is the difference between
+              an invitation and an ultimatum. Asserted by kyc-cdd-topup.spec.ts. */}
+          <span className="mt-2 block font-medium">{t("kyc.cdd.topup.noGate")}</span>
+        </Alert>
 
         <KycCddFields form={form} errors={errors} onChange={onChange} />
 
-        <Button type="submit" disabled={submitting} className="w-full brand-gradient text-white">
-          {submitting ? (
-            <>
-              <Loader2 className="size-4 animate-spin" /> {t("kyc.cdd.topup.saving")}
-            </>
-          ) : (
-            t("kyc.cdd.topup.submit")
-          )}
+        <Button
+          type="submit"
+          variant="brand"
+          size="lg"
+          className="w-full"
+          loading={submitting}
+          loadingLabel={t("kyc.cdd.topup.saving")}
+        >
+          {t("kyc.cdd.topup.submit")}
         </Button>
       </fieldset>
     </form>

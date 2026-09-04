@@ -52,13 +52,13 @@ describe("useMint", () => {
       test("amountError for USD amount below minimum (rate-independent)", () => {
         useMintStore.getState().setAmount("5");
         const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
-        expect(result.current.amountError).toContain("Minimum");
+        expect(result.current.amountError).toBe("validation.amount.minMint");
       });
 
       test("amountError for USD amount above maximum", () => {
         useMintStore.getState().setAmount("2000000");
         const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
-        expect(result.current.amountError).toContain("Maximum");
+        expect(result.current.amountError).toBe("validation.amount.maxMint");
       });
 
       test("addressError for invalid EVM address", () => {

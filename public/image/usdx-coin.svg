@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="USDX">
+  <defs>
+    <linearGradient id="u-ring" x1="34" y1="34" x2="222" y2="222" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f2bc4a"/><stop offset=".4" stop-color="#da981f"/>
+      <stop offset=".75" stop-color="#a36610"/><stop offset="1" stop-color="#8a5309"/>
+    </linearGradient>
+    <linearGradient id="u-face" x1="60" y1="46" x2="196" y2="212" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8d5619"/><stop offset=".5" stop-color="#7a4713"/>
+      <stop offset="1" stop-color="#5e330b"/>
+    </linearGradient>
+    <linearGradient id="u-inner" x1="128" y1="19" x2="128" y2="237" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fdf6cf"/><stop offset=".45" stop-color="#c99a5c"/>
+      <stop offset="1" stop-color="#6b3c14"/>
+    </linearGradient>
+    <linearGradient id="u-a1" x1="58" y1="67" x2="148" y2="146" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff6d4"/><stop offset="1" stop-color="#f5d79c"/>
+    </linearGradient>
+    <linearGradient id="u-a2" x1="112" y1="129" x2="54" y2="183" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fce7b6"/><stop offset="1" stop-color="#f2cd7e"/>
+    </linearGradient>
+    <linearGradient id="u-a3" x1="140" y1="129" x2="203" y2="183" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f8dfb0"/><stop offset="1" stop-color="#e2bc7e"/>
+    </linearGradient>
+    <linearGradient id="u-a4" x1="201" y1="67" x2="134" y2="121" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fed52e"/><stop offset="1" stop-color="#f9b61f"/>
+    </linearGradient>
+  </defs>
+
+  <circle cx="128" cy="128" r="122" fill="url(#u-ring)"/>
+  <circle cx="128" cy="128" r="109" fill="url(#u-inner)"/>
+  <circle cx="128" cy="128" r="105" fill="url(#u-face)"/>
+
+  <path d="M58 67 L103 119 L128 146 L130 146 L147 127 L148 124 L100 67 Z" fill="url(#u-a1)"/>
+  <path d="M103 129 L54 183 L97 183 L112 167 L124 152 L123 148 L106 129 Z" fill="url(#u-a2)"/>
+  <path d="M152 129 L135 149 L134 152 L160 183 L203 183 L156 129 Z" fill="url(#u-a3)"/>
+  <path d="M163 67 L134 99 L134 101 L152 121 L153 121 L201 67 Z" fill="url(#u-a4)"/>
+</svg>

@@ -6,7 +6,12 @@ export const metadata: Metadata = {
   title: "USDX - USD Stablecoin",
   description: "Mint and redeem USDX stablecoin",
   icons: {
-    icon: "/image/usdx-logo.png",
+    // SVG dulu untuk browser modern (tajam di semua ukuran, 2,3 kB), PNG
+    // sebagai cadangan untuk yang belum mendukung favicon SVG.
+    icon: [
+      { url: "/image/usdx-coin.svg", type: "image/svg+xml" },
+      { url: "/image/usdx-logo.png", type: "image/png" },
+    ],
   },
 };
 

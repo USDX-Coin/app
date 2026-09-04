@@ -1,8 +1,8 @@
 "use client";
 
+import { Checkbox, CheckboxField } from "@/components/ui/checkbox";
+import { Field, FieldHelp, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { FieldError } from "@/components/ui/field-error";
 import { useLang } from "@/providers/LanguageProvider";
 import {
   CDD_OPTIONS,
@@ -36,10 +36,10 @@ export function KycCddFields({ form, errors, onChange }: KycCddFieldsProps) {
   const { t } = useLang();
 
   return (
-    <div className="space-y-4 border-t border-border pt-4">
+    <div className="flex flex-col gap-4 border-t border-border pt-4">
       <div>
         <h2 className="text-sm font-semibold text-foreground">{t("kyc.cdd.sectionTitle")}</h2>
-        <p className="mt-1 text-xs text-muted-foreground">{t("kyc.cdd.sectionHint")}</p>
+        <p className="mt-1 text-xs text-muted-text">{t("kyc.cdd.sectionHint")}</p>
       </div>
 
       {/* Pekerjaan berdiri sendiri, tidak di dalam grid dua kolom: 99 pilihan butuh
@@ -56,19 +56,18 @@ export function KycCddFields({ form, errors, onChange }: KycCddFieldsProps) {
           mereka mengarang alamat memperburuk mutu data CDD. Ditaruh persis di bawah
           pekerjaan karena hanya punya arti bersamanya. */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div>
-          <Label htmlFor="employerAddress">{t("kyc.cdd.employerAddress")}</Label>
+        <Field>
+          <FieldLabel htmlFor="employerAddress">{t("kyc.cdd.employerAddress")}</FieldLabel>
           <Input
             id="employerAddress"
             autoComplete="off"
             placeholder={t("kyc.cdd.employerAddressPh")}
             value={form.employerAddress}
             onChange={(e) => onChange("employerAddress", e.target.value)}
-            className="mt-1.5"
           />
-        </div>
-        <div>
-          <Label htmlFor="employerPhone">{t("kyc.cdd.employerPhone")}</Label>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="employerPhone">{t("kyc.cdd.employerPhone")}</FieldLabel>
           <Input
             id="employerPhone"
             inputMode="tel"
@@ -76,9 +75,8 @@ export function KycCddFields({ form, errors, onChange }: KycCddFieldsProps) {
             placeholder={t("kyc.cdd.employerPhonePh")}
             value={form.employerPhone}
             onChange={(e) => onChange("employerPhone", e.target.value)}
-            className="mt-1.5"
           />
-        </div>
+        </Field>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -120,8 +118,11 @@ export function KycCddFields({ form, errors, onChange }: KycCddFieldsProps) {
         />
       </div>
 
-      <div>
-        <Label htmlFor="npwp">{t("kyc.cdd.npwp")}</Label>
+      {/* Tanpa hint permanen di bawah field (Versi 4): label sudah menulis
+          "(opsional)", dan mengulanginya sebagai baris kedua hanya menambah
+          satu lapis teks yang harus dibaca sebelum mengisi. */}
+      <Field>
+        <FieldLabel htmlFor="npwp">{t("kyc.cdd.npwp")}</FieldLabel>
         <Input
           id="npwp"
           inputMode="numeric"
@@ -129,36 +130,37 @@ export function KycCddFields({ form, errors, onChange }: KycCddFieldsProps) {
           placeholder={t("kyc.cdd.npwpPh")}
           value={form.npwp}
           onChange={(e) => onChange("npwp", e.target.value)}
-          className="mt-1.5"
         />
-        <p className="mt-1 text-xs text-muted-foreground">{t("kyc.cdd.npwpHint")}</p>
-      </div>
+      </Field>
 
       <div className="rounded-lg border border-border bg-muted/30 p-3">
         {/* Boolean, jadi checkbox — satu-satunya kontrol yang jujur untuk "ya / tidak".
             Sengaja TIDAK tercentang secara default dan validator tidak pernah
             mewajibkannya: kotak yang tidak tercentang ITULAH jawaban "tidak". */}
-        <div className="flex items-start gap-2.5">
-          <input
+        {/* `relative` menanggung beban (kelas A1): Radix menaruh input checkbox
+            bayangannya sebagai `position: absolute`. Tanpa leluhur ber-posisi,
+            offsetParent-nya jatuh ke <body> dan kotaknya — yang secara alur ada jauh
+            di bawah, di dalam kartu yang menggulir — ikut memanjangkan dokumen
+            (docScrollHeight 1628 lawan clientHeight 900), sehingga halaman punya dua
+            lapis scroll. */}
+        <CheckboxField htmlFor="pepStatus" className="relative items-start">
+          <Checkbox
             id="pepStatus"
-            type="checkbox"
+            className="mt-0.5"
             checked={form.pepStatus}
-            onChange={(e) => {
-              onChange("pepStatus", e.target.checked);
+            onCheckedChange={(checked) => {
+              onChange("pepStatus", checked === true);
               // Membatalkan centang menarik kembali pernyataannya — buang relasi DAN
               // sumber kekayaan bersamanya supaya jawaban yang ditarik tidak pernah
               // sampai ke body request.
-              if (!e.target.checked) {
+              if (checked !== true) {
                 onChange("pepRelation", "");
                 onChange("sourceOfWealth", "");
               }
             }}
-            className="mt-0.5 size-4 shrink-0 accent-primary disabled:cursor-not-allowed disabled:opacity-50"
           />
-          <Label htmlFor="pepStatus" className="items-start text-sm leading-snug font-normal">
-            {t("kyc.cdd.pepStatus")}
-          </Label>
-        </div>
+          <span className="leading-snug">{t("kyc.cdd.pepStatus")}</span>
+        </CheckboxField>
 
         {/* Bersyarat by design: relasi dan sumber kekayaan hanya ditanyakan — dan
             hanya diwajibkan — saat nasabah menyatakan ada jabatan publik.
@@ -167,20 +169,20 @@ export function KycCddFields({ form, errors, onChange }: KycCddFieldsProps) {
             hartanya berasal membuat EDD-nya kosong isi tapi terlihat sudah
             dikerjakan. */}
         {form.pepStatus && (
-          <div className="mt-3 space-y-3">
-            <div>
-              <Label htmlFor="pepRelation">{t("kyc.cdd.pepRelation")}</Label>
+          <div className="mt-3 flex flex-col gap-3">
+            <Field>
+              <FieldLabel htmlFor="pepRelation">{t("kyc.cdd.pepRelation")}</FieldLabel>
               <Input
                 id="pepRelation"
                 autoComplete="off"
                 placeholder={t("kyc.cdd.pepRelationPh")}
                 value={form.pepRelation}
                 onChange={(e) => onChange("pepRelation", e.target.value)}
-                className="mt-1.5"
                 aria-invalid={!!errors.pepRelation}
+                aria-describedby="pepRelation-error"
               />
-              <FieldError message={errors.pepRelation} />
-            </div>
+              <FieldHelp id="pepRelation" error={errors.pepRelation} />
+            </Field>
             <KycSelect
               id="sourceOfWealth"
               label={t("kyc.cdd.sourceOfWealth")}

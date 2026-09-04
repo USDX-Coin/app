@@ -37,3 +37,9 @@ pnpm-debug.log*
 next-env.d.ts
 node_modules
 sot/
+
+# Keluaran harness audit UI (screenshot + JSON ukuran, token sesi)
+tests/audit-ui/keluaran/
+
+# Worktree sementara Claude Code (artefak lokal, bukan konfigurasi tim)
+.claude/worktrees/

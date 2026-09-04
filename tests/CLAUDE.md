@@ -6,6 +6,7 @@
 pnpm test              # Unit tests (Vitest, ~1s)
 pnpm test:integration  # Integration tests (Playwright, ~40s, builds production first)
 pnpm test:e2e          # E2E tests (Playwright, ~20s, builds production first)
+pnpm audit:ui          # UI measurement harness (node, needs `pnpm dev` running)
 ```
 
 ## Structure
@@ -27,7 +28,17 @@ tests/
     auth-flow.spec.ts   # Register -> logout -> login
     mint-flow.spec.ts   # Login -> mint -> review -> cross-origin checkout handoff
     redeem-flow.spec.ts # Login -> redeem -> connect wallet prompt
+  audit-ui/             # node + Playwright — measurement, NOT assertions
+    sweep-auth.js       # Every authed page x 4 viewports: overflow, out-of-bounds
+    state-audit.js      # Empty, 500, 401, 429, offline, slow loading
+    a11y-audit.js       # Keyboard focus, touch targets, WCAG contrast
+    modal-audit.js      # Dialog behaviour: max-height, scroll, focus trap
 ```
+
+`audit-ui/` is deliberately not a Playwright project: these scripts have **no
+assertions**. They measure the rendered page and write numbers to JSON, which is how the
+September 2026 audit caught a scroll bug (`scrollHeight 1962` vs `clientHeight 900`) that
+both the eye and the spec suites missed. See `tests/audit-ui/README.md`.
 
 ## Naming Convention
 

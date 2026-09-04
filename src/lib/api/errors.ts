@@ -36,6 +36,34 @@ export function getErrorMessage(error: unknown, fallback = "Something went wrong
   return fallback;
 }
 
+// Kunci i18n untuk kegagalan yang BUKAN salah user dan bukan aturan bisnis:
+// koneksi mati dan server error. Temuan B3 — `getErrorMessage` meneruskan pesan
+// mentah dari backend ("boom") dan dari fetch ("Failed to fetch") apa adanya ke
+// toast. Pesan begitu tidak menjelaskan apa yang terjadi dan tidak memberi jalan
+// keluar. Yang lain (4xx dengan `code` SoT) tetap dipetakan per layar oleh
+// pemanggilnya, jadi fungsi ini mengembalikan null dan pemanggil memakai
+// kalimatnya sendiri.
+export function getFailureKey(error: unknown): string | null {
+  if (isApiError(error)) return error.status >= 500 ? "error.server" : null;
+  // fetch() menolak dengan TypeError saat jaringan/DNS/CORS gagal — tidak pernah
+  // dengan status. Ini satu-satunya sinyal "offline" yang kita punya.
+  if (error instanceof TypeError) return "error.offline";
+  return null;
+}
+
+/**
+ * Kalimat yang layak ditampilkan untuk sebuah kegagalan: pesan jaringan/server
+ * kalau memang itu masalahnya, kalau bukan kalimat milik layar itu sendiri.
+ * Pesan mentah dari backend tidak pernah ikut.
+ */
+export function getFailureText(
+  t: (key: string, vars?: Record<string, string>) => string,
+  error: unknown,
+  fallbackKey: string
+): string {
+  return t(getFailureKey(error) ?? fallbackKey);
+}
+
 // 403 EMAIL_NOT_VERIFIED — backend asks the user to verify before continuing.
 // auth.yaml login/kyc/storage. `details.resendUrl` may accompany it.
 export function isEmailNotVerified(error: unknown): boolean {
@@ -45,6 +73,7 @@ export function isEmailNotVerified(error: unknown): boolean {
 export function isAccountSuspended(error: unknown): boolean {
   return isApiError(error) && error.status === 403 && error.code === "ACCOUNT_SUSPENDED";
 }
+
 
 // 403 KYC_NOT_VERIFIED — consumer gate (common.yaml § ConsumerGateForbidden).
 // User must finish KYC before transacting; surface the /kyc CTA, not a toast.

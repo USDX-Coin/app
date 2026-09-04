@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, ImagePlus, Loader2 } from "lucide-react";
+import { CheckCircle2, ImagePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Field, FieldHelp, FieldLabel } from "@/components/ui/field";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
-import { FieldError } from "@/components/ui/field-error";
 import { PAGE_HEADING_STICKY } from "@/components/shared/PageHeader";
 import { KycStatusBanner } from "./KycStatusBanner";
 import { KycCddFields } from "./KycCddFields";
@@ -244,7 +244,7 @@ export function KycPageContent() {
   if (statusLoading || !status) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="size-7 animate-spin text-primary" />
+        <Spinner className="size-7 text-primary" aria-label={t("common.processing")} />
       </div>
     );
   }
@@ -292,7 +292,7 @@ export function KycPageContent() {
       {/* Sticky supaya form KYC yang panjang menggulir di bawah judulnya sendiri. */}
       <div className={PAGE_HEADING_STICKY}>
         <h1 className="text-2xl font-semibold text-foreground">{t("kyc.title")}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{t("kyc.subtitle")}</p>
+        <p className="mt-1 text-sm text-muted-text">{t("kyc.subtitle")}</p>
       </div>
 
       <KycStatusBanner
@@ -321,75 +321,74 @@ export function KycPageContent() {
               <h2 className="text-sm font-semibold text-foreground">
                 {t("kyc.identity.sectionTitle")}
               </h2>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 text-xs text-muted-text">
                 {t("kyc.identity.sectionHint")}
               </p>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <Label htmlFor="firstName">{t("kyc.firstName")}</Label>
+              <Field>
+                <FieldLabel htmlFor="firstName">{t("kyc.firstName")}</FieldLabel>
                 <Input
                   id="firstName"
                   value={form.firstName}
                   onChange={(e) => setField("firstName", e.target.value)}
-                  className="mt-1.5"
                   aria-invalid={!!errors.firstName}
+                  aria-describedby="firstName-error"
                 />
-                <FieldError message={errors.firstName} />
-              </div>
-              <div>
-                <Label htmlFor="lastName">{t("kyc.lastName")}</Label>
+                <FieldHelp id="firstName" error={errors.firstName} />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="lastName">{t("kyc.lastName")}</FieldLabel>
                 <Input
                   id="lastName"
                   value={form.lastName}
                   onChange={(e) => setField("lastName", e.target.value)}
-                  className="mt-1.5"
                   aria-invalid={!!errors.lastName}
+                  aria-describedby="lastName-error"
                 />
-                <FieldError message={errors.lastName} />
-              </div>
+                <FieldHelp id="lastName" error={errors.lastName} />
+              </Field>
             </div>
 
             {/* Alias — "nama lengkap termasuk nama alias, JIKA ADA" (butir a). Kosong
                 adalah jawaban lengkap, bukan pengajuan yang kurang, jadi tidak pernah
                 divalidasi dan labelnya menyebut opsional. */}
-            <div>
-              <Label htmlFor="aliasName">{t("kyc.aliasName")}</Label>
+            <Field>
+              <FieldLabel htmlFor="aliasName">{t("kyc.aliasName")}</FieldLabel>
               <Input
                 id="aliasName"
                 autoComplete="off"
                 placeholder={t("kyc.aliasNamePh")}
                 value={form.aliasName}
                 onChange={(e) => setField("aliasName", e.target.value)}
-                className="mt-1.5"
               />
-            </div>
+            </Field>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <Label htmlFor="dob">{t("kyc.dob")}</Label>
+              <Field>
+                <FieldLabel htmlFor="dob">{t("kyc.dob")}</FieldLabel>
                 <Input
                   id="dob"
                   type="date"
                   value={form.dob}
                   onChange={(e) => setField("dob", e.target.value)}
-                  className="mt-1.5"
                   aria-invalid={!!errors.dob}
+                  aria-describedby="dob-error"
                 />
-                <FieldError message={errors.dob} />
-              </div>
-              <div>
-                <Label htmlFor="birthPlace">{t("kyc.birthPlace")}</Label>
+                <FieldHelp id="dob" error={errors.dob} />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="birthPlace">{t("kyc.birthPlace")}</FieldLabel>
                 <Input
                   id="birthPlace"
                   value={form.birthPlace}
                   onChange={(e) => setField("birthPlace", e.target.value)}
-                  className="mt-1.5"
                   aria-invalid={!!errors.birthPlace}
+                  aria-describedby="birthPlace-error"
                 />
-                <FieldError message={errors.birthPlace} />
-              </div>
+                <FieldHelp id="birthPlace" error={errors.birthPlace} />
+              </Field>
               <KycSelect
                 id="gender"
                 label={t("kyc.gender")}
@@ -417,19 +416,19 @@ export function KycPageContent() {
                 layanan keuangan Indonesia ia masih dipakai sebagai jawaban verifikasi
                 lewat telepon, jadi jangan pernah dipakai sebagai faktor autentikasi
                 di sistem kita sendiri dan jangan pernah dikembalikan ke app. */}
-            <div>
-              <Label htmlFor="mothersMaidenName">{t("kyc.mothersMaidenName")}</Label>
+            <Field>
+              <FieldLabel htmlFor="mothersMaidenName">{t("kyc.mothersMaidenName")}</FieldLabel>
               <Input
                 id="mothersMaidenName"
                 autoComplete="off"
                 placeholder={t("kyc.mothersMaidenNamePh")}
                 value={form.mothersMaidenName}
                 onChange={(e) => setField("mothersMaidenName", e.target.value)}
-                className="mt-1.5"
                 aria-invalid={!!errors.mothersMaidenName}
+                aria-describedby="mothersMaidenName-error"
               />
-              <FieldError message={errors.mothersMaidenName} />
-            </div>
+              <FieldHelp id="mothersMaidenName" error={errors.mothersMaidenName} />
+            </Field>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {/* Jenis identitas kini bisa dipilih (Pasal 26 ayat (2)): KTP untuk WNI,
@@ -449,8 +448,8 @@ export function KycPageContent() {
                   Kotak teks dua huruf, bukan daftar negara: kontraknya meminta kode
                   ISO 3166-1 alpha-2 dan repo ini belum punya daftar negara — mengarang
                   daftarnya di form kepatuhan justru masalah yang tiket ini perbaiki. */}
-              <div>
-                <Label htmlFor="nationality">{t("kyc.nationality")}</Label>
+              <Field>
+                <FieldLabel htmlFor="nationality">{t("kyc.nationality")}</FieldLabel>
                 <Input
                   id="nationality"
                   autoComplete="off"
@@ -458,29 +457,25 @@ export function KycPageContent() {
                   placeholder={t("kyc.nationalityPh")}
                   value={form.nationality}
                   onChange={(e) => setField("nationality", e.target.value.toUpperCase())}
-                  className="mt-1.5 uppercase"
+                  className="uppercase"
                   aria-invalid={!!errors.nationality}
+                  aria-describedby="nationality-error"
                 />
-                <p className="mt-1 text-xs text-muted-foreground">{t("kyc.nationalityHint")}</p>
-                <FieldError message={errors.nationality} />
-              </div>
+                <FieldHelp id="nationality" error={errors.nationality} />
+              </Field>
             </div>
 
-            <div>
-              <Label htmlFor="country">{t("kyc.country")}</Label>
-              <Input
-                id="country"
-                value="ID"
-                readOnly
-                aria-readonly="true"
-                className="mt-1.5 bg-muted/50 text-muted-foreground"
-              />
-            </div>
+            {/* readonly, bukan disabled: nilainya tetap berkontras penuh dan bisa
+                disalin — `Input` sudah membedakan keduanya (B.2 baris 9–10). */}
+            <Field>
+              <FieldLabel htmlFor="country">{t("kyc.country")}</FieldLabel>
+              <Input id="country" value="ID" readOnly aria-readonly="true" />
+            </Field>
 
-            <div>
-              <Label htmlFor="identityNumber">
+            <Field>
+              <FieldLabel htmlFor="identityNumber">
                 {t(identityNumberLabelKey(form.identityType))}
-              </Label>
+              </FieldLabel>
               <Input
                 id="identityNumber"
                 // Paspor alfanumerik — memaksa keypad angka di sana akan menyembunyikan
@@ -489,33 +484,32 @@ export function KycPageContent() {
                 placeholder={t(identityNumberPlaceholderKey(form.identityType))}
                 value={form.identityNumber}
                 onChange={(e) => setField("identityNumber", e.target.value)}
-                className="mt-1.5"
                 aria-invalid={!!errors.identityNumber}
+                aria-describedby="identityNumber-error"
               />
-              <FieldError message={errors.identityNumber} />
-            </div>
+              <FieldHelp id="identityNumber" error={errors.identityNumber} />
+            </Field>
 
-            <div>
-              <Label htmlFor="addressLine1">{t("kyc.address1")}</Label>
+            <Field>
+              <FieldLabel htmlFor="addressLine1">{t("kyc.address1")}</FieldLabel>
               <Input
                 id="addressLine1"
                 value={form.addressLine1}
                 onChange={(e) => setField("addressLine1", e.target.value)}
-                className="mt-1.5"
                 aria-invalid={!!errors.addressLine1}
+                aria-describedby="addressLine1-error"
               />
-              <FieldError message={errors.addressLine1} />
-            </div>
+              <FieldHelp id="addressLine1" error={errors.addressLine1} />
+            </Field>
 
-            <div>
-              <Label htmlFor="addressLine2">{t("kyc.address2")}</Label>
+            <Field>
+              <FieldLabel htmlFor="addressLine2">{t("kyc.address2")}</FieldLabel>
               <Input
                 id="addressLine2"
                 value={form.addressLine2}
                 onChange={(e) => setField("addressLine2", e.target.value)}
-                className="mt-1.5"
               />
-            </div>
+            </Field>
 
             <KycCddFields form={cdd} errors={errors} onChange={setCddField} />
 
@@ -538,14 +532,14 @@ export function KycPageContent() {
 
             <Button
               type="submit"
-              disabled={!allFilled || uploadsBusy || submitting || formDisabled || hasErrors}
-              className="w-full brand-gradient text-white"
+              variant="brand"
+              size="lg"
+              className="w-full"
+              disabled={!allFilled || uploadsBusy || formDisabled || hasErrors}
+              loading={submitting}
+              loadingLabel={t("kyc.submitting")}
             >
-              {submitting
-                ? t("kyc.submitting")
-                : status.status === "REJECTED"
-                  ? t("kyc.resubmit")
-                  : t("kyc.submit")}
+              {status.status === "REJECTED" ? t("kyc.resubmit") : t("kyc.submit")}
             </Button>
           </fieldset>
         </form>
@@ -585,8 +579,12 @@ function DocField({
   const showPreview = !!doc.previewUrl && !doc.error;
 
   return (
-    <div>
-      <Label htmlFor={`${kind}File`}>{label}</Label>
+    // `relative` is load-bearing (A1): the file input below is `sr-only`, which is
+    // absolutely positioned. Without a positioned ancestor its offsetParent falls back
+    // to <body>, stretching the document to ~1962px and letting the whole page scroll
+    // straight through the app shell.
+    <Field className="relative">
+      <FieldLabel htmlFor={`${kind}File`}>{label}</FieldLabel>
       {/* Satu kartu dropzone per dokumen: placeholder selagi kosong, fotonya begitu
           dipilih. Mengklik kartu membuka (lagi) pemilih berkas — bukan baris input +
           pratinjau terpisah. Input aslinya tetap ada di DOM (sr-only) supaya test dan
@@ -594,7 +592,7 @@ function DocField({
       <label
         htmlFor={`${kind}File`}
         className={cn(
-          "mt-1.5 flex h-48 w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-border bg-muted/40 transition-colors hover:border-primary/70 hover:bg-muted",
+          "flex h-48 w-full cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-border bg-muted/40 transition-control hover:border-primary/70 hover:bg-muted",
           showPreview && "border-solid border-border",
           (docError ?? requiredError) && "border-destructive",
         )}
@@ -612,7 +610,7 @@ function DocField({
             }}
           />
         ) : (
-          <span className="flex flex-col items-center gap-2 px-4 text-center text-sm text-muted-foreground">
+          <span className="flex flex-col items-center gap-2 px-4 text-center text-sm text-muted-text">
             <ImagePlus className="size-8 opacity-70" />
             <span className="font-medium">{t("kyc.uploadPlaceholder")}</span>
             <span className="text-xs opacity-75">{t("kyc.uploadHint")}</span>
@@ -626,19 +624,20 @@ function DocField({
         onChange={(e) => onSelect(kind, e.target.files?.[0] ?? null)}
         className="sr-only"
         aria-invalid={!!(docError ?? requiredError)}
+        aria-describedby={`${kind}File-error`}
       />
       {doc.uploading && (
-        <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Loader2 className="size-3.5 animate-spin" /> {t("kyc.uploading")}
+        <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-text">
+          <Spinner className="size-3.5" /> {t("kyc.uploading")}
         </p>
       )}
       {doc.objectKey && !doc.uploading && (
-        <p className="mt-1.5 flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
+        <p className="mt-1.5 flex items-center gap-1.5 text-xs text-success-text">
           <CheckCircle2 className="size-3.5" /> {t("kyc.uploaded")}
-          <span className="text-muted-foreground">· {t("kyc.changePhoto")}</span>
+          <span className="text-muted-text">· {t("kyc.changePhoto")}</span>
         </p>
       )}
-      <FieldError message={docError ?? requiredError} />
-    </div>
+      <FieldHelp id={`${kind}File`} error={docError ?? requiredError} />
+    </Field>
   );
 }

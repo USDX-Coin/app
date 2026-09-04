@@ -3,14 +3,29 @@
 import Link from "next/link";
 import { CheckCircle2, Clock, ShieldAlert, XCircle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { statusTone } from "@/components/ui/status-badge";
 import { getMyKycStatus } from "@/lib/api/kyc-api";
 import { KYC_STATUS_KEY } from "@/hooks/useKyc";
 import { useSession } from "@/hooks/useSession";
 import { useVerifiedBannerVisibility } from "@/hooks/useVerifiedBannerVisibility";
 import { useAuthStore } from "@/stores/authStore";
 import { useLang } from "@/providers/LanguageProvider";
-import { cn } from "@/lib/utils";
 import type { KycStatus } from "@/types";
+
+// `statusTone()` is the single status -> tone map for the whole product, so this
+// banner does not keep a private copy: PENDING used to read `info` here and
+// `warning` on /kyc, which is exactly the split the map exists to end. Only
+// `neutral` needs translating — Alert has no neutral tone, and UNVERIFIED is the
+// one status here that carries a "finish your KYC" CTA, so it lands on warning.
+export function alertTone(status: KycStatus): "info" | "success" | "warning" | "danger" {
+  const tone = statusTone(status);
+  // `neutral` and `coming-soon` are Badge-only tones; Alert has neither. Both
+  // land on warning here, which is right for the one status that reaches it:
+  // UNVERIFIED, the only state on this banner that carries a "finish it" CTA.
+  return tone === "neutral" || tone === "coming-soon" ? "warning" : tone;
+}
 
 // Status tracker on the dashboard home (USDX-153 — sot/phase-2/phase2.md § Pages
 // row 8, amended: lives on /mint, not /dashboard). Unlike the /kyc banner this
@@ -39,22 +54,13 @@ export function KycStatusSection() {
   const status: KycStatus = statusQuery.data.status;
   if (status === "VERIFIED" && !verifiedVisible) return null;
 
-  const styles: Record<KycStatus, string> = {
-    UNVERIFIED:
-      "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200",
-    PENDING:
-      "border-sky-300 bg-sky-50 text-sky-900 dark:border-sky-700/60 dark:bg-sky-950/40 dark:text-sky-200",
-    VERIFIED:
-      "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-700/60 dark:bg-emerald-950/40 dark:text-emerald-200",
-    REJECTED:
-      "border-red-300 bg-red-50 text-red-900 dark:border-red-700/60 dark:bg-red-950/40 dark:text-red-200",
-  };
-
+  // The per-status glyph is kept — it carries meaning the tone alone does not.
+  // (UNVERIFIED and PENDING now share a tone; the icon is what tells them apart.)
   const icon = {
-    UNVERIFIED: <ShieldAlert className="mt-0.5 size-5 shrink-0" />,
-    PENDING: <Clock className="mt-0.5 size-5 shrink-0" />,
-    VERIFIED: <CheckCircle2 className="mt-0.5 size-5 shrink-0" />,
-    REJECTED: <XCircle className="mt-0.5 size-5 shrink-0" />,
+    UNVERIFIED: <ShieldAlert />,
+    PENDING: <Clock />,
+    VERIFIED: <CheckCircle2 />,
+    REJECTED: <XCircle />,
   }[status];
 
   const title = {
@@ -79,23 +85,23 @@ export function KycStatusSection() {
         : null;
 
   return (
-    <div
+    <Alert
       data-testid="kyc-status-section"
-      className={cn("flex items-start gap-3 rounded-lg border p-4", styles[status])}
+      tone={alertTone(status)}
+      icon={icon}
+      title={title}
+      action={
+        ctaLabel && (
+          // Stays an anchor (`asChild`), so it keeps the link role the KYC gate
+          // specs navigate by. `-ml-3` cancels the link variant's own padding so
+          // the label lines up with the text above it.
+          <Button variant="link" size="sm" asChild className="-ml-3">
+            <Link href="/kyc">{ctaLabel}</Link>
+          </Button>
+        )
+      }
     >
-      {icon}
-      <div className="flex-1">
-        <p className="font-medium">{title}</p>
-        <p className="text-sm opacity-90">{body}</p>
-        {ctaLabel && (
-          <Link
-            href="/kyc"
-            className="mt-2 inline-block text-sm font-medium underline underline-offset-2"
-          >
-            {ctaLabel}
-          </Link>
-        )}
-      </div>
-    </div>
+      {body}
+    </Alert>
   );
 }

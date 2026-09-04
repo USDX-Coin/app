@@ -135,7 +135,12 @@ Per-route `error.tsx` files in each dashboard route. Uses Next.js App Router con
 Detailed skeleton components matching exact layout per feature. Used with conditional `isLoading` checks (not Suspense — `useQuery` doesn't suspend).
 
 ### Validation
-All validators return `string | null` (error message or null for valid). Located in `src/lib/validations.ts`. EVM-only address validation (must start with `0x`). Hoisted regex at module level.
+All validators return `string | null` — **an i18n key**, or null when the value is
+valid. The component turns the key into a sentence with `translateValidation(t, key)`
+(`src/lib/validations.ts`), which also fills in the bounds from `constants.ts`. They
+used to return English sentences, which is how "Email is required" ended up under an
+Indonesian label. EVM-only address validation (must start with `0x`). Hoisted regex at
+module level.
 
 ### Multi-Step Forms
 Mint and Redeem keep their state in Zustand stores; the Ringkasan is a modal:
@@ -219,8 +224,8 @@ Test helpers in `tests/helpers/`:
   (`bridge_/send_<timestamp>`, no API call), so the routes now render `ComingSoon`.
   The sidebar **keeps both items visible** as promotion teasers (PM, 13 Aug) —
   icon + a `nav.soon` pill ("Coming Soon" / "Segera Hadir"), clicking lands on
-  the ComingSoon page. The form components still exist under
-  `components/bridge/` and `components/send/` but are unreferenced
+  the ComingSoon page. `components/bridge/` and `components/send/` are gone —
+  they held the faked forms and had no importer left
 - The `/payment` mock gateway route was deleted (it faked "Payment Successful" with a
   `setTimeout`); the real mint flow uses the cross-origin checkout handoff
 - RainbowKit wallet connection works; the USDX balance is read **on-chain for real**
@@ -229,7 +234,9 @@ Test helpers in `tests/helpers/`:
   shown as "—" plus a reason, never as a number (USDX-396)
 - WalletConnect SSR produces `indexedDB` warnings (harmless)
 - Solana removed — EVM chains only (7 chains)
-- Validation messages (`validations.ts`) are English-only — they appear untranslated in the ID locale (UI chrome is i18n'd EN+ID, validation strings are not)
+- Validation messages are translated in both locales (`validation.*` keys in
+  `lib/i18n/dictionaries.ts`); `validations.ts` returns the key and the component
+  translates it
 
 
 # Source of Truth

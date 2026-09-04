@@ -71,7 +71,7 @@ describe("useRedeem", () => {
       test("amountError for amounts below the minimum", () => {
         useRedeemStore.getState().setAmount("5");
         const { result } = renderHook(() => useRedeem(), { wrapper: createWrapper() });
-        expect(result.current.amountError).toContain("Minimum");
+        expect(result.current.amountError).toBe("validation.amount.minRedeem");
       });
 
       test("isFormValid false without bank details", async () => {

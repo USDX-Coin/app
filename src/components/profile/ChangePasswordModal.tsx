@@ -3,6 +3,7 @@
 import { useState } from "react";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -10,13 +11,21 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { FieldError } from "@/components/ui/field-error";
+import { Field, FieldHelp, FieldLabel } from "@/components/ui/field";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group";
 import { useAuth } from "@/hooks/useAuth";
 import { useCooldown, DEFAULT_COOLDOWN_SECONDS } from "@/hooks/useCooldown";
 import { useLang } from "@/providers/LanguageProvider";
-import { validatePassword, validateConfirmPassword } from "@/lib/validations";
+import {
+  translateValidation,
+  validatePassword,
+  validateConfirmPassword,
+} from "@/lib/validations";
 import {
   getErrorMessage,
   getRateLimitSeconds,
@@ -66,8 +75,10 @@ export function ChangePasswordModal({ open, onOpenChange }: ChangePasswordModalP
     e.preventDefault();
     const nextErrors: FieldErrors = {
       current: currentPassword ? undefined : t("profile.changePassword.currentRequired"),
-      new: validatePassword(newPassword) ?? undefined,
-      confirm: validateConfirmPassword(newPassword, confirmNewPassword) ?? undefined,
+      new: translateValidation(t, validatePassword(newPassword)) ?? undefined,
+      confirm:
+        translateValidation(t, validateConfirmPassword(newPassword, confirmNewPassword)) ??
+        undefined,
     };
     if (nextErrors.current || nextErrors.new || nextErrors.confirm) {
       setErrors(nextErrors);
@@ -99,12 +110,13 @@ export function ChangePasswordModal({ open, onOpenChange }: ChangePasswordModalP
       if (hasErrorCode(err, "PASSWORD_MISMATCH")) {
         setErrors({
           confirm:
-            validateConfirmPassword(newPassword, confirmNewPassword) ?? getErrorMessage(err),
+            translateValidation(t, validateConfirmPassword(newPassword, confirmNewPassword)) ??
+            getErrorMessage(err),
         });
         return;
       }
       if (hasErrorCode(err, "WEAK_PASSWORD")) {
-        setErrors({ new: validatePassword(newPassword) ?? getErrorMessage(err) });
+        setErrors({ new: translateValidation(t, validatePassword(newPassword)) ?? getErrorMessage(err) });
         return;
       }
       toast.error(getErrorMessage(err, t("profile.changePassword.failed")));
@@ -113,64 +125,78 @@ export function ChangePasswordModal({ open, onOpenChange }: ChangePasswordModalP
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent size="md">
         <DialogHeader>
           <DialogTitle>{t("profile.changePassword.title")}</DialogTitle>
-          <DialogDescription>{t("profile.changePassword.description")}</DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <PasswordField
-            id="current-password"
-            label={t("profile.changePassword.current")}
-            value={currentPassword}
-            onChange={setCurrentPassword}
-            visible={show.current}
-            onToggle={() => setShow((s) => ({ ...s, current: !s.current }))}
-            error={errors.current}
-            autoComplete="current-password"
-            showLabel={t("auth.showPassword")}
-            hideLabel={t("auth.hidePassword")}
-          />
-          <PasswordField
-            id="new-password"
-            label={t("profile.changePassword.new")}
-            value={newPassword}
-            onChange={setNewPassword}
-            visible={show.next}
-            onToggle={() => setShow((s) => ({ ...s, next: !s.next }))}
-            error={errors.new}
-            autoComplete="new-password"
-            showLabel={t("auth.showPassword")}
-            hideLabel={t("auth.hidePassword")}
-          />
-          <PasswordField
-            id="confirm-new-password"
-            label={t("profile.changePassword.confirm")}
-            value={confirmNewPassword}
-            onChange={setConfirmNewPassword}
-            visible={show.confirm}
-            onToggle={() => setShow((s) => ({ ...s, confirm: !s.confirm }))}
-            error={errors.confirm}
-            autoComplete="new-password"
-            showLabel={t("auth.showPassword")}
-            hideLabel={t("auth.hidePassword")}
-          />
+        {/* The form wraps body AND footer so Enter still submits from any field;
+            `contents` keeps it out of the dialog's three-row grid. */}
+        <form onSubmit={handleSubmit} className="contents">
+          <DialogBody className="gap-4">
+            <DialogDescription>{t("profile.changePassword.description")}</DialogDescription>
 
-          <DialogFooter className="gap-2 sm:gap-2">
+            <PasswordField
+              id="current-password"
+              label={t("profile.changePassword.current")}
+              value={currentPassword}
+              onChange={setCurrentPassword}
+              visible={show.current}
+              onToggle={() => setShow((s) => ({ ...s, current: !s.current }))}
+              error={errors.current}
+              autoComplete="current-password"
+              showLabel={t("auth.showPassword")}
+              hideLabel={t("auth.hidePassword")}
+            />
+            <PasswordField
+              id="new-password"
+              label={t("profile.changePassword.new")}
+              value={newPassword}
+              onChange={setNewPassword}
+              visible={show.next}
+              onToggle={() => setShow((s) => ({ ...s, next: !s.next }))}
+              error={errors.new}
+              autoComplete="new-password"
+              showLabel={t("auth.showPassword")}
+              hideLabel={t("auth.hidePassword")}
+            />
+            <PasswordField
+              id="confirm-new-password"
+              label={t("profile.changePassword.confirm")}
+              value={confirmNewPassword}
+              onChange={setConfirmNewPassword}
+              visible={show.confirm}
+              onToggle={() => setShow((s) => ({ ...s, confirm: !s.confirm }))}
+              error={errors.confirm}
+              autoComplete="new-password"
+              showLabel={t("auth.showPassword")}
+              hideLabel={t("auth.hidePassword")}
+            />
+          </DialogBody>
+
+          <DialogFooter>
             <Button
               type="button"
               variant="outline"
+              size="lg"
+              className="flex-1"
               onClick={() => handleOpenChange(false)}
             >
               {t("common.cancel")}
             </Button>
-            <Button type="submit" disabled={changePasswordLoading || cooldown.active}>
-              {cooldown.active
-                ? t("auth.tryAgainIn", { duration: formatDuration(cooldown.remaining, lang) })
-                : changePasswordLoading
-                  ? t("profile.changePassword.submitting")
-                  : t("profile.changePassword.submit")}
+            <Button
+              type="submit"
+              variant="brand"
+              size="lg"
+              className="flex-1"
+              loading={changePasswordLoading}
+              loadingLabel={t("profile.changePassword.submitting")}
+              cooldownSeconds={cooldown.active ? cooldown.remaining : undefined}
+              cooldownLabel={t("auth.tryAgainIn", {
+                duration: formatDuration(cooldown.remaining, lang),
+              })}
+            >
+              {t("profile.changePassword.submit")}
             </Button>
           </DialogFooter>
         </form>
@@ -205,10 +231,10 @@ function PasswordField({
   hideLabel,
 }: PasswordFieldProps) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      <div className="relative">
-        <Input
+    <Field>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <InputGroup>
+        <InputGroupInput
           id={id}
           type={visible ? "text" : "password"}
           placeholder="••••••••"
@@ -216,18 +242,20 @@ function PasswordField({
           onChange={(e) => onChange(e.target.value)}
           autoComplete={autoComplete}
           aria-invalid={!!error}
-          className="h-11 pr-10"
         />
-        <button
-          type="button"
-          aria-label={visible ? hideLabel : showLabel}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-          onClick={onToggle}
-        >
-          {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-        </button>
-      </div>
-      <FieldError message={error} />
-    </div>
+        <InputGroupAddon align="inline-end">
+          {/* 40 px, 44 on touch. The eye used to be a bare 16 px icon with no
+              hit area of its own — the smallest target in the product (E1). */}
+          <InputGroupButton
+            size="icon"
+            aria-label={visible ? hideLabel : showLabel}
+            onClick={onToggle}
+          >
+            {visible ? <EyeOff /> : <Eye />}
+          </InputGroupButton>
+        </InputGroupAddon>
+      </InputGroup>
+      <FieldHelp id={id} error={error} />
+    </Field>
   );
 }

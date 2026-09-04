@@ -20,8 +20,22 @@ import { useLang } from "@/providers/LanguageProvider";
 export const PAGE_HEADING_STICKY =
   "sticky top-0 z-10 -mt-5 bg-card pt-5 pb-3 md:-mt-6 md:pt-6";
 
-/** Breadcrumb + page title. `crumbs` and `title` are i18n keys. */
-export function PageHeader({ crumbs, title }: { crumbs: string[]; title: string }) {
+/**
+ * Breadcrumb + page title. `crumbs` and `title` are i18n keys.
+ *
+ * `badge` sits on the title line — it is where the "SEGERA HADIR" pill goes on a
+ * route that only serves a coming-soon page, so the label is visible before the
+ * user scrolls (F3: those pages used to open with no marker at all).
+ */
+export function PageHeader({
+  crumbs,
+  title,
+  badge,
+}: {
+  crumbs: string[];
+  title: string;
+  badge?: React.ReactNode;
+}) {
   const { t } = useLang();
   return (
     <div className={cn(PAGE_HEADING_STICKY, "flex w-full flex-col gap-2")}>
@@ -35,7 +49,10 @@ export function PageHeader({ crumbs, title }: { crumbs: string[]; title: string 
           </span>
         ))}
       </div>
-      <h1 className="text-xl font-medium tracking-tight text-foreground">{t(title)}</h1>
+      <div className="flex items-center gap-2">
+        <h1 className="text-xl font-medium tracking-tight text-foreground">{t(title)}</h1>
+        {badge}
+      </div>
     </div>
   );
 }

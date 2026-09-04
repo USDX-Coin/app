@@ -8,8 +8,12 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-background">
-      {/* Branding panel */}
+      {/* Branding panel. The 45 % width stays an arbitrary value: it is a layout
+          ratio between two columns and the spacing scale has no 45 %. Text here is
+          white on maroon in both themes, so it deliberately ignores the tokens. */}
       <div className="balance-gradient relative hidden w-[45%] flex-col justify-between overflow-hidden p-12 text-white lg:flex">
+        {/* art: ukuran mengikuti aset — the watermark is a fixed-size drawing,
+            deliberately overflowing the panel, so it is sized in px not scale. */}
         <img
           src="/image/balance-watermark.svg"
           alt=""

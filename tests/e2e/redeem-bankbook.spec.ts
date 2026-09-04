@@ -44,9 +44,9 @@ test.describe("Redeem Bank Account Book", () => {
       await openPicker(page);
       await page.getByRole("button", { name: "Add Bank Account" }).click();
 
-      const modal = page.getByRole("dialog", { name: "Add Bank Account" });
-      await modal.getByRole("button", { name: "Select bank" }).click();
-      await modal.getByText("BCA", { exact: true }).click();
+      const modal = page.getByRole("dialog", { name: "Add bank account" });
+      await modal.getByRole("combobox", { name: "Select bank" }).click();
+      await page.getByRole("option", { name: "BCA" }).click();
       await modal.getByLabel("Account Number").fill("9988776655");
       await modal.getByLabel("Holder Name").fill("NEW HOLDER");
       await page.getByPlaceholder("BCA utama").fill("Gaji");
@@ -74,9 +74,9 @@ test.describe("Redeem Bank Account Book", () => {
       await openPicker(page);
       await page.getByRole("button", { name: "Add Bank Account" }).click();
 
-      const modal = page.getByRole("dialog", { name: "Add Bank Account" });
-      await modal.getByRole("button", { name: "Select bank" }).click();
-      await modal.getByText("BCA", { exact: true }).click();
+      const modal = page.getByRole("dialog", { name: "Add bank account" });
+      await modal.getByRole("combobox", { name: "Select bank" }).click();
+      await page.getByRole("option", { name: "BCA" }).click();
       // Matches seeded BCA account 1234563210 → duplicate.
       await modal.getByLabel("Account Number").fill("1234563210");
       await modal.getByLabel("Holder Name").fill("SINGGIH BRILIAN TARA");
@@ -100,7 +100,7 @@ test.describe("Redeem Bank Account Book", () => {
 
     test("manual bank entry still works without the saved book", async ({ page }) => {
       await page.getByPlaceholder("0", { exact: true }).fill("100");
-      await page.getByRole("button", { name: "Select bank" }).click();
+      await page.getByRole("combobox", { name: "Select bank" }).click();
       await page.getByText("BCA", { exact: true }).click();
       await page.getByLabel("Account Number").fill("1234563210");
       await page.getByLabel("Holder Name").fill("SINGGIH BRILIAN TARA");

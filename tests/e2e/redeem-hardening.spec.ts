@@ -14,10 +14,10 @@ import {
 
 async function fillForm(page: Page, amount = "100") {
   await page.getByPlaceholder("0", { exact: true }).fill(amount);
-  await page.getByRole("button", { name: "Select bank" }).click();
+  await page.getByRole("combobox", { name: "Select bank" }).click();
   await page.getByText("BCA", { exact: true }).click();
-  await page.getByPlaceholder("Enter account number").fill("1234563210");
-  await page.getByPlaceholder("Enter holder name").fill("SINGGIH BRILIAN TARA");
+  await page.getByPlaceholder("1234567890").fill("1234563210");
+  await page.getByPlaceholder("As printed on the passbook").fill("SINGGIH BRILIAN TARA");
 }
 
 // Open the Ringkasan: the CTA is always "Redeem" — first click connects (seam),
@@ -132,8 +132,8 @@ test.describe("Redeem hardening — resume from history", () => {
   async function resumeSeededOrder(page: Page) {
     await page.goto("/history");
     await expect(page.getByText("Transaction History")).toBeVisible({ timeout: 15000 });
-    await page.getByRole("button", { name: "All Transaction" }).click();
-    await page.getByRole("button", { name: "Redeem", exact: true }).click();
+    await page.getByRole("tab", { name: "All Transaction" }).click();
+    await page.getByRole("tab", { name: "Redeem", exact: true }).click();
     await page.getByRole("button", { name: "Continue" }).first().click();
     // Lands on the tracker for the resumed order; reconnect the wallet in-flow.
     await expect(page.getByRole("heading", { name: "Redeem Status" })).toBeVisible({ timeout: 15000 });

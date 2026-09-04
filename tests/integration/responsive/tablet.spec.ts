@@ -26,14 +26,18 @@ test.describe("Tablet Responsive (768x1024)", () => {
     await expect(formCard).toBeVisible();
   });
 
-  test("history shows table view", async ({ page }) => {
+  test("history shows the card view, not the table", async ({ page }) => {
     await forceEnglish(page);
     await loginViaStorage(page);
     await page.goto("/history");
     await expect(page.getByText("Transaction History")).toBeVisible({ timeout: 15000 });
 
-    // Table should be visible on tablet
-    const table = page.locator("table");
-    await expect(table).toBeVisible();
+    // Deliberate (finding A2): at 768 the 272 px sidebar is still on screen, so
+    // the table would get 456 px and drop the Status column off the edge. The
+    // table switches in at `lg`; tablet gets the card list, which fits.
+    await expect(page.locator("table")).toBeHidden();
+    await expect(
+      page.getByText("Rate", { exact: true }).filter({ visible: true }).first()
+    ).toBeVisible();
   });
 });

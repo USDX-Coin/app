@@ -2,7 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { Clock, ShieldAlert, XCircle } from "lucide-react";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useLang } from "@/providers/LanguageProvider";
 import type { KycStatus } from "@/types";
@@ -28,10 +35,12 @@ export function KycGateDialog({
 
   if (status === "VERIFIED") return null;
 
+  // Tone tokens, not palette numbers: the icon is the only colour in this dialog
+  // and it has to keep meaning the same thing after a theme switch.
   const content =
     status === "PENDING"
       ? {
-          icon: <Clock className="size-6 text-amber-500" />,
+          icon: <Clock className="size-6 text-warning" />,
           title: t("kyc.lock.pendingTitle"),
           body: t("kyc.lock.pendingBody"),
           cta: null,
@@ -44,7 +53,7 @@ export function KycGateDialog({
             cta: t("kyc.lock.resubmit"),
           }
         : {
-            icon: <ShieldAlert className="size-6 text-amber-500" />,
+            icon: <ShieldAlert className="size-6 text-warning" />,
             title: t("kyc.lock.unverifiedTitle"),
             body: t("kyc.lock.unverifiedBody"),
             cta: t("kyc.lock.completeKyc"),
@@ -52,36 +61,43 @@ export function KycGateDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[420px]">
-        <div className="flex flex-col items-center gap-3 pt-2 text-center">
-          {content.icon}
-          <DialogTitle className="text-lg font-medium text-foreground">
-            {content.title}
-          </DialogTitle>
-          <p className="text-sm text-muted-foreground">{content.body}</p>
-          <div className="mt-2 flex w-full flex-col gap-2">
-            {content.cta && (
-              <Button
-                type="button"
-                className="brand-gradient w-full text-white"
-                onClick={() => {
-                  onOpenChange(false);
-                  router.push("/kyc");
-                }}
-              >
-                {content.cta}
-              </Button>
-            )}
+      <DialogContent size="md">
+        <DialogHeader>
+          <span aria-hidden className="shrink-0">
+            {content.icon}
+          </span>
+          <DialogTitle>{content.title}</DialogTitle>
+        </DialogHeader>
+
+        {/* A rejection reason comes from a reviewer and has no length limit, so
+            the body scrolls rather than pushing the buttons out of reach. */}
+        <DialogBody>
+          <p className="text-sm text-muted-text">{content.body}</p>
+        </DialogBody>
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            size="lg"
+            className="flex-1"
+            onClick={() => onOpenChange(false)}
+          >
+            {t("kyc.lock.dismiss")}
+          </Button>
+          {content.cta && (
             <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={() => onOpenChange(false)}
+              variant="brand"
+              size="lg"
+              className="flex-1"
+              onClick={() => {
+                onOpenChange(false);
+                router.push("/kyc");
+              }}
             >
-              {t("kyc.lock.dismiss")}
+              {content.cta}
             </Button>
-          </div>
-        </div>
+          )}
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

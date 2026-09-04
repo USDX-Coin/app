@@ -18,10 +18,10 @@ test.describe("Rate limit (429 RATE_LIMITED)", () => {
       await expect(page.getByText("You will redeem")).toBeVisible({ timeout: 15000 });
 
       await page.getByPlaceholder("0", { exact: true }).fill("100");
-      await page.getByRole("button", { name: "Select bank" }).click();
+      await page.getByRole("combobox", { name: "Select bank" }).click();
       await page.getByText("BCA", { exact: true }).click();
-      await page.getByPlaceholder("Enter account number").fill("1234563210");
-      await page.getByPlaceholder("Enter holder name").fill("SINGGIH BRILIAN TARA");
+      await page.getByPlaceholder("1234567890").fill("1234563210");
+      await page.getByPlaceholder("As printed on the passbook").fill("SINGGIH BRILIAN TARA");
 
       const redeem = page.getByRole("button", { name: "Redeem", exact: true });
       await redeem.click(); // contextual connect (seam)

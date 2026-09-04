@@ -3,14 +3,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { Field, FieldHelp, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { validateEmail } from "@/lib/validations";
-import { FieldError } from "@/components/ui/field-error";
+import { LinkInline } from "@/components/ui/link-inline";
+import { translateValidation, validateEmail } from "@/lib/validations";
 import { useAuth } from "@/hooks/useAuth";
 import { useCooldown, DEFAULT_COOLDOWN_SECONDS } from "@/hooks/useCooldown";
 import { useLang } from "@/providers/LanguageProvider";
-import { getErrorMessage, getRateLimitSeconds, isValidationError } from "@/lib/api/errors";
+import { getFailureText, getRateLimitSeconds, isValidationError } from "@/lib/api/errors";
 import { formatDuration } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -18,7 +18,8 @@ export function ForgotPasswordForm() {
   const { t, lang } = useLang();
   const { forgotPassword, forgotPasswordLoading } = useAuth();
   const [email, setEmail] = useState("");
-  const [error, setError] = useState("");
+  // An i18n key, whatever it came from — the validator or the 422 branch below.
+  const [errorKey, setErrorKey] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const cooldown = useCooldown();
 
@@ -29,10 +30,10 @@ export function ForgotPasswordForm() {
     e.preventDefault();
     const emailErr = validateEmail(email);
     if (emailErr) {
-      setError(emailErr);
+      setErrorKey(emailErr);
       return;
     }
-    setError("");
+    setErrorKey(null);
     try {
       // Backend returns a generic 200 even for unknown emails (avoid enumeration),
       // so we always advance to the check-email screen on success.
@@ -41,81 +42,90 @@ export function ForgotPasswordForm() {
     } catch (err) {
       const retryAfter = getRateLimitSeconds(err);
       if (retryAfter !== null) {
+        // The button carries the countdown, so the throttle needs no toast (B11).
         cooldown.start(retryAfter > 0 ? retryAfter : DEFAULT_COOLDOWN_SECONDS);
-        toast.error(t("auth.forgot.tooMany"));
         return;
       }
       // 422 VALIDATION_ERROR (invalid email body) → inline on the field, not a
       // toast (USDX-214; client-side email validation usually catches it first).
+      // The backend's own wording never reaches the field (finding B3).
       if (isValidationError(err)) {
-        setError(getErrorMessage(err, t("auth.forgot.failed")));
+        setErrorKey("validation.email.format");
         return;
       }
-      toast.error(getErrorMessage(err, t("auth.forgot.failed")));
+      toast.error(getFailureText(t, err, "auth.forgot.failed"));
     }
   }
 
   if (submitted) {
     return (
-      <div className="text-center">
-        <div className="mb-4 flex justify-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-            <span className="text-3xl">✉</span>
-          </div>
+      <div className="flex flex-col items-center gap-6 text-center">
+        <div className="flex size-16 items-center justify-center rounded-full bg-primary/10">
+          <span className="text-3xl">✉</span>
         </div>
-        <h1 className="text-2xl font-bold text-primary mb-2">{t("auth.forgot.checkTitle")}</h1>
-        <p className="text-sm text-muted-foreground mb-6">
-          {checkBefore}
-          <strong>{email}</strong>
-          {checkAfter}
-        </p>
-        <Link href="/login">
-          <Button variant="outline" className="w-full">
-            {t("auth.backToLogin")}
-          </Button>
-        </Link>
+        <div className="flex flex-col gap-1.5">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            {t("auth.forgot.checkTitle")}
+          </h1>
+          <p className="text-sm text-muted-text">
+            {checkBefore}
+            <strong className="text-foreground">{email}</strong>
+            {checkAfter}
+          </p>
+        </div>
+        <Button variant="outline" size="lg" className="w-full" asChild>
+          <Link href="/login">{t("auth.backToLogin")}</Link>
+        </Button>
       </div>
     );
   }
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-primary mb-1">{t("auth.forgot.title")}</h1>
-      <p className="text-sm text-muted-foreground mb-8">{t("auth.forgot.subtitle")}</p>
+    <div className="flex flex-col gap-8">
+      <div className="flex flex-col gap-1.5">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+          {t("auth.forgot.title")}
+        </h1>
+        <p className="text-sm text-muted-text">{t("auth.forgot.subtitle")}</p>
+      </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <Label htmlFor="email">{t("auth.email")}</Label>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <Field>
+          <FieldLabel htmlFor="email">{t("auth.email")}</FieldLabel>
           <Input
             id="email"
             type="email"
+            autoComplete="email"
             placeholder={t("auth.forgot.emailPh")}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="mt-1.5 bg-transparent dark:bg-transparent"
-            aria-invalid={!!error}
+            aria-invalid={!!errorKey}
+            aria-describedby="email-error"
           />
-          <FieldError message={error || undefined} />
-        </div>
+          <FieldHelp id="email" error={translateValidation(t, errorKey)} />
+        </Field>
 
         <Button
           type="submit"
-          disabled={forgotPasswordLoading || cooldown.active}
-          className="w-full bg-linear-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary-700"
+          variant="brand"
+          size="lg"
+          className="w-full"
+          loading={forgotPasswordLoading}
+          loadingLabel={t("auth.forgot.sending")}
+          cooldownSeconds={cooldown.remaining}
+          cooldownLabel={t("auth.tryAgainIn", {
+            duration: formatDuration(cooldown.remaining, lang),
+          })}
         >
-          {cooldown.active
-            ? t("auth.tryAgainIn", { duration: formatDuration(cooldown.remaining, lang) })
-            : forgotPasswordLoading
-              ? t("auth.forgot.sending")
-              : t("auth.forgot.submit")}
+          {t("auth.forgot.submit")}
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-muted-foreground">
+      <p className="text-center text-sm text-muted-text">
         {t("auth.forgot.remember")}{" "}
-        <Link href="/login" className="text-primary underline">
-          {t("auth.forgot.loginLink")}
-        </Link>
+        <LinkInline asChild>
+          <Link href="/login">{t("auth.forgot.loginLink")}</Link>
+        </LinkInline>
       </p>
     </div>
   );

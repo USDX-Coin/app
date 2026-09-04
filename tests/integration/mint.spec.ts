@@ -19,7 +19,7 @@ test.describe("Mint Page", () => {
     test("displays mint form locked to Polygon with the live rate", async ({ page }) => {
       await expect(page.getByText("You will pay")).toBeVisible();
       await expect(page.getByPlaceholder("0", { exact: true })).toBeVisible();
-      await expect(page.getByPlaceholder("Select destination address")).toBeVisible();
+      await expect(page.getByPlaceholder("0x5DC489Ad05Efc")).toBeVisible();
       // Chain is locked to Polygon — its badge shows on the USDX chip.
       await expect(page.locator('img[src="/icon/polygon.svg"]').first()).toBeVisible();
       await expect(page.getByText("1 USDX ≈ 16,400 IDR")).toBeVisible();
@@ -27,13 +27,13 @@ test.describe("Mint Page", () => {
 
     test("Mint button enabled when form is valid", async ({ page }) => {
       await page.getByPlaceholder("0", { exact: true }).fill("100");
-      await page.getByPlaceholder("Select destination address").fill(VALID_ADDRESS);
+      await page.getByPlaceholder("0x5DC489Ad05Efc").fill(VALID_ADDRESS);
       await expect(page.getByRole("button", { name: "Mint", exact: true })).toBeEnabled();
     });
 
     test("opens the Ringkasan modal with correct data", async ({ page }) => {
       await page.getByPlaceholder("0", { exact: true }).fill("500");
-      await page.getByPlaceholder("Select destination address").fill(VALID_ADDRESS);
+      await page.getByPlaceholder("0x5DC489Ad05Efc").fill(VALID_ADDRESS);
       await page.getByRole("button", { name: "Mint", exact: true }).click();
       await expect(page.getByText("Transaction Summary")).toBeVisible();
       await expect(page.getByText("500 USDX").first()).toBeVisible();
@@ -43,7 +43,7 @@ test.describe("Mint Page", () => {
       await page.getByRole("button", { name: "Add address book" }).click();
       await expect(page.getByRole("heading", { name: "Address book" })).toBeVisible();
       await page.getByText("Demo Wallet").click();
-      await expect(page.getByPlaceholder("Select destination address")).toHaveValue(SEEDED_ADDRESS);
+      await expect(page.getByPlaceholder("0x5DC489Ad05Efc")).toHaveValue(SEEDED_ADDRESS);
     });
   });
 
@@ -54,19 +54,19 @@ test.describe("Mint Page", () => {
 
     test("shows min amount error", async ({ page }) => {
       await page.getByPlaceholder("0", { exact: true }).fill("1");
-      await page.getByPlaceholder("Select destination address").fill(VALID_ADDRESS);
-      await expect(page.getByText("Minimum amount is 10 USDX")).toBeVisible();
+      await page.getByPlaceholder("0x5DC489Ad05Efc").fill(VALID_ADDRESS);
+      await expect(page.getByText("Minimum mint is 10 USDX")).toBeVisible();
     });
 
     test("shows max amount error", async ({ page }) => {
       await page.getByPlaceholder("0", { exact: true }).fill("9999999");
-      await page.getByPlaceholder("Select destination address").fill(VALID_ADDRESS);
-      await expect(page.getByText("Maximum amount is 1,000,000 USDX")).toBeVisible();
+      await page.getByPlaceholder("0x5DC489Ad05Efc").fill(VALID_ADDRESS);
+      await expect(page.getByText("Maximum mint is 1,000,000 USDX")).toBeVisible();
     });
 
     test("keeps Mint disabled for an invalid address", async ({ page }) => {
       await page.getByPlaceholder("0", { exact: true }).fill("100");
-      await page.getByPlaceholder("Select destination address").fill("notanaddress");
+      await page.getByPlaceholder("0x5DC489Ad05Efc").fill("notanaddress");
       await expect(page.getByRole("button", { name: "Mint", exact: true })).toBeDisabled();
     });
 
@@ -74,7 +74,7 @@ test.describe("Mint Page", () => {
       // Sentinel address the mock rejects with 422 RECIPIENT_BLACKLISTED (mirrors BE pre-check).
       await page.getByPlaceholder("0", { exact: true }).fill("100");
       await page
-        .getByPlaceholder("Select destination address")
+        .getByPlaceholder("0x5DC489Ad05Efc")
         .fill("0x000000000000000000000000000000000000dead");
       await page.getByRole("button", { name: "Mint", exact: true }).click();
       await expect(page.getByText("Transaction Summary")).toBeVisible();

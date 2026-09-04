@@ -19,7 +19,7 @@ test.describe("Profile Page", () => {
     test("displays user info", async ({ page }) => {
       // Name also appears in the sidebar account switcher — assert the first match.
       await expect(page.getByText("Demo User").first()).toBeVisible();
-      await expect(page.getByText("demo@usdx.com")).toBeVisible();
+      await expect(page.getByText("demo@usdx.com").first()).toBeVisible();
     });
 
     test("shows verification badge", async ({ page }) => {

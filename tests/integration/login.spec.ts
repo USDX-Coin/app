@@ -19,7 +19,7 @@ test.describe("Login Page", () => {
         page.getByRole("heading", { name: "Welcome back" })
       ).toBeVisible();
       await expect(page.getByPlaceholder("you@email.com")).toBeVisible();
-      await expect(page.getByPlaceholder("••••••••")).toBeVisible();
+      await expect(page.getByPlaceholder("Enter your password")).toBeVisible();
       await expect(page.getByRole("button", { name: "Login" })).toBeVisible();
     });
 
@@ -28,7 +28,7 @@ test.describe("Login Page", () => {
     }) => {
       await gotoLogin(page);
       await page.getByPlaceholder("you@email.com").fill("demo@usdx.com");
-      await page.getByPlaceholder("••••••••").fill("Demo1234");
+      await page.getByPlaceholder("Enter your password").fill("Demo1234");
       await page.getByRole("button", { name: "Login" }).click();
       await expect(page.getByText("You will mint")).toBeVisible({
         timeout: 30000,
@@ -54,7 +54,7 @@ test.describe("Login Page", () => {
     test("shows error toast for invalid credentials", async ({ page }) => {
       await gotoLogin(page);
       await page.getByPlaceholder("you@email.com").fill("wrong@email.com");
-      await page.getByPlaceholder("••••••••").fill("WrongPass1");
+      await page.getByPlaceholder("Enter your password").fill("WrongPass1");
       await page.getByRole("button", { name: "Login" }).click();
       // Login errors surface as a sonner toast (auto-dismisses) — assert promptly.
       await expect(page.getByText("Invalid email or password")).toBeVisible({
@@ -64,7 +64,7 @@ test.describe("Login Page", () => {
 
     test("shows validation error for empty email", async ({ page }) => {
       await gotoLogin(page);
-      await page.getByPlaceholder("••••••••").fill("Demo1234");
+      await page.getByPlaceholder("Enter your password").fill("Demo1234");
       await page.getByRole("button", { name: "Login" }).click();
       await expect(page.getByText("Email is required")).toBeVisible({
         timeout: 10000,
@@ -101,7 +101,7 @@ test.describe("Login Page", () => {
       await page.getByRole("link", { name: "Back to Login" }).click();
       await page.waitForURL(/\/login/, { timeout: 10000 });
       await page.getByPlaceholder("you@email.com").fill(email);
-      await page.getByPlaceholder("••••••••").fill("TestPass1");
+      await page.getByPlaceholder("Enter your password").fill("TestPass1");
       await page.getByRole("button", { name: "Login" }).click();
 
       // Sonner's live region is also role=alert — filter to the banner by text.
@@ -118,7 +118,7 @@ test.describe("Login Page", () => {
     test("shows error for email that fails server validation", async ({ page }) => {
       await gotoLogin(page);
       await page.getByPlaceholder("you@email.com").fill("notregistered@test.com");
-      await page.getByPlaceholder("••••••••").fill("WrongPass1");
+      await page.getByPlaceholder("Enter your password").fill("WrongPass1");
       await page.getByRole("button", { name: "Login" }).click();
       await expect(page.getByText("Invalid email or password")).toBeVisible({
         timeout: 10000,
@@ -133,7 +133,7 @@ test.describe("Login Page", () => {
       // 5 wrong attempts trip the mock's per-email limit (week1.md § Login);
       // the 6th returns 429 and the button switches to a ticking countdown.
       for (let attempt = 0; attempt < 5; attempt++) {
-        await page.getByPlaceholder("••••••••").fill("WrongPass1");
+        await page.getByPlaceholder("Enter your password").fill("WrongPass1");
         await page.getByRole("button", { name: "Login" }).click();
         await expect(page.getByRole("button", { name: "Login" })).toBeEnabled({
           timeout: 10000,
@@ -152,7 +152,7 @@ test.describe("Login Page", () => {
       await seedRetryAfter(page, 76451); // daily-limit-scale 429 TOO_MANY_ATTEMPTS
       await page.reload();
       await page.getByPlaceholder("you@email.com").fill("demo@usdx.com");
-      await page.getByPlaceholder("••••••••").fill("Demo1234");
+      await page.getByPlaceholder("Enter your password").fill("Demo1234");
       await page.getByRole("button", { name: "Login" }).click();
       const cooldownButton = page.getByRole("button", {
         name: "Try again in about 22 hours",

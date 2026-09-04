@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ThemeProvider } from "next-themes";
+import { MotionConfig } from "motion/react";
 import { LanguageProvider } from "@/providers/LanguageProvider";
 import { Toaster } from "@/components/ui/sonner";
 import { ApiClientBridge } from "@/components/system/ApiClientBridge";
@@ -59,19 +60,21 @@ export function Providers({ children }: { children: React.ReactNode }) {
   });
 
   return (
-    <ThemeProvider
-      attribute="class"
-      defaultTheme="light"
-      enableSystem={false}
-      disableTransitionOnChange
-    >
-      <LanguageProvider>
-        <QueryClientProvider client={queryClient}>
-          <ApiClientBridge />
-          {children}
-          <Toaster position="top-right" />
-        </QueryClientProvider>
-      </LanguageProvider>
+    // `disableTransitionOnChange` is deliberately NOT set. It injects
+    // `* { transition: none !important }` while the theme flips, which is
+    // exactly the colour transition we want (globals.css `.theme-switching`).
+    // `MotionConfig reducedMotion="user"` is the `motion` half of the reduced
+    // motion story; the CSS half already runs off the `--dur-*` tokens.
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
+      <MotionConfig reducedMotion="user">
+        <LanguageProvider>
+          <QueryClientProvider client={queryClient}>
+            <ApiClientBridge />
+            {children}
+            <Toaster position="top-right" />
+          </QueryClientProvider>
+        </LanguageProvider>
+      </MotionConfig>
     </ThemeProvider>
   );
 }

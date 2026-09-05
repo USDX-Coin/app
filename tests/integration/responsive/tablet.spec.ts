@@ -36,8 +36,12 @@ test.describe("Tablet Responsive (768x1024)", () => {
     // the table would get 456 px and drop the Status column off the edge. The
     // table switches in at `lg`; tablet gets the card list, which fits.
     await expect(page.locator("table")).toBeHidden();
+    // Kartu dikenali dari label yang memang direnders-nya. Dulu spec ini mencari
+    // "Rate", tapi kolom itu dibuang mengikuti papan 27 (kolom ke-10 dari 10 yang
+    // ditandai tersembunyi) — jadi assertion-nya pindah ke label yang benar-benar ada,
+    // bukan dilonggarkan.
     await expect(
-      page.getByText("Rate", { exact: true }).filter({ visible: true }).first()
+      page.getByText("Subtotal", { exact: true }).filter({ visible: true }).first()
     ).toBeVisible();
   });
 });

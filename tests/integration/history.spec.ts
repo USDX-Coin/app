@@ -15,9 +15,11 @@ test.describe("History Page", () => {
     test("displays the mint history table", async ({ page }) => {
       await expect(page.locator("table")).toBeVisible();
       await expect(page.getByText("Minting").first()).toBeVisible();
-      // Seeded mint row amount (1,000 USDX).
+      // Dua desimal sejak tabel disamakan ke Figma 27. Berkas ini berjalan di locale EN
+      // (`forceEnglish` di beforeEach) dan formatternya sadar-bahasa, jadi pemisahnya
+      // gaya Inggris; padanan Indonesianya "1.000,00" dikunci di tests/unit/utils.test.ts.
       await expect(
-        page.getByText("1,000", { exact: true }).first()
+        page.getByText("1,000.00", { exact: true }).first()
       ).toBeVisible();
     });
 
@@ -37,14 +39,21 @@ test.describe("History Page", () => {
       await expect(page.getByRole("columnheader", { name: "Subtotal" })).toBeVisible();
       // Neutral header serves both mint (paid) and redeem (received) — USDX-244.
       await expect(page.getByRole("columnheader", { name: "Total", exact: true })).toBeVisible();
-      await expect(page.getByRole("columnheader", { name: "Rate" })).toBeVisible();
+      // Kolom "Rate" sengaja TIDAK ada: papan 27 menandainya kolom ke-10 dari 10 yang
+      // tersembunyi (badge "9/10"), dan kontrol "Tampilan" yang menyalakannya belum
+      // dibangun. Nilainya tetap tersedia di `tx.effectiveRate`.
+      await expect(page.getByRole("columnheader", { name: "Rate" })).toHaveCount(0);
+      await expect(page.getByRole("columnheader", { name: "Actions" })).toBeVisible();
     });
 
     test("shows redeem rows with net payout, status, and burn tx link", async ({ page }) => {
       await page.getByRole("tab", { name: "All Transaction" }).click();
       await page.getByRole("tab", { name: "Redeem", exact: true }).click();
       // Seeded completed redeem: 100 USDX → net Rp 1.547.320 (week3 worked example).
-      await expect(page.getByText("Payout complete").first()).toBeVisible();
+      // `PAYOUT_COMPLETE` kini memakai label papan 26 ("Completed"). Kalimat
+      // "Payout complete" tetap hidup sebagai nama LANGKAH di tracker redeem,
+      // bukan sebagai status di tabel ini.
+      await expect(page.getByText("Completed").first()).toBeVisible();
       await expect(page.getByText("Rp 1.547.320").first()).toBeVisible();
       await expect(page.locator('a[href*="polygonscan.com/tx/0x"]').first()).toBeVisible();
     });

@@ -42,7 +42,12 @@ test.describe("Profile Page", () => {
       await loginViaStorage(page);
       await page.goto("/profile");
       await expect(page.getByText("Member Since")).toBeVisible({ timeout: 15000 });
-      await expect(page.getByText("January 1, 2026")).toBeVisible();
+      // `en-GB`, bukan `en-US` (lihat `localeOf` di lib/utils.ts): urutan hari-bulan-tahun
+      // sama dengan sisi Indonesia, jadi satu-satunya yang berubah saat orang menukar
+      // bahasa adalah nama bulannya — bukan posisi angkanya. Untuk produk yang menampilkan
+      // tanggal transaksi, "1 January" vs "1 Januari" jauh lebih kecil risikonya
+      // salah dibaca daripada berpindah antara 1/2 dan 2/1.
+      await expect(page.getByText("1 January 2026")).toBeVisible();
     });
 
     // Scope: Personal Information + Security. The Preferences section is

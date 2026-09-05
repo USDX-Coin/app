@@ -3,13 +3,15 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  ArrowDown,
   ArrowDownToLine,
+  ArrowUpFromLine,
   ChevronLeft,
   ChevronRight,
   Copy,
   ExternalLink,
   History,
-  RefreshCcw,
+  MoreHorizontal,
   ServerCrash,
   SlidersHorizontal,
   WifiOff,
@@ -19,7 +21,7 @@ import { useTransactions } from "@/hooks/useTransactions";
 import { useRedeemStore } from "@/stores/redeemStore";
 import { getChainById } from "@/lib/chains";
 import { getFailureKey } from "@/lib/api/errors";
-import { formatAmount, formatIDR, truncateAddress, cn } from "@/lib/utils";
+import { formatDateTime, formatIDR, formatTokenAmount, truncateAddress, cn } from "@/lib/utils";
 import { useLang } from "@/providers/LanguageProvider";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -37,8 +39,13 @@ import {
   PaginationEllipsis,
   PaginationItem,
 } from "@/components/ui/pagination";
-import { Badge } from "@/components/ui/badge";
-import { statusTone } from "@/components/ui/status-badge";
+import { StatusBadge } from "@/components/ui/status-badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -60,8 +67,10 @@ import type {
 
 const PAGE_SIZE = 10;
 
-// Badge per derived status. EXPIRED comes from `paymentStatus` (the order's
-// overall `status` is FAILED then), so we surface it as its own pill.
+// Badge per derived status. EXPIRED and HELD come from `paymentStatus` (the
+// order's overall `status` reads FAILED / HELD alongside them), so each gets its
+// own pill. Papan 26 § derivation: EXPIRED wins over FAILED because the Expiry
+// Handler writes both at once.
 type BadgeKey = MintOrderStatus | "EXPIRED";
 const statusLabelKey: Record<BadgeKey, string> = {
   COMPLETED: "tx.st.completed",
@@ -69,16 +78,19 @@ const statusLabelKey: Record<BadgeKey, string> = {
   WAITING_FOR_APPROVAL: "tx.st.waitingApproval",
   FAILED: "tx.st.failed",
   EXPIRED: "tx.st.expired",
+  HELD: "tx.st.held",
 };
 
 function badgeKey(status: MintOrderStatus, paymentStatus: MintPaymentStatus): BadgeKey {
-  return paymentStatus === "EXPIRED" ? "EXPIRED" : status;
+  if (paymentStatus === "EXPIRED") return "EXPIRED";
+  if (paymentStatus === "HELD") return "HELD";
+  return status;
 }
 
 // Per-type icon + brand color (matches Figma: mint=green, redeem=amber).
 const typeMeta: Record<ConsumerOrderType, { icon: typeof ArrowDownToLine; color: string; key: string }> = {
-  MINT: { icon: ArrowDownToLine, color: "text-success", key: "tx.minting" },
-  REDEEM: { icon: RefreshCcw, color: "text-warning", key: "tx.redeem" },
+  MINT: { icon: ArrowDownToLine, color: "text-success-text", key: "tx.minting" },
+  REDEEM: { icon: ArrowUpFromLine, color: "text-warning-text", key: "tx.redeem" },
 };
 
 // Redeem status labels (USDX-244). Reuses the redeem.status* labels (USDX-243);
@@ -88,7 +100,7 @@ const redeemStatusLabelKey: Record<RedeemStatus, string> = {
   AWAITING_BURN: "redeem.statusAwaitingBurn",
   BURNED: "redeem.statusBurned",
   PROCESSING_PAYOUT: "redeem.statusProcessing",
-  PAYOUT_COMPLETE: "redeem.statusComplete",
+  PAYOUT_COMPLETE: "tx.st.completed",
   EXPIRED: "redeem.statusExpired",
 };
 
@@ -110,15 +122,6 @@ function explorerTxUrl(chain: string, txHash: string | null): string | null {
   return url ? `${url}/tx/${txHash}` : null;
 }
 
-function formatDateTime(iso: string) {
-  const d = new Date(iso);
-  const mo = d.toLocaleString("en-US", { month: "short" });
-  const day = String(d.getDate()).padStart(2, "0");
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${mo} ${day}, ${d.getFullYear()} - ${hh}:${mm}`;
-}
-
 /** Page list with ellipsis: 1 2 3 … 8 9 10 */
 function pageList(current: number, total: number): (number | "…")[] {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
@@ -133,25 +136,6 @@ const typeParam: Record<string, ConsumerOrderType | undefined> = {
   mint: "MINT",
   redeem: "REDEEM",
 };
-
-/**
- * NOTE untuk pemilik `ui/status-badge.tsx` — dua hal yang harus diperbaiki di sana,
- * dan sampai itu terjadi file ini menyusun `Badge` + `statusTone()` sendiri
- * (petanya tetap satu, tetap dari `ui/`, tidak ada peta warna lokal):
- *
- * 1. Pembungkus `<span className="@container/status inline-block max-w-full">`
- *    LEBARNYA 0. `@container` memasang `container-type: inline-size`, dan
- *    containment membuat lebar elemen tidak boleh ditentukan isinya — sebuah
- *    `inline-block` dengan `width: auto` jadi shrink-to-fit dari nol.
- *    Terukur di /profile: wrapper 0 px, badge terpotong jadi 12 px.
- *    Perbaikannya satu kata: `inline-flex w-fit` (atau buang `@container` dan
- *    kelas `@max-[6rem]/status:px-1.5` yang tidak pernah bisa aktif).
- * 2. `AWAITING_BURN` belum ada di `STATUS_TONE`, jadi redeem yang menunggu burn
- *    jatuh ke `neutral` — abu-abu, sewarna EXPIRED/CANCELLED di baris sebelahnya.
- *    Seharusnya `warning`.
- *
- * Begitu keduanya beres, kembalikan pemanggilan di file ini ke `<StatusBadge>`.
- */
 
 /**
  * B1 — the four outcomes this page can have, and they must never look alike.
@@ -173,7 +157,7 @@ type ListState = "data" | "empty" | "filter" | "error" | "offline";
 
 export function TransactionList() {
   const router = useRouter();
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const resumeRedeem = useRedeemStore((s) => s.resumeOrder);
   const [typeFilter, setTypeFilter] = useState("all");
   const [page, setPage] = useState(1);
@@ -242,9 +226,9 @@ export function TransactionList() {
 
   function AmountCell({ amount }: { amount: string }) {
     return (
-      <span className="flex items-center gap-1.5 font-medium tabular-nums text-foreground">
+      <span className="flex items-center justify-end gap-1.5 tabular-nums text-foreground">
         <img src="/image/usdx-coin.svg" alt="" className="size-4 rounded-full" />
-        {formatAmount(Number(amount))}
+        {formatTokenAmount(amount, lang)}
       </span>
     );
   }
@@ -259,24 +243,23 @@ export function TransactionList() {
             href={url}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1 text-primary-text underline-offset-4 hover:underline"
+            className="text-primary-text underline-offset-4 hover:underline"
           >
-            {truncateAddress(tx.txHash, 6)}
-            <ExternalLink className="size-3.5" />
+            {truncateAddress(tx.txHash, 4)}
           </a>
         ) : (
-          truncateAddress(tx.txHash, 6)
+          truncateAddress(tx.txHash, 4)
         )}
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
               variant="ghost"
-              size="icon-sm"
+              size="icon"
               onClick={() => copy(tx.txHash!)}
               aria-label={t("common.copy")}
               className="text-muted-text"
             >
-              <Copy className="size-3.5" />
+              <Copy className="size-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>{t("common.copy")}</TooltipContent>
@@ -293,10 +276,53 @@ export function TransactionList() {
     const labelKey = isRedeem
       ? redeemStatusLabelKey[status as RedeemStatus]
       : statusLabelKey[status as BadgeKey];
+    return <StatusBadge status={status}>{t(labelKey)}</StatusBadge>;
+  }
+
+  /**
+   * Menu ⋯ per baris (Figma 8). Figma memasang tiga entri: "Lihat detail",
+   * "Buka di explorer", "Salin hash". "Lihat detail" butuh Sheet detail +
+   * Steps timeline yang belum ada di produk, jadi ia TIDAK dirender — entri
+   * menu yang tidak membuka apa pun lebih buruk daripada menu berisi dua.
+   *
+   * Dua entri yang tersisa sama-sama butuh tx hash. Baris yang belum mendarat
+   * on-chain karena itu tidak dapat pemicu sama sekali, bukan tombol yang
+   * membuka menu kosong. Kolomnya tetap ada supaya lebar tabel tidak bergoyang
+   * antar baris.
+   */
+  function RowActions({ tx }: { tx: ConsumerTransaction }) {
+    const url = explorerTxUrl(tx.chain, tx.txHash);
+    if (!tx.txHash) return null;
     return (
-      <Badge tone={statusTone(status)} data-status={status}>
-        {t(labelKey)}
-      </Badge>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={t("tx.rowActions")}
+            className="text-muted-text"
+          >
+            <MoreHorizontal className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56">
+          {url && (
+            // `asChild` is stripped by the Animate UI item, so this cannot be an
+            // `<a>`; `noopener` is passed explicitly instead of inherited from
+            // `rel`.
+            <DropdownMenuItem
+              onSelect={() => window.open(url, "_blank", "noopener,noreferrer")}
+            >
+              <ExternalLink />
+              {t("tx.openExplorer")}
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem onSelect={() => copy(tx.txHash!)}>
+            <Copy />
+            {t("tx.copyHash")}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     );
   }
 
@@ -378,30 +404,49 @@ export function TransactionList() {
           <Table scrollLabel={t("tx.tableScroll")}>
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <TableHead>{t("tx.dateTime")}</TableHead>
+                {/* Penanda urut, bukan tombol urut. Daftar ini memang selalu
+                    `created_at desc` (transactions.yaml), jadi `aria-sort` di
+                    sini menyatakan fakta. Membalik urutan butuh param `sort` di
+                    API yang belum ada — sampai itu ada, header ini tidak boleh
+                    bisa diklik: sorting klien di halaman yang dipaginasi server
+                    hanya mengurutkan 10 baris yang kebetulan terlihat. */}
+                <TableHead aria-sort="descending">
+                  <span className="flex items-center gap-1.5">
+                    {t("tx.dateTime")}
+                    <ArrowDown className="size-3.5 shrink-0" aria-hidden="true" />
+                    <span className="sr-only">{t("tx.sortedNewest")}</span>
+                  </span>
+                </TableHead>
                 <TableHead>{t("tx.transaction")}</TableHead>
-                <TableHead>{t("tx.amount")}</TableHead>
-                <TableHead>{t("tx.subtotal")}</TableHead>
-                <TableHead>{t("tx.totalPay")}</TableHead>
-                <TableHead>{t("tx.rate")}</TableHead>
+                <TableHead className="text-right">{t("tx.amount")}</TableHead>
+                <TableHead className="text-right">{t("tx.subtotal")}</TableHead>
+                <TableHead className="text-right">{t("tx.totalPay")}</TableHead>
                 <TableHead>{t("tx.chain")}</TableHead>
                 <TableHead>{t("tx.txHash")}</TableHead>
-                <TableHead>{t("tx.status")}</TableHead>
+                {/* 212 px = lebar sel Status di Figma; ia harus memuat badge
+                    terpanjang ("Menunggu pembayaran") dan pasangan
+                    "Menunggu burn" + "Lanjutkan" berdampingan. */}
+                <TableHead className="w-[212px]">{t("tx.status")}</TableHead>
+                <TableHead className="w-14">
+                  <span className="sr-only">{t("tx.actions")}</span>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.map((tx) => (
                 <TableRow key={tx.id}>
-                  <TableCell className="text-muted-text">{formatDateTime(tx.createdAt)}</TableCell>
+                  <TableCell className="text-muted-text">{formatDateTime(tx.createdAt, lang)}</TableCell>
                   <TableCell><TypeCell type={tx.type} /></TableCell>
-                  <TableCell><AmountCell amount={tx.amount} /></TableCell>
-                  <TableCell className="tabular-nums text-foreground">{idrOrDash(subtotalValue(tx))}</TableCell>
-                  <TableCell className="tabular-nums text-foreground">{idrOrDash(totalValue(tx))}</TableCell>
-                  <TableCell className="tabular-nums text-muted-text">{idrOrDash(tx.effectiveRate)}</TableCell>
+                  <TableCell className="text-right"><AmountCell amount={tx.amount} /></TableCell>
+                  <TableCell className="text-right tabular-nums text-foreground">{idrOrDash(subtotalValue(tx))}</TableCell>
+                  {/* Total adalah angka yang benar-benar berpindah tangan —
+                      Figma memberinya Nominal/Tabel Medium supaya ia menonjol
+                      dari Subtotal di sebelahnya. */}
+                  <TableCell className="text-right font-medium tabular-nums text-foreground">{idrOrDash(totalValue(tx))}</TableCell>
                   <TableCell className="text-foreground">{chainLabel(tx.chain)}</TableCell>
                   <TableCell><TxHashCell tx={tx} /></TableCell>
-                  <TableCell>
-                    <div className="flex flex-col items-start gap-1">
+                  <TableCell className="w-[212px]">
+                    <div className="flex items-center gap-2">
                       <StatusPill tx={tx} />
                       {tx.type === "REDEEM" && tx.status === "AWAITING_BURN" && (
                         <Button variant="link" size="sm" className="h-auto px-0" onClick={() => continueBurn(tx.id)}>
@@ -410,6 +455,7 @@ export function TransactionList() {
                       )}
                     </div>
                   </TableCell>
+                  <TableCell className="w-14 text-right"><RowActions tx={tx} /></TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -421,7 +467,7 @@ export function TransactionList() {
           {rows.map((tx) => (
             <div key={tx.id} className="flex flex-col gap-3 rounded-xl border border-border p-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-text">{formatDateTime(tx.createdAt)}</span>
+                <span className="text-sm text-muted-text">{formatDateTime(tx.createdAt, lang)}</span>
                 <StatusPill tx={tx} />
               </div>
               <div className="flex items-center justify-between">
@@ -430,7 +476,6 @@ export function TransactionList() {
               </div>
               <CardRow label={t("tx.subtotal")} value={idrOrDash(subtotalValue(tx))} />
               <CardRow label={t("tx.totalPay")} value={idrOrDash(totalValue(tx))} />
-              <CardRow label={t("tx.rate")} value={idrOrDash(tx.effectiveRate)} />
               <CardRow label={t("tx.chain")} value={chainLabel(tx.chain)} />
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-text">{t("tx.txHash")}</span>

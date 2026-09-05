@@ -125,7 +125,7 @@ export function ProfileCard() {
             <div>
               <p className="text-xs text-muted-text">{t("profile.memberSince")}</p>
               <p className="text-sm font-medium">
-                {user?.createdAt ? formatDate(user.createdAt) : "-"}
+                {user?.createdAt ? formatDate(user.createdAt, lang) : "-"}
               </p>
             </div>
           </div>

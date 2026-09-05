@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field, FieldHelp, FieldLabel } from "@/components/ui/field";
@@ -30,23 +31,19 @@ import { toast } from "sonner";
 
 export function LoginForm() {
   const { t, lang } = useLang();
-  const { login, loginLoading } = useAuth();
+  const router = useRouter();
+  const { login, loginLoading, resendVerification, resendVerificationLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   // Validators hand back i18n keys, not sentences (finding D1) — the key is
   // what we keep, so the message re-translates when the language changes.
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
-  // Set when the backend returns 403 EMAIL_NOT_VERIFIED — Phase 1 users migrate via
-  // the "Forgot password" flow (sot/phase-2/week1.md § Migrasi User Phase 1).
+  // Set when the backend returns 403 EMAIL_NOT_VERIFIED.
   const [needsVerification, setNeedsVerification] = useState(false);
   // 403 ACCOUNT_SUSPENDED (auth.yaml loginV2) — distinct banner, not a generic toast.
   const [suspended, setSuspended] = useState(false);
   const cooldown = useCooldown();
-
-  // The dictionary string carries a {link} slot so each language controls the
-  // sentence around the Forgot-password link.
-  const [verifyBefore, verifyAfter] = t("auth.login.needsVerification").split("{link}");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -90,13 +87,30 @@ export function LoginForm() {
     }
   }
 
+  /**
+   * The verification banner carries the action, not a sentence pointing at
+   * Forgot password. Self-signup users have never set a password to reset —
+   * what they need is the activation mail again (Figma 31, state "belum
+   * diverifikasi"). Success lands on /register/check-email, which owns the
+   * cooldown and the "still nothing?" box.
+   */
+  async function handleResend() {
+    try {
+      await resendVerification({ email });
+    } catch {
+      // Deliberately swallowed: the check-email screen can resend again, and a
+      // toast here would fire on top of the navigation.
+    }
+    router.push(`/register/check-email?email=${encodeURIComponent(email)}`);
+  }
+
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1.5">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+        <h1 className="text-2xl leading-8 font-semibold tracking-tight text-foreground">
           {t("auth.login.title")}
         </h1>
-        <p className="text-sm text-muted-text">
+        <p className="text-sm leading-5 text-muted-text">
           {t("auth.login.newTo")}{" "}
           <LinkInline asChild>
             <Link href="/register">{t("auth.login.createAccount")}</Link>
@@ -105,16 +119,41 @@ export function LoginForm() {
       </div>
 
       {needsVerification && (
-        <Alert tone="warning">
-          {verifyBefore}
-          <LinkInline asChild>
-            <Link href="/forgot-password">{t("auth.login.forgotLinkText")}</Link>
-          </LinkInline>
-          {verifyAfter}
+        <Alert
+          tone="warning"
+          title={t("auth.login.needsVerificationTitle")}
+          action={
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleResend}
+              loading={resendVerificationLoading}
+              loadingLabel={t("auth.check.sending")}
+            >
+              {t("auth.login.resendLink")}
+            </Button>
+          }
+        >
+          {email
+            ? t("auth.login.needsVerificationBody", { email })
+            : t("auth.login.needsVerificationBodyNoEmail")}
         </Alert>
       )}
 
-      {suspended && <Alert tone="danger">{t("auth.login.suspended")}</Alert>}
+      {suspended && (
+        <Alert
+          tone="danger"
+          title={t("auth.login.suspendedTitle")}
+          action={
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/suspended">{t("auth.login.suspendedAction")}</Link>
+            </Button>
+          }
+        >
+          {t("auth.login.suspended")}
+        </Alert>
+      )}
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <Field>
@@ -132,36 +171,42 @@ export function LoginForm() {
           <FieldHelp id="email" error={translateValidation(t, errors.email)} />
         </Field>
 
-        <Field>
-          <div className="mb-1.5 flex items-center justify-between gap-2">
+        {/* "Lupa kata sandi?" sits BELOW the field, right aligned, 8 px down —
+            not on the label row. `Field` has no action slot in the label line
+            (noted for the component ledger), and squeezing a second control in
+            there is what made the label row read as two competing labels. */}
+        <div className="flex flex-col gap-2">
+          <Field>
             <FieldLabel htmlFor="password">{t("auth.password")}</FieldLabel>
-            <Button variant="link" size="sm" className="-mr-3" asChild>
+            <InputGroup>
+              <InputGroupInput
+                id="password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="current-password"
+                placeholder={t("auth.passwordPh")}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                aria-invalid={!!errors.password}
+                aria-describedby="password-error"
+              />
+              <InputGroupAddon align="inline-end">
+                <InputGroupButton
+                  size="icon"
+                  aria-label={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? <EyeOff /> : <Eye />}
+                </InputGroupButton>
+              </InputGroupAddon>
+            </InputGroup>
+            <FieldHelp id="password" error={translateValidation(t, errors.password)} />
+          </Field>
+          <p className="text-right text-sm leading-5">
+            <LinkInline asChild>
               <Link href="/forgot-password">{t("auth.login.forgot")}</Link>
-            </Button>
-          </div>
-          <InputGroup>
-            <InputGroupInput
-              id="password"
-              type={showPassword ? "text" : "password"}
-              autoComplete="current-password"
-              placeholder={t("auth.passwordPh")}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              aria-invalid={!!errors.password}
-              aria-describedby="password-error"
-            />
-            <InputGroupAddon align="inline-end">
-              <InputGroupButton
-                size="icon"
-                aria-label={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
-                onClick={() => setShowPassword(!showPassword)}
-              >
-                {showPassword ? <EyeOff /> : <Eye />}
-              </InputGroupButton>
-            </InputGroupAddon>
-          </InputGroup>
-          <FieldHelp id="password" error={translateValidation(t, errors.password)} />
-        </Field>
+            </LinkInline>
+          </p>
+        </div>
 
         <Button
           type="submit"
@@ -179,26 +224,18 @@ export function LoginForm() {
         </Button>
       </form>
 
-      <div className="flex flex-col gap-4">
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-border" />
-          </div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-background px-2 text-muted-text">
-              {t("auth.login.orContinue")}
-            </span>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Button variant="outline" size="lg" disabled>
-            Google
-          </Button>
-          <Button variant="outline" size="lg" disabled>
-            Web3 Wallet
-          </Button>
-        </div>
-      </div>
+      {/*
+       * No "ATAU LANJUTKAN DENGAN" divider and no Google / Web3 Wallet buttons.
+       * They were two permanently disabled controls with no label explaining
+       * why (finding F9) on the one screen with a single job. Figma 30 C weighed
+       * hiding them against a "Segera hadir" badge and chose hiding: a dead
+       * control on the main path is worse than a missing one, and sign-in via
+       * wallet also contradicts the email-first KYC flow (USDX-153) — a wallet
+       * is connected AFTER sign-in, it is not an identity. The form is ~100 px
+       * shorter for it, which is what lets Login fit a 375×667 screen without
+       * scrolling. When Google or wallet sign-in actually works, the buttons
+       * come back as LIVE controls.
+       */}
     </div>
   );
 }

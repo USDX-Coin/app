@@ -39,7 +39,7 @@ function Checkbox({
         // Detached by a background-coloured gap so the focus ring never reads
         // as the box's own edge — focus and checked must not look alike.
         "focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-        "aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40",
+        "aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40",
         "disabled:pointer-events-none disabled:opacity-50",
         className
       )}

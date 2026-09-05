@@ -28,6 +28,11 @@ function PopoverTrigger({
   return <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />
 }
 
+// Lebar dan tinggi TIDAK boleh dipaku angka tetap. `max-w-[360px]` bawaan
+// memotong panel combobox pekerjaan (99 opsi) dan di 320×568 mendorongnya 69 px
+// keluar layar; `max-h-[60dvh]` mengabaikan ruang yang benar-benar tersedia di
+// sisi pemicunya. Radix menghitung keduanya lewat custom property — pakai itu,
+// lalu sisakan 2rem supaya panel tidak menempel tepi layar.
 function PopoverContent({
   className,
   align = "center",
@@ -41,7 +46,7 @@ function PopoverContent({
         align={align}
         sideOffset={sideOffset}
         className={cn(
-          "z-50 w-80 max-w-[360px] max-h-[60dvh] overflow-y-auto origin-(--radix-popover-content-transform-origin) rounded-xl border bg-popover p-4 text-popover-foreground shadow-md outline-hidden dark:shadow-none data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
+          "z-50 w-80 max-w-[calc(100vw-2rem)] max-h-[min(60dvh,var(--radix-popover-content-available-height))] overflow-y-auto origin-(--radix-popover-content-transform-origin) rounded-xl border bg-popover p-4 text-popover-foreground shadow-md outline-hidden dark:shadow-none data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
           className
         )}
         {...props}

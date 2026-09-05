@@ -144,17 +144,21 @@ test.describe("Transaction Action Gate", () => {
       const main = page.getByRole("main");
 
       await gotoWithStatus(page, "VERIFIED", "/bridge");
+      // Dua pil, dan itu memang desainnya (Figma `20` Arah 3): satu di judul halaman,
+      // satu di dalam kartu. Salah satunya pernah dihapus karena dikira duplikat.
       await expect(
         main.getByText("Coming soon", { exact: true })
-      ).toBeVisible({ timeout: 15000 });
+      ).toHaveCount(2, { timeout: 15000 });
       await expect(
         main.getByRole("button", { name: "Bridge", exact: true })
       ).toHaveCount(0);
 
       await page.goto("/send");
+      // Dua pil, dan itu memang desainnya (Figma `20` Arah 3): satu di judul halaman,
+      // satu di dalam kartu. Salah satunya pernah dihapus karena dikira duplikat.
       await expect(
         main.getByText("Coming soon", { exact: true })
-      ).toBeVisible({ timeout: 15000 });
+      ).toHaveCount(2, { timeout: 15000 });
       await expect(
         main.getByRole("button", { name: "Send", exact: true })
       ).toHaveCount(0);

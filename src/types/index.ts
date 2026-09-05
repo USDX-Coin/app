@@ -150,9 +150,23 @@ export type VaBank =
   | "MAYBANK";
 
 // 3 separate status dimensions of a mint order.
-export type MintPaymentStatus = "REQUESTED" | "WAITING_FOR_PAYMENT" | "PAID" | "EXPIRED";
+// `HELD` (BNI, USDX-341) is in both enums in `sot/api/common.yaml` but was
+// missing here, so TypeScript believed a held order could not exist — and the
+// status label lookup in Riwayat returned `undefined`, rendering an empty pill
+// for the one status that actually needs someone to act on it.
+export type MintPaymentStatus =
+  | "REQUESTED"
+  | "WAITING_FOR_PAYMENT"
+  | "PAID"
+  | "EXPIRED"
+  | "HELD";
 export type MintSafeStatus = "NONE" | "PENDING_APPROVAL" | "APPROVED" | "EXECUTED" | "REJECTED";
-export type MintOrderStatus = "WAITING_FOR_PAYMENT" | "WAITING_FOR_APPROVAL" | "COMPLETED" | "FAILED";
+export type MintOrderStatus =
+  | "WAITING_FOR_PAYMENT"
+  | "WAITING_FOR_APPROVAL"
+  | "COMPLETED"
+  | "FAILED"
+  | "HELD";
 
 // Consumer order type (openapi TransactionType). W2 = MINT; REDEEM effective W3.
 export type ConsumerOrderType = "MINT" | "REDEEM";

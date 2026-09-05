@@ -80,7 +80,6 @@ export function RedeemStatus() {
   return (
     <div className="flex w-full max-w-lg flex-col gap-5 rounded-2xl border border-border bg-card p-5">
       <div className="flex flex-col gap-1">
-        <h2 className="text-lg font-semibold tracking-tight text-foreground">{t("title.redeemStatus")}</h2>
         <p className="text-sm text-muted-text">
           {order.orderNumber}
           {order.lateBurn && <span className="ml-2 text-warning-text">{t("redeem.lateBurn")}</span>}

@@ -38,7 +38,7 @@ export function KycCddFields({ form, errors, onChange }: KycCddFieldsProps) {
   return (
     <div className="flex flex-col gap-4 border-t border-border pt-4">
       <div>
-        <h2 className="text-sm font-semibold text-foreground">{t("kyc.cdd.sectionTitle")}</h2>
+        <h2 className="text-base font-semibold text-foreground">{t("kyc.cdd.sectionTitle")}</h2>
         <p className="mt-1 text-xs text-muted-text">{t("kyc.cdd.sectionHint")}</p>
       </div>
 
@@ -83,6 +83,7 @@ export function KycCddFields({ form, errors, onChange }: KycCddFieldsProps) {
         <KycSelect
           id="sourceOfFunds"
           label={t("kyc.cdd.sourceOfFunds")}
+          placeholder={t("kyc.cdd.sourceOfFundsPh")}
           value={form.sourceOfFunds}
           options={CDD_OPTIONS.sourceOfFunds}
           labelKey={(v) => cddOptionLabelKey("sourceOfFunds", v)}
@@ -92,6 +93,7 @@ export function KycCddFields({ form, errors, onChange }: KycCddFieldsProps) {
         <KycSelect
           id="annualIncomeRange"
           label={t("kyc.cdd.annualIncomeRange")}
+          placeholder={t("kyc.cdd.annualIncomeRangePh")}
           value={form.annualIncomeRange}
           options={CDD_OPTIONS.annualIncomeRange}
           labelKey={(v) => cddOptionLabelKey("annualIncomeRange", v)}
@@ -101,6 +103,7 @@ export function KycCddFields({ form, errors, onChange }: KycCddFieldsProps) {
         <KycSelect
           id="netWorthRange"
           label={t("kyc.cdd.netWorthRange")}
+          placeholder={t("kyc.cdd.netWorthRangePh")}
           value={form.netWorthRange}
           options={CDD_OPTIONS.netWorthRange}
           labelKey={(v) => cddOptionLabelKey("netWorthRange", v)}
@@ -110,6 +113,7 @@ export function KycCddFields({ form, errors, onChange }: KycCddFieldsProps) {
         <KycSelect
           id="transactionPurpose"
           label={t("kyc.cdd.transactionPurpose")}
+          placeholder={t("kyc.cdd.transactionPurposePh")}
           value={form.transactionPurpose}
           options={CDD_OPTIONS.transactionPurpose}
           labelKey={(v) => cddOptionLabelKey("transactionPurpose", v)}
@@ -120,7 +124,9 @@ export function KycCddFields({ form, errors, onChange }: KycCddFieldsProps) {
 
       {/* Tanpa hint permanen di bawah field (Versi 4): label sudah menulis
           "(opsional)", dan mengulanginya sebagai baris kedua hanya menambah
-          satu lapis teks yang harus dibaca sebelum mengisi. */}
+          satu lapis teks yang harus dibaca sebelum mengisi. Aturan panjangnya
+          ("15 atau 16 digit") pindah ke DALAM field sebagai contoh — lima belas
+          angka yang terlihat sudah menunjukkan panjangnya tanpa satu kata pun. */}
       <Field>
         <FieldLabel htmlFor="npwp">{t("kyc.cdd.npwp")}</FieldLabel>
         <Input
@@ -186,6 +192,7 @@ export function KycCddFields({ form, errors, onChange }: KycCddFieldsProps) {
             <KycSelect
               id="sourceOfWealth"
               label={t("kyc.cdd.sourceOfWealth")}
+          placeholder={t("kyc.cdd.sourceOfWealthPh")}
               value={form.sourceOfWealth}
               options={CDD_OPTIONS.sourceOfWealth}
               labelKey={(v) => cddOptionLabelKey("sourceOfWealth", v)}

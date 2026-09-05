@@ -177,11 +177,16 @@ export function Sidebar({
     // The three-row template stays an arbitrary value: it is a grid template, not
     // a length, and the scale has no value for "pin the ends, give the middle the
     // rest". Same shape as `ui/dialog.tsx` and `ui/sheet.tsx`.
-    <div className="grid h-full w-full grid-rows-[auto_1fr_auto] bg-sidebar text-sidebar-foreground">
+    <div className="grid h-full w-full min-w-0 grid-rows-[auto_1fr_auto] bg-sidebar text-sidebar-foreground">
       {/* Row 1 — account switcher. Pinned. */}
       <div
         data-slot="sidebar-header"
-        className={cn("flex shrink-0 items-center gap-1 p-3", hasOverlayClose && "pr-12")}
+        // `min-w-0` menanggung beban: sebagai grid item, default `min-width: auto`
+        // membuat baris ini melebar mengikuti isinya alih-alih memotongnya. Akun tanpa
+        // nama memakai email sebagai kedua baris, dan email 25 karakter melebarkan
+        // SELURUH sidebar 272 → 349 px sehingga kartu saldo menembus area konten.
+        // `truncate` di dalam MenuProfil tidak pernah aktif tanpa ini.
+        className={cn("flex min-w-0 shrink-0 items-center gap-1 p-3", hasOverlayClose && "pr-12")}
       >
         <MenuProfil
           className="min-w-0 flex-1"
@@ -234,7 +239,7 @@ export function Sidebar({
           inside the drawer from scrolling the page behind it. */}
       <div
         data-slot="sidebar-nav"
-        className="flex flex-col gap-4 overflow-y-auto overscroll-contain px-3 pb-3"
+        className="flex min-w-0 flex-col gap-4 overflow-y-auto overscroll-contain px-3 pb-3"
       >
         {/* Total Saldo card */}
         <div className="balance-gradient relative flex w-full flex-col gap-3.5 overflow-hidden rounded-xl border border-white/20 p-3">

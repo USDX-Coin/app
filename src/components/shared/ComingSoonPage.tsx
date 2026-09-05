@@ -98,6 +98,15 @@ export function ComingSoonPage({
           className="relative size-14 rounded-full md:size-16"
         />
 
+        {/* Badge kedua ini BUKAN duplikat dari yang di PageHeader — Figma `20` Arah 3
+            menggambar keduanya (papan `2580:10922`). Yang di judul halaman menandai menu
+            mana yang belum aktif; yang ini menjawab pertanyaan yang muncul saat orang
+            sudah membaca janji di kartunya: "kapan?". Pernah dihapus sekali karena
+            dikira duplikat — jangan diulangi. */}
+        <Badge tone="coming-soon" className="relative">
+          {t("common.comingSoon")}
+        </Badge>
+
         <h2 className="relative max-w-xl text-2xl leading-8 font-semibold tracking-tight text-balance text-primary-foreground md:text-3xl md:leading-10">
           {t(headlineKey)}
         </h2>

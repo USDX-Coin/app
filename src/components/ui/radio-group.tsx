@@ -99,7 +99,7 @@ function RadioGroupItem({
         // The focus ring is detached by a background-coloured gap, so it can
         // never merge with the selected border into one solid maroon edge.
         "focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-        "aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40",
+        "aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40",
         "disabled:cursor-not-allowed disabled:opacity-50 disabled:pointer-events-none",
         className
       )}

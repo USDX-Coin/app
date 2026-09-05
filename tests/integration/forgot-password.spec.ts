@@ -9,7 +9,7 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/forgot-password");
   await clearAuth(page);
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Forgot Password" })).toBeVisible({
+  await expect(page.getByRole("heading", { name: "Forgot your password?" })).toBeVisible({
     timeout: 10000,
   });
 });
@@ -17,20 +17,41 @@ test.beforeEach(async ({ page }) => {
 test.describe("Forgot Password Page", () => {
   test.describe("positive", () => {
     test("submit advances to the check-email landing", async ({ page }) => {
-      await page.getByPlaceholder("Enter your email").fill("demo@usdx.com");
+      await page.getByPlaceholder("name@email.com").fill("demo@usdx.com");
       await page.getByRole("button", { name: "Send Reset Link" }).click();
-      await expect(page.getByRole("heading", { name: "Check Your Email" })).toBeVisible({
+      await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible({
         timeout: 10000,
       });
       await expect(page.getByText("demo@usdx.com")).toBeVisible();
     });
 
     test("unknown email still advances (anti-enumeration)", async ({ page }) => {
-      await page.getByPlaceholder("Enter your email").fill("nobody@example.com");
+      await page.getByPlaceholder("name@email.com").fill("nobody@example.com");
       await page.getByRole("button", { name: "Send Reset Link" }).click();
-      await expect(page.getByRole("heading", { name: "Check Your Email" })).toBeVisible({
+      await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible({
         timeout: 10000,
       });
+      // The endpoint answers 200 for any address on purpose, so the screen must
+      // not claim it sent anything — it said "We've sent a link to X" before,
+      // which turned the anti-enumeration 200 into a working account oracle.
+      await expect(
+        page.getByText("If nobody@example.com is registered")
+      ).toBeVisible();
+    });
+
+    test("mistyped address goes back to the form, not to a second send button", async ({
+      page,
+    }) => {
+      await page.getByPlaceholder("name@email.com").fill("typo@example.com");
+      await page.getByRole("button", { name: "Send Reset Link" }).click();
+      await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible({
+        timeout: 10000,
+      });
+      await page.getByRole("button", { name: "Try another email" }).click();
+      await expect(
+        page.getByRole("heading", { name: "Forgot your password?" })
+      ).toBeVisible();
+      await expect(page.getByPlaceholder("name@email.com")).toBeVisible();
     });
   });
 
@@ -38,7 +59,7 @@ test.describe("Forgot Password Page", () => {
     test("invalid email format shows inline error", async ({ page }) => {
       // "user@domain" passes the browser's native type=email check (so submit
       // fires) but fails the app's stricter regex (requires a TLD).
-      await page.getByPlaceholder("Enter your email").fill("user@domain");
+      await page.getByPlaceholder("name@email.com").fill("user@domain");
       await page.getByRole("button", { name: "Send Reset Link" }).click();
       await expect(page.getByText("Enter a valid email address")).toBeVisible();
     });
@@ -79,7 +100,7 @@ test.describe("Forgot Password Page", () => {
     test("English locale renders English units", async ({ page }) => {
       await seedRetryAfter(page, 76451);
       await page.reload(); // beforeEach already forced English
-      await page.getByPlaceholder("Enter your email").fill("demo@usdx.com");
+      await page.getByPlaceholder("name@email.com").fill("demo@usdx.com");
       await page.getByRole("button", { name: "Send Reset Link" }).click();
       await expect(
         page.getByRole("button", { name: "Try again in about 22 hours" })
@@ -91,7 +112,7 @@ test.describe("Forgot Password Page", () => {
     }) => {
       await seedRetryAfter(page, 0);
       await page.reload();
-      await page.getByPlaceholder("Enter your email").fill("demo@usdx.com");
+      await page.getByPlaceholder("name@email.com").fill("demo@usdx.com");
       await page.getByRole("button", { name: "Send Reset Link" }).click();
       await expect(
         page.getByRole("button", { name: /Try again in (60|59)s/ })

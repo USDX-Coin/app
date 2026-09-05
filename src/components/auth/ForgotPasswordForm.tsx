@@ -2,14 +2,23 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { Field, FieldHelp, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { LinkInline } from "@/components/ui/link-inline";
+import { useLang } from "@/providers/LanguageProvider";
 import { translateValidation, validateEmail } from "@/lib/validations";
 import { useAuth } from "@/hooks/useAuth";
 import { useCooldown, DEFAULT_COOLDOWN_SECONDS } from "@/hooks/useCooldown";
-import { useLang } from "@/providers/LanguageProvider";
 import { getFailureText, getRateLimitSeconds, isValidationError } from "@/lib/api/errors";
 import { formatDuration } from "@/lib/utils";
 import { toast } from "sonner";
@@ -22,9 +31,6 @@ export function ForgotPasswordForm() {
   const [errorKey, setErrorKey] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const cooldown = useCooldown();
-
-  // {email} slot lets each language place the address naturally in the sentence.
-  const [checkBefore, checkAfter] = t("auth.forgot.checkBody").split("{email}");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -59,34 +65,50 @@ export function ForgotPasswordForm() {
 
   if (submitted) {
     return (
-      <div className="flex flex-col items-center gap-6 text-center">
-        <div className="flex size-16 items-center justify-center rounded-full bg-primary/10">
-          <span className="text-3xl">✉</span>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            {t("auth.forgot.checkTitle")}
-          </h1>
-          <p className="text-sm text-muted-text">
-            {checkBefore}
-            <strong className="text-foreground">{email}</strong>
-            {checkAfter}
-          </p>
-        </div>
-        <Button variant="outline" size="lg" className="w-full" asChild>
-          <Link href="/login">{t("auth.backToLogin")}</Link>
-        </Button>
+      <div className="flex flex-col gap-6">
+        {/*
+         * Neutral tone, not success. The endpoint answers 200 for an address
+         * that was never registered — deliberately, so nobody can probe for
+         * accounts — which means this screen does not know whether anything was
+         * sent. A green tick would claim knowledge it does not have, so the copy
+         * says "if … is registered" and the tint stays informational.
+         */}
+        <Empty className="gap-4 p-0">
+          <EmptyHeader>
+            <EmptyMedia className="bg-info/12 text-info-text">
+              <Mail />
+            </EmptyMedia>
+            <EmptyTitle as="h1">{t("auth.forgot.checkTitle")}</EmptyTitle>
+            <EmptyDescription>{t("auth.forgot.checkBody", { email })}</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button variant="outline" size="lg" asChild>
+              <Link href="/login">{t("auth.backToLogin")}</Link>
+            </Button>
+          </EmptyContent>
+        </Empty>
+
+        {/* Retyping the address goes back to the form rather than adding a second
+            resend button here — one cooldown, in one place. */}
+        <p className="text-center text-sm leading-5 text-muted-text">
+          {t("auth.forgot.wrongAddress")}{" "}
+          <LinkInline asChild>
+            <button type="button" onClick={() => setSubmitted(false)}>
+              {t("auth.forgot.tryAnother")}
+            </button>
+          </LinkInline>
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1.5">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+        <h1 className="text-2xl leading-8 font-semibold tracking-tight text-foreground">
           {t("auth.forgot.title")}
         </h1>
-        <p className="text-sm text-muted-text">{t("auth.forgot.subtitle")}</p>
+        <p className="text-sm leading-5 text-muted-text">{t("auth.forgot.subtitle")}</p>
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -96,7 +118,7 @@ export function ForgotPasswordForm() {
             id="email"
             type="email"
             autoComplete="email"
-            placeholder={t("auth.forgot.emailPh")}
+            placeholder={t("auth.emailPh")}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             aria-invalid={!!errorKey}
@@ -121,7 +143,7 @@ export function ForgotPasswordForm() {
         </Button>
       </form>
 
-      <p className="text-center text-sm text-muted-text">
+      <p className="text-center text-sm leading-5 text-muted-text">
         {t("auth.forgot.remember")}{" "}
         <LinkInline asChild>
           <Link href="/login">{t("auth.forgot.loginLink")}</Link>

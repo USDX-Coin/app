@@ -12,7 +12,7 @@ test.describe("Auth Flow", () => {
       await clearAuth(page);
       await page.goto("/register");
       await expect(
-        page.getByRole("heading", { name: "Create Account" })
+        page.getByRole("heading", { name: "Create an account" })
       ).toBeVisible({ timeout: 15000 });
 
       // Register (new contract: email, phone, password x2, ToS — no fullName)
@@ -21,19 +21,19 @@ test.describe("Auth Flow", () => {
         .fill(`e2e-${Date.now()}@test.com`);
       await page.getByPlaceholder("08xx or +62xx").fill("081234567891");
       await page.getByPlaceholder("Create a password").fill("E2eTest12");
-      await page.getByPlaceholder("Confirm your password").fill("E2eTest12");
+      await page.getByPlaceholder("Type the password again").fill("E2eTest12");
       await page.getByRole("checkbox").check();
-      await page.getByRole("button", { name: "Create Account" }).click();
+      await page.getByRole("button", { name: "Create account" }).click();
 
       // Register no longer auto-logs in — it lands on the check-email page
       await page.waitForURL(/\/register\/check-email/, { timeout: 30000 });
       await expect(
-        page.getByRole("heading", { name: "Verify Your Email" })
+        page.getByRole("heading", { name: "Check your email" })
       ).toBeVisible();
 
       // Login with the verified demo account (fresh accounts need email verification)
       await page.goto("/login");
-      await page.getByPlaceholder("you@email.com").fill("demo@usdx.com");
+      await page.getByPlaceholder("name@email.com").fill("demo@usdx.com");
       await page.getByPlaceholder("Enter your password").fill("Demo1234");
       await page.getByRole("button", { name: "Login" }).click();
       await expect(page.getByText("You will mint")).toBeVisible({
@@ -75,11 +75,11 @@ test.describe("Auth Flow", () => {
       await forceEnglish(page);
       await page.goto("/forgot-password");
       await expect(
-        page.getByRole("heading", { name: "Forgot Password" })
+        page.getByRole("heading", { name: "Forgot your password?" })
       ).toBeVisible({ timeout: 15000 });
-      await page.getByPlaceholder("Enter your email").fill("demo@usdx.com");
+      await page.getByPlaceholder("name@email.com").fill("demo@usdx.com");
       await page.getByRole("button", { name: "Send Reset Link" }).click();
-      await expect(page.getByText("Check Your Email")).toBeVisible({
+      await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible({
         timeout: 10000,
       });
     });

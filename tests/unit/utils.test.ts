@@ -1,7 +1,10 @@
 import { describe, test, expect } from "vitest";
 import {
   formatAmount,
+  formatDate,
+  formatDateTime,
   formatDuration,
+  formatTokenAmount,
   formatUSD,
   truncateAddress,
   parseAmount,
@@ -152,6 +155,80 @@ describe("formatDuration", () => {
     test("clamps zero and negatives to 0 seconds", () => {
       expect(formatDuration(0, "id")).toBe("0 detik");
       expect(formatDuration(-5, "en")).toBe("0s");
+    });
+  });
+});
+
+/**
+ * D3 — Riwayat rendered "Sep 05, 2026 - 01:06" on an Indonesian page because
+ * the date was assembled by hand from `toLocaleString("en-US")`. Figma papan 27
+ * writes "3 Sep 2026, 11.13"; the dot between hours and minutes is what `id-ID`
+ * produces, and these tests are what stop an en-US month name coming back.
+ */
+describe("formatDateTime", () => {
+  const iso = "2026-09-03T11:13:00";
+
+  describe("positive", () => {
+    test("Indonesian is the default and matches Figma", () => {
+      expect(formatDateTime(iso)).toBe("3 Sep 2026, 11.13");
+    });
+    test("abbreviates August the Indonesian way", () => {
+      expect(formatDateTime("2026-08-29T13:20:00", "id")).toBe("29 Agu 2026, 13.20");
+    });
+    test("English keeps day-month-year order and a colon", () => {
+      expect(formatDateTime(iso, "en")).toBe("3 Sept 2026, 11:13");
+    });
+    test("pads a single-digit hour", () => {
+      expect(formatDateTime("2026-08-27T08:55:00", "id")).toBe("27 Agu 2026, 08.55");
+    });
+  });
+
+  describe("negative", () => {
+    test("an unparseable timestamp renders an em dash, never 'Invalid Date'", () => {
+      expect(formatDateTime("not-a-date")).toBe("—");
+    });
+  });
+});
+
+describe("formatDate", () => {
+  describe("positive", () => {
+    test("uses the Indonesian month name by default", () => {
+      expect(formatDate("2026-09-03T11:13:00")).toBe("3 September 2026");
+    });
+    test("English spells the month out too", () => {
+      expect(formatDate("2026-09-03T11:13:00", "en")).toBe("3 September 2026");
+    });
+  });
+
+  describe("negative", () => {
+    test("an unparseable date renders an em dash", () => {
+      expect(formatDate("")).toBe("—");
+    });
+  });
+});
+
+describe("formatTokenAmount", () => {
+  describe("positive", () => {
+    test("a whole number still shows two decimals, Indonesian comma", () => {
+      expect(formatTokenAmount(10)).toBe("10,00");
+    });
+    test("accepts the decimal string the API sends", () => {
+      expect(formatTokenAmount("60")).toBe("60,00");
+    });
+    test("thousands separator is a dot in Indonesian", () => {
+      expect(formatTokenAmount(1000)).toBe("1.000,00");
+    });
+  });
+
+  describe("edge cases", () => {
+    test("keeps backend precision instead of rounding it away", () => {
+      expect(formatTokenAmount("62.092307")).toBe("62,092307");
+    });
+    test("English uses a dot decimal and a comma for thousands", () => {
+      expect(formatTokenAmount(1000, "en")).toBe("1,000.00");
+    });
+    test("a non-numeric amount renders an em dash", () => {
+      expect(formatTokenAmount("abc")).toBe("—");
     });
   });
 });

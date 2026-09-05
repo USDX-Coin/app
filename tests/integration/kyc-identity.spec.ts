@@ -139,7 +139,18 @@ test.describe("KYC identity fields", () => {
       const values = await page.$$eval("#identityType option", (els) =>
         els.map((el) => (el as HTMLOptionElement).value),
       );
-      expect(values).toEqual(["", "KTP", "PASSPORT"]);
+      // Dulu `["", "KTP", "PASSPORT"]`. Opsi kosong terdepan HILANG sejak
+      // placeholder Versi 4 (papan Figma `40 · KYC` baris 9: "Select selalu punya
+      // nilai, placeholder tidak pernah tampil") — `identityType` mulai di `KTP`
+      // lewat `EMPTY_IDENTITY_FORM`, jadi opsi kosong itu bukan cuma tak pernah
+      // terlihat, ia jawaban yang bisa DIPILIH ULANG nasabah dan tidak akan pernah
+      // lolos `isIdentityNumberValid`. `KycSelect` sekarang hanya merender opsi
+      // kosong kalau diberi prop `placeholder`, dan di sini sengaja tidak.
+      //
+      // Assertion ini TIDAK dilonggarkan: ia tetap membuktikan maksud tesnya (SIM
+      // tidak ditawarkan, Pasal 26 ayat (2)) lewat perbandingan yang sama-sama
+      // persis, dan sekarang sekalian membuktikan tidak ada jawaban kosong.
+      expect(values).toEqual(["KTP", "PASSPORT"]);
     });
   });
 

@@ -10,7 +10,7 @@ async function login(page: import("@playwright/test").Page) {
   await page.goto("/login");
   await clearAuth(page);
   await page.goto("/login");
-  await page.getByPlaceholder("you@email.com").fill("demo@usdx.com");
+  await page.getByPlaceholder("name@email.com").fill("demo@usdx.com");
   await page.getByPlaceholder("Enter your password").fill("Demo1234");
   await page.getByRole("button", { name: "Login" }).click();
   // Lands on /mint once the session is established.

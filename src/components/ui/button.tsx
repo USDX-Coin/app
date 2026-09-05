@@ -43,6 +43,10 @@ const buttonVariants = cva(
         ],
         outline: [
           "border border-border bg-card text-foreground",
+          // Dipakai sebagai trigger Select/Combobox, jadi ia harus bisa menyatakan
+          // "isian ini belum benar" seperti Input. Tanpa ini, satu-satunya field
+          // wajib yang memakai trigger tombol tidak pernah memerah saat divalidasi.
+          "aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20",
           "pointer-fine:hover:bg-accent",
           "active:bg-accent/80",
         ],

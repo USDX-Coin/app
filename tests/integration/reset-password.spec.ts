@@ -18,8 +18,8 @@ test.describe("Reset Password Page", () => {
       await forceEnglish(page);
       await gotoReset(page, "token=valid-token");
       await page.getByPlaceholder("Create a new password").fill("NewPass123");
-      await page.getByPlaceholder("Confirm your new password").fill("NewPass123");
-      await page.getByRole("button", { name: "Reset Password" }).click();
+      await page.getByPlaceholder("Type the new password again").fill("NewPass123");
+      await page.getByRole("button", { name: "Save the new password" }).click();
       await page.waitForURL(/\/mint/, { timeout: 30000 });
     });
 
@@ -27,39 +27,61 @@ test.describe("Reset Password Page", () => {
       await forceEnglish(page);
       await gotoReset(page, "token=valid-token");
       await expect(page.getByRole("heading", { name: "Reset Password" })).toBeVisible();
-      await expect(page.getByRole("button", { name: "Reset Password" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Save the new password" })).toBeVisible();
     });
   });
 
   test.describe("negative", () => {
-    test("expired token shows an error toast", async ({ page }) => {
+    // Was: "expired token shows an error toast". A toast over a form that is
+    // still fillable and still submittable is what made people re-click the same
+    // dead mail; Figma 36 replaces the form with the dead-link screen, which
+    // carries the only action that works. Same fact under test — the app refuses
+    // a rejected token and says so — asserted on the screen that replaced it.
+    test("server-rejected token replaces the form with the dead-link screen", async ({
+      page,
+    }) => {
       await forceEnglish(page);
       await gotoReset(page, "token=expired-token");
       await page.getByPlaceholder("Create a new password").fill("NewPass123");
-      await page.getByPlaceholder("Confirm your new password").fill("NewPass123");
-      await page.getByRole("button", { name: "Reset Password" }).click();
-      await expect(page.getByText("This link is invalid or has expired")).toBeVisible({
-        timeout: 10000,
-      });
+      await page.getByPlaceholder("Type the new password again").fill("NewPass123");
+      await page.getByRole("button", { name: "Save the new password" }).click();
+
+      await expect(
+        page.getByRole("heading", { name: "This link no longer works" })
+      ).toBeVisible({ timeout: 10000 });
+      // The form is gone, so the dead link cannot be submitted a second time.
+      await expect(page.getByPlaceholder("Create a new password")).toHaveCount(0);
+      await expect(
+        page.getByRole("link", { name: "Request a new link" })
+      ).toHaveAttribute("href", "/forgot-password");
     });
 
-    test("missing token shows an error toast on submit", async ({ page }) => {
+    // Was: "missing token shows an error toast on submit" — two password fields
+    // had to be filled in before the app admitted the link was unusable. It can
+    // tell from the URL alone, so it now says so before anything is typed.
+    test("missing token renders the dead-link screen instead of a form", async ({
+      page,
+    }) => {
       await forceEnglish(page);
       await gotoReset(page, "");
-      await page.getByPlaceholder("Create a new password").fill("NewPass123");
-      await page.getByPlaceholder("Confirm your new password").fill("NewPass123");
-      await page.getByRole("button", { name: "Reset Password" }).click();
-      await expect(page.getByText("This reset link is missing its token.")).toBeVisible({
-        timeout: 10000,
-      });
+      await expect(
+        page.getByRole("heading", { name: "This link no longer works" })
+      ).toBeVisible({ timeout: 10000 });
+      await expect(page.getByPlaceholder("Create a new password")).toHaveCount(0);
+      await expect(
+        page.getByRole("button", { name: "Save the new password" })
+      ).toHaveCount(0);
+      await expect(
+        page.getByRole("link", { name: "Request a new link" })
+      ).toHaveAttribute("href", "/forgot-password");
     });
 
     test("password mismatch shows inline error", async ({ page }) => {
       await forceEnglish(page);
       await gotoReset(page, "token=valid-token");
       await page.getByPlaceholder("Create a new password").fill("NewPass123");
-      await page.getByPlaceholder("Confirm your new password").fill("Different1");
-      await page.getByRole("button", { name: "Reset Password" }).click();
+      await page.getByPlaceholder("Type the new password again").fill("Different1");
+      await page.getByRole("button", { name: "Save the new password" }).click();
       await expect(page.getByText("The two passwords are not the same")).toBeVisible();
     });
   });
@@ -71,21 +93,21 @@ test.describe("Reset Password Page", () => {
       // No forceEnglish — default Indonesian locale, per the SOT copy example.
       await gotoReset(page, "token=valid-token&type=activation");
       await expect(page.getByRole("heading", { name: "Atur kata sandi" })).toBeVisible();
-      await expect(page.getByRole("button", { name: "Simpan kata sandi" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Aktifkan akun" })).toBeVisible();
     });
 
     test("type=activation renders invite copy in English", async ({ page }) => {
       await forceEnglish(page);
       await gotoReset(page, "token=valid-token&type=activation");
       await expect(page.getByRole("heading", { name: "Set Your Password" })).toBeVisible();
-      await expect(page.getByRole("button", { name: "Set Password" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Activate account" })).toBeVisible();
     });
 
     test("unknown type value falls back to reset copy", async ({ page }) => {
       await forceEnglish(page);
       await gotoReset(page, "token=valid-token&type=xyz");
       await expect(page.getByRole("heading", { name: "Reset Password" })).toBeVisible();
-      await expect(page.getByRole("button", { name: "Reset Password" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Save the new password" })).toBeVisible();
     });
   });
 });

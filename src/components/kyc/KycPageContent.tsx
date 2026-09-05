@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, ImagePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -313,12 +313,19 @@ export function KycPageContent() {
 
       {showForm && (
         <form onSubmit={handleSubmit}>
-          <fieldset disabled={formDisabled} className="space-y-4 disabled:opacity-60">
+          {/* TANPA `disabled:opacity-60`. Keadaan PENDING sudah digambar tiap
+              kontrol sendiri (`Input` → bg-muted + text-muted-text, `NativeSelect` →
+              opacity-50, `Button` → opacity-50); menumpuk 60 % fieldset di atas 50 %
+              input menghasilkan 30 % — kartu yang nyaris tak terbaca, dan papan `40`
+              B3-5 menyebutnya "terlalu pudar". Dropzone tidak punya varian disabled
+              bawaan karena ia `<label>`, bukan kontrol form, jadi ia mengambilnya
+              dari input file-nya sendiri — lihat `DocField`. */}
+          <fieldset disabled={formDisabled} className="space-y-4">
             {/* Judul bagian identitas — pasangan judul blok CDD di bawah. Formnya
                 panjang sejak USDX-586, dan dua kelompok bernama membuatnya terbaca
                 sebagai dua pertanyaan, bukan satu borang. */}
             <div>
-              <h2 className="text-sm font-semibold text-foreground">
+              <h2 className="text-base font-semibold text-foreground">
                 {t("kyc.identity.sectionTitle")}
               </h2>
               <p className="mt-1 text-xs text-muted-text">
@@ -331,6 +338,8 @@ export function KycPageContent() {
                 <FieldLabel htmlFor="firstName">{t("kyc.firstName")}</FieldLabel>
                 <Input
                   id="firstName"
+                  autoComplete="given-name"
+                  placeholder={t("kyc.firstNamePh")}
                   value={form.firstName}
                   onChange={(e) => setField("firstName", e.target.value)}
                   aria-invalid={!!errors.firstName}
@@ -342,6 +351,8 @@ export function KycPageContent() {
                 <FieldLabel htmlFor="lastName">{t("kyc.lastName")}</FieldLabel>
                 <Input
                   id="lastName"
+                  autoComplete="family-name"
+                  placeholder={t("kyc.lastNamePh")}
                   value={form.lastName}
                   onChange={(e) => setField("lastName", e.target.value)}
                   aria-invalid={!!errors.lastName}
@@ -382,6 +393,8 @@ export function KycPageContent() {
                 <FieldLabel htmlFor="birthPlace">{t("kyc.birthPlace")}</FieldLabel>
                 <Input
                   id="birthPlace"
+                  autoComplete="off"
+                  placeholder={t("kyc.birthPlacePh")}
                   value={form.birthPlace}
                   onChange={(e) => setField("birthPlace", e.target.value)}
                   aria-invalid={!!errors.birthPlace}
@@ -392,6 +405,7 @@ export function KycPageContent() {
               <KycSelect
                 id="gender"
                 label={t("kyc.gender")}
+                placeholder={t("kyc.genderPh")}
                 value={form.gender}
                 options={IDENTITY_OPTIONS.gender}
                 labelKey={(v) => identityOptionLabelKey("gender", v)}
@@ -401,6 +415,7 @@ export function KycPageContent() {
               <KycSelect
                 id="maritalStatus"
                 label={t("kyc.maritalStatus")}
+                placeholder={t("kyc.maritalStatusPh")}
                 value={form.maritalStatus}
                 options={IDENTITY_OPTIONS.maritalStatus}
                 labelKey={(v) => identityOptionLabelKey("maritalStatus", v)}
@@ -434,6 +449,11 @@ export function KycPageContent() {
               {/* Jenis identitas kini bisa dipilih (Pasal 26 ayat (2)): KTP untuk WNI,
                   paspor untuk WNA. Mengubahnya ikut mengubah label, placeholder, dan
                   aturan panjang nomor identitas di bawah. */}
+              {/* Tanpa `placeholder`, jadi tanpa opsi kosong: nilainya mulai di
+                  `KTP` dan tidak pernah boleh kembali ke "" (papan `40` baris 9 —
+                  "placeholder tidak pernah tampil"). Opsi kosong yang dulu ada bukan
+                  cuma tak terlihat, ia jawaban yang bisa dipilih ulang nasabah dan
+                  tidak akan pernah lolos `isIdentityNumberValid`. */}
               <KycSelect
                 id="identityType"
                 label={t("kyc.identityType")}
@@ -494,6 +514,8 @@ export function KycPageContent() {
               <FieldLabel htmlFor="addressLine1">{t("kyc.address1")}</FieldLabel>
               <Input
                 id="addressLine1"
+                autoComplete="street-address"
+                placeholder={t("kyc.address1Ph")}
                 value={form.addressLine1}
                 onChange={(e) => setField("addressLine1", e.target.value)}
                 aria-invalid={!!errors.addressLine1}
@@ -506,6 +528,8 @@ export function KycPageContent() {
               <FieldLabel htmlFor="addressLine2">{t("kyc.address2")}</FieldLabel>
               <Input
                 id="addressLine2"
+                autoComplete="off"
+                placeholder={t("kyc.address2Ph")}
                 value={form.addressLine2}
                 onChange={(e) => setField("addressLine2", e.target.value)}
               />
@@ -578,6 +602,39 @@ function DocField({
 
   const showPreview = !!doc.previewUrl && !doc.error;
 
+  // Papan `40` menulis teks kartunya "Pilih atau SERET foto". Sampai PR ini kartunya
+  // hanya bisa diklik, jadi kalimat itu menjanjikan gerakan yang tidak ada — dan
+  // menyeret foto ke atasnya membuat browser MENINGGALKAN halaman untuk membuka
+  // berkas itu, dengan form yang sudah diisi ikut hilang. Dua hal itu diperbaiki
+  // sekaligus di sini.
+  //
+  // `inputRef` dipakai untuk satu hal saja: menanyakan apakah <fieldset disabled>
+  // sedang mematikan input file-nya. Label bukan kontrol form, jadi keadaan PENDING
+  // tidak merambat ke sana sendiri — tanpa pengecekan ini, nasabah masih bisa
+  // MELEPAS berkas ke form yang seharusnya mati.
+  //
+  // `matches(":disabled")`, BUKAN `.disabled`. Properti `.disabled` hanya memantulkan
+  // ATRIBUT di elemen itu sendiri, jadi input di dalam <fieldset disabled> tetap
+  // menjawab `false` — diukur di /kyc keadaan PENDING. Pseudo-class CSS `:disabled`
+  // yang ikut mewarisi keadaan fieldset, dan itulah pertanyaan yang sebenarnya
+  // ditanyakan di sini.
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+
+  function isLocked() {
+    return inputRef.current?.matches(":disabled") ?? false;
+  }
+
+  function acceptDrop(e: React.DragEvent<HTMLLabelElement>) {
+    e.preventDefault();
+    setDragging(false);
+    if (isLocked()) return;
+    const file = e.dataTransfer.files?.[0];
+    // `onSelect` yang sama dengan jalur klik: validasi jenis/ukuran dan unggah
+    // presigned hidup di `useKyc`, dan seret-lepas tidak boleh punya aturan sendiri.
+    if (file) onSelect(kind, file);
+  }
+
   return (
     // `relative` is load-bearing (A1): the file input below is `sr-only`, which is
     // absolutely positioned. Without a positioned ancestor its offsetParent falls back
@@ -591,9 +648,22 @@ function DocField({
           teknologi bantu tetap menyasar #ktpFile / #selfieFile. */}
       <label
         htmlFor={`${kind}File`}
+        onDragOver={(e) => {
+          e.preventDefault();
+          if (!isLocked()) setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={acceptDrop}
         className={cn(
-          "flex h-48 w-full cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-border bg-muted/40 transition-control hover:border-primary/70 hover:bg-muted",
+          "flex h-48 w-full cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-border bg-muted/40 transition-control",
+          // `pointer-fine:` — di layar sentuh, satu ketukan meninggalkan kartu ini
+          // dalam keadaan hover sampai nasabah menyentuh tempat lain.
+          "pointer-fine:hover:border-primary/70 pointer-fine:hover:bg-muted",
+          // Varian disabled kartunya sendiri, diambil dari input file di bawahnya —
+          // menggantikan `opacity-60` fieldset yang dulu meredupkan SELURUH form.
+          "[&:has(+input:disabled)]:pointer-events-none [&:has(+input:disabled)]:opacity-50",
           showPreview && "border-solid border-border",
+          dragging && "border-primary bg-muted",
           (docError ?? requiredError) && "border-destructive",
         )}
       >
@@ -618,6 +688,7 @@ function DocField({
         )}
       </label>
       <input
+        ref={inputRef}
         id={`${kind}File`}
         type="file"
         accept="image/jpeg,image/png,image/heic"

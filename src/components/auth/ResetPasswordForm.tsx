@@ -3,7 +3,16 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { Hourglass } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { Field, FieldHelp, FieldLabel } from "@/components/ui/field";
 import {
   InputGroup,
@@ -13,8 +22,8 @@ import {
 } from "@/components/ui/input-group";
 import { LinkInline } from "@/components/ui/link-inline";
 import { PasswordStrength } from "@/components/ui/password-strength";
-import { useAuth } from "@/hooks/useAuth";
 import { useLang } from "@/providers/LanguageProvider";
+import { useAuth } from "@/hooks/useAuth";
 import {
   passwordScore,
   translateValidation,
@@ -45,6 +54,9 @@ export function ResetPasswordForm() {
   const [showPassword, setShowPassword] = useState(false);
   // i18n keys, not sentences — see `lib/validations.ts` (finding D1).
   const [errors, setErrors] = useState<Record<string, string | undefined>>({});
+  // Set when the server rejects the token at submit time. Together with a
+  // missing `?token=` it replaces the form entirely.
+  const [tokenDead, setTokenDead] = useState(false);
 
   const score = passwordScore(password);
   const strengthLabel =
@@ -52,10 +64,6 @@ export function ResetPasswordForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!token) {
-      toast.error(t("auth.reset.missingToken"));
-      return;
-    }
     const newErrors = {
       password: validatePassword(password) ?? undefined,
       confirmPassword: validateConfirmPassword(password, confirmPassword) ?? undefined,
@@ -64,26 +72,62 @@ export function ResetPasswordForm() {
     if (Object.values(newErrors).some(Boolean)) return;
 
     try {
-      await resetPassword({ token, newPassword: password, confirmNewPassword: confirmPassword });
+      await resetPassword({
+        token: token as string,
+        newPassword: password,
+        confirmNewPassword: confirmPassword,
+      });
     } catch (err) {
-      // A dead link is the reason the user needs: without it they re-click the
-      // same expired mail instead of asking for a new one. Our sentence, not the
-      // backend's — B3 bans the raw message, not the explanation.
+      // A dead link replaces the form; it does not toast over a form the user
+      // can still submit. Re-clicking the same expired mail is exactly what the
+      // old toast produced (finding B7).
       if (hasErrorCode(err, "INVALID_TOKEN")) {
-        toast.error(t("auth.reset.invalidToken"));
+        setTokenDead(true);
         return;
       }
       toast.error(getFailureText(t, err, "auth.reset.failed"));
     }
   }
 
+  /*
+   * No token, or the server refused it: the form is not rendered at all. It used
+   * to render in full and stay submittable, so the only way to learn the link
+   * was dead was to fill in two password fields and press the button (B7).
+   */
+  if (!token || tokenDead) {
+    return (
+      <div className="flex flex-col gap-6">
+        <Empty className="gap-4 p-0">
+          <EmptyHeader>
+            <EmptyMedia className="bg-warning/12 text-warning-text">
+              <Hourglass />
+            </EmptyMedia>
+            <EmptyTitle as="h1">{t("auth.reset.deadTitle")}</EmptyTitle>
+            <EmptyDescription>{t("auth.reset.deadBody")}</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button variant="brand" size="lg" asChild>
+              <Link href="/forgot-password">{t("auth.reset.requestNew")}</Link>
+            </Button>
+          </EmptyContent>
+        </Empty>
+
+        <p className="text-center text-sm leading-5">
+          <LinkInline asChild>
+            <Link href="/login">{t("auth.backToLogin")}</Link>
+          </LinkInline>
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1.5">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+        <h1 className="text-2xl leading-8 font-semibold tracking-tight text-foreground">
           {t(`${copy}.title`)}
         </h1>
-        <p className="text-sm text-muted-text">{t(`${copy}.subtitle`)}</p>
+        <p className="text-sm leading-5 text-muted-text">{t(`${copy}.subtitle`)}</p>
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -160,7 +204,7 @@ export function ResetPasswordForm() {
         </Button>
       </form>
 
-      <p className="text-center text-sm text-muted-text">
+      <p className="text-center text-sm leading-5">
         <LinkInline asChild>
           <Link href="/login">{t("auth.backToLogin")}</Link>
         </LinkInline>

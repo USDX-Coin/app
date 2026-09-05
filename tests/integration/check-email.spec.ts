@@ -11,7 +11,7 @@ test.describe("Check Email Page", () => {
       await page.goto("/register/check-email?email=someone%40example.com");
       await clearAuth(page);
       await page.goto("/register/check-email?email=someone%40example.com");
-      await expect(page.getByRole("heading", { name: "Verify Your Email" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
       await expect(page.getByText("someone@example.com")).toBeVisible();
     });
 
@@ -20,7 +20,7 @@ test.describe("Check Email Page", () => {
       await page.goto("/register/check-email?email=someone%40example.com");
       await clearAuth(page);
       await page.goto("/register/check-email?email=someone%40example.com");
-      await page.getByRole("button", { name: "Resend Verification" }).click();
+      await page.getByRole("button", { name: "Resend the link" }).click();
       const cooldownButton = page.getByRole("button", { name: /Resend in \d+s/ });
       await expect(cooldownButton).toBeVisible({ timeout: 10000 });
       await expect(cooldownButton).toBeDisabled();
@@ -33,7 +33,7 @@ test.describe("Check Email Page", () => {
       await page.goto("/register/check-email?email=someone%40example.com");
       await clearAuth(page);
       await page.goto("/register/check-email?email=someone%40example.com");
-      await page.getByRole("button", { name: "Kirim Ulang", exact: true }).click();
+      await page.getByRole("button", { name: "Kirim ulang tautan" }).click();
       // Starts at 60 (one tick of slack for slow CI), then proves the
       // per-second tick by waiting for a strictly lower remaining count.
       await expect(
@@ -46,18 +46,52 @@ test.describe("Check Email Page", () => {
         page.getByRole("button", { name: /Kirim ulang dalam \d+ detik/ })
       ).toBeDisabled();
     });
+
+    // Figma 33 · Cek email, blok E. The three lines used to be missing entirely;
+    // they are the whole answer to "the mail has not arrived", so their absence
+    // is what sent people back to Register to try a second address.
+    test("help box lists what to do when the mail has not arrived", async ({ page }) => {
+      await forceEnglish(page);
+      await page.goto("/register/check-email?email=someone%40example.com");
+      await clearAuth(page);
+      await page.goto("/register/check-email?email=someone%40example.com");
+      await expect(page.getByText("Email has not arrived?")).toBeVisible();
+      await expect(page.getByText("Check the spam or promotions folder.")).toBeVisible();
+      await expect(
+        page.getByText("Wait 1–2 minutes — delivery is sometimes delayed.")
+      ).toBeVisible();
+      await expect(
+        page.getByRole("link", { name: "Register again" })
+      ).toHaveAttribute("href", "/register");
+    });
   });
 
   test.describe("edge cases", () => {
-    test("missing email shows an error toast on resend", async ({ page }) => {
+    // Was: "missing email shows an error toast on resend". The page has no
+    // address to resend to when it is opened without ?email= (direct hit, or a
+    // refresh that dropped the query), so Figma 33 (state "tanpa alamat")
+    // replaced the resend button with the action that CAN work. The old spec
+    // locked in a button whose only outcome was a failure toast; this one
+    // asserts the same situation is still handled, on the screen that replaced it.
+    test("without ?email= the resend button is replaced by Register again", async ({
+      page,
+    }) => {
       await forceEnglish(page);
       await page.goto("/register/check-email");
       await clearAuth(page);
       await page.goto("/register/check-email");
-      await page.getByRole("button", { name: "Resend Verification" }).click();
+
+      await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Resend the link" })).toHaveCount(0);
+      // The address is unknown, so the sentence must not pretend to name one.
       await expect(
-        page.getByText("Missing email address — please register again.")
-      ).toBeVisible({ timeout: 10000 });
+        page.getByText("We sent an activation link to the address you registered")
+      ).toBeVisible();
+
+      const registerAgain = page.getByRole("link", { name: "Register again" });
+      await expect(registerAgain).toBeVisible();
+      await registerAgain.click();
+      await page.waitForURL(/\/register$/, { timeout: 10000 });
     });
   });
 });

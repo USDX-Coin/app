@@ -39,7 +39,10 @@ export function KycCddTopUp({ form, errors, onChange, onSubmit, submitting }: Ky
 
   return (
     <form onSubmit={onSubmit} data-testid="kyc-cdd-topup">
-      <fieldset disabled={submitting} className="flex flex-col gap-4 disabled:opacity-60">
+      {/* Tanpa `disabled:opacity-60` — alasan sama dengan form penuh (papan `40`
+          B3-5): varian disabled tiap kontrol sudah menggambar keadaannya, dan
+          60 % di atas 50 % menghasilkan 30 %. */}
+      <fieldset disabled={submitting} className="flex flex-col gap-4">
         {/* `role="status"` overrides the Alert default `role="alert"`: this notice
             is present from the first paint, and an assertive role would make a
             screen reader interrupt itself on page load over an invitation. */}

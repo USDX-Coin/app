@@ -9,7 +9,7 @@ async function login(page: import("@playwright/test").Page) {
   await clearAuth(page);
   await page.goto("/login");
   await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible({ timeout: 15000 });
-  await page.getByPlaceholder("you@email.com").fill("demo@usdx.com");
+  await page.getByPlaceholder("name@email.com").fill("demo@usdx.com");
   await page.getByPlaceholder("Enter your password").fill("Demo1234");
   await page.getByRole("button", { name: "Login" }).click();
   await expect(page.getByText("You will mint")).toBeVisible({ timeout: 30000 });

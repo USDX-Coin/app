@@ -29,8 +29,12 @@ import { RedeemReview } from "./RedeemReview";
 // background belong to the AmountBox around it, the focus ring stays on the
 // control. The bare `<input outline-none>` it replaces showed no keyboard focus
 // at all (finding E2).
+// Ring fokus sengaja BUKAN di input ini, melainkan di kotak pembungkusnya —
+// kontrol `flex-1` di dalam kotak berisi menggambar persegi kedua yang melayang
+// di tengah yang pertama, dan itu terbaca sebagai cacat render, bukan sebagai
+// fokus. Lihat komentar yang sama di `mint/MintForm.tsx`.
 const AMOUNT_INPUT_CLASS =
-  "h-auto min-w-0 flex-1 rounded-md border-0 bg-transparent px-1 py-0 text-right text-2xl font-semibold tracking-tight md:text-2xl dark:bg-transparent pointer-fine:hover:border-transparent";
+  "h-auto min-w-0 flex-1 rounded-md border-0 bg-transparent px-1 py-0 text-right text-2xl font-semibold tracking-tight shadow-none ring-0 outline-none focus-visible:border-0 focus-visible:ring-0 md:text-2xl dark:bg-transparent pointer-fine:hover:border-transparent";
 
 // One amount row: a currency chip on the left, and either the editable input
 // (when the user denominates in this currency) or the computed counter-value.
@@ -56,7 +60,7 @@ function AmountBox({
   maxLabel?: string;
 }) {
   return (
-    <div className="flex flex-col gap-4 rounded-xl bg-muted p-4">
+    <div className="flex flex-col gap-4 rounded-xl bg-muted p-4 transition-control has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-focus-ring has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-card">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-medium text-muted-text">{label}</p>
         {isInput && onMax && (
@@ -234,7 +238,6 @@ export function RedeemForm() {
           address + live USDX balance. Balance is only read AFTER connect (the
           on-chain read is gated on isConnected) — no global connect button. */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold tracking-tight text-foreground">{t("title.redeem")}</h2>
         {!isWalletConnected ? (
           <Button type="button" variant="outline" onClick={connectWallet}>
             <Wallet />

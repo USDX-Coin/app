@@ -25,11 +25,14 @@ import { MintFormSkeleton } from "@/components/mint/MintFormSkeleton";
 import { useLang } from "@/providers/LanguageProvider";
 
 // The amount is a real `Input`, stripped of its own box because it already sits
-// in one: the border and background belong to the AmountBox, the focus ring
-// stays on the control. (Before this it was a bare `<input>` with `outline-none`
-// — the field showed no keyboard focus at all, finding E2.)
+// in one: the border, the background AND the focus ring all belong to the
+// AmountBox. The ring is deliberately NOT on the input — an `flex-1` control
+// inside a filled box draws a second rectangle floating in the middle of the
+// first, which reads as a rendering fault rather than as focus. The box owns it
+// via `has-[:focus-visible]`, so keyboard focus is still visible (finding E2)
+// but it outlines the thing a person actually perceives as the field.
 const AMOUNT_INPUT_CLASS =
-  "h-auto min-w-0 flex-1 rounded-md border-0 bg-transparent px-1 py-0 text-right text-2xl font-semibold tracking-tight md:text-2xl dark:bg-transparent pointer-fine:hover:border-transparent";
+  "h-auto min-w-0 flex-1 rounded-md border-0 bg-transparent px-1 py-0 text-right text-2xl font-semibold tracking-tight shadow-none ring-0 outline-none focus-visible:border-0 focus-visible:ring-0 md:text-2xl dark:bg-transparent pointer-fine:hover:border-transparent";
 
 // One amount row: a currency chip (logo + ticker) on the left, and either the
 // editable input (when the user denominates in this currency) or the computed
@@ -53,7 +56,7 @@ function AmountBox({
   ariaLabel: string;
 }) {
   return (
-    <div className="flex flex-col gap-4 rounded-xl bg-muted p-4">
+    <div className="flex flex-col gap-4 rounded-xl bg-muted p-4 transition-control has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-focus-ring has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-card">
       <p className="text-sm font-medium text-muted-text">{label}</p>
       <div className="flex items-center justify-between gap-2">
         {chip}
@@ -179,8 +182,6 @@ export function MintForm() {
 
   return (
     <div className="flex w-full max-w-lg flex-col gap-6 rounded-2xl border border-border bg-card p-5">
-      <h2 className="text-lg font-semibold tracking-tight text-foreground">{t("title.mint")}</h2>
-
       <div className="flex flex-col gap-4">
         {/* Amount boxes with center currency swap. Toggling the denomination
             swaps the whole boxes (label + logo + value) top/bottom — the

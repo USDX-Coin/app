@@ -63,9 +63,12 @@ export default function DashboardLayout({
   return (
     <WalletProviders>
       <div className="flex h-screen overflow-hidden bg-background">
-        {/* Desktop sidebar */}
+        {/* Desktop sidebar. `overflow-hidden` di sini jaring pengaman, bukan hiasan:
+            apa pun yang di dalam sidebar melebihi 272 px harus terpotong, tidak pernah
+            menembus ke area konten. Sekali pernah terjadi lewat email panjang pada akun
+            tanpa nama — sidebar melar ke 349 px dan kartu saldo menimpa halaman. */}
         {!desktopHidden && (
-          <aside className="hidden w-68 shrink-0 md:block">
+          <aside className="hidden w-68 shrink-0 overflow-hidden md:block">
             <Sidebar onCollapse={() => setDesktopHidden(true)} />
           </aside>
         )}

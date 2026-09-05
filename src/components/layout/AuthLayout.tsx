@@ -1,8 +1,26 @@
 "use client";
 
 import { ShieldCheck, Globe, Coins } from "lucide-react";
+import { UsdxMark } from "@/components/auth/UsdxMark";
 import { useLang } from "@/providers/LanguageProvider";
 
+/**
+ * Auth shell — Figma 30 A + 30 D.
+ *
+ * Desktop 1280×840: brand panel 576 (45 %) + form panel 704, with a 448 column
+ * centred in it — `max-w-md` inside a centred flex column gives exactly the
+ * 128 px gutters the board draws.
+ *
+ * Mobile 375×812: no brand panel. Gutter 20 (`px-5`, column 335), the coin mark
+ * at y = 24, the column at y = 88, and everything TOP aligned — the desktop
+ * column is vertically centred, the mobile one is not, because Register is
+ * taller than the viewport and a centred short screen next to a scrolling tall
+ * one reads as two different pages.
+ *
+ * `/suspended` (37) is deliberately NOT in this group: Figma drops the brand
+ * panel there, and it lives at `app/suspended` outside the (auth) segment.
+ * `components/auth/SuspendedNotice` carries its own bare shell for that reason.
+ */
 export function AuthLayout({ children }: { children: React.ReactNode }) {
   const { t } = useLang();
 
@@ -22,7 +40,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
         />
 
         <div className="relative">
-          <img src="/image/usdx-wordmark.png" alt="USDX" className="h-11 w-auto" />
+          <UsdxMark tone="brand" size={44} />
         </div>
 
         <div className="relative flex flex-col gap-6">
@@ -48,14 +66,12 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
         <p className="relative text-xs text-white/50">{t("auth.brand.copyright")}</p>
       </div>
 
-      {/* Form panel */}
-      <div className="flex flex-1 items-center justify-center px-6 py-12 lg:px-12">
-        <div className="w-full max-w-md">
-          <div className="mb-8 lg:hidden">
-            <img src="/image/usdx-wordmark.png" alt="USDX" className="h-9 w-auto" />
-          </div>
-          {children}
+      {/* Form panel — gutter 20 and top aligned on mobile, 448 centred on desktop. */}
+      <div className="flex flex-1 flex-col px-5 pt-6 pb-12 lg:items-center lg:justify-center lg:px-12 lg:py-12">
+        <div className="mb-8 lg:hidden">
+          <UsdxMark />
         </div>
+        <div className="w-full max-w-md">{children}</div>
       </div>
     </div>
   );

@@ -18,7 +18,7 @@ test.describe("Login Page", () => {
       await expect(
         page.getByRole("heading", { name: "Welcome back" })
       ).toBeVisible();
-      await expect(page.getByPlaceholder("you@email.com")).toBeVisible();
+      await expect(page.getByPlaceholder("name@email.com")).toBeVisible();
       await expect(page.getByPlaceholder("Enter your password")).toBeVisible();
       await expect(page.getByRole("button", { name: "Login" })).toBeVisible();
     });
@@ -27,7 +27,7 @@ test.describe("Login Page", () => {
       page,
     }) => {
       await gotoLogin(page);
-      await page.getByPlaceholder("you@email.com").fill("demo@usdx.com");
+      await page.getByPlaceholder("name@email.com").fill("demo@usdx.com");
       await page.getByPlaceholder("Enter your password").fill("Demo1234");
       await page.getByRole("button", { name: "Login" }).click();
       await expect(page.getByText("You will mint")).toBeVisible({
@@ -53,7 +53,7 @@ test.describe("Login Page", () => {
   test.describe("negative", () => {
     test("shows error toast for invalid credentials", async ({ page }) => {
       await gotoLogin(page);
-      await page.getByPlaceholder("you@email.com").fill("wrong@email.com");
+      await page.getByPlaceholder("name@email.com").fill("wrong@email.com");
       await page.getByPlaceholder("Enter your password").fill("WrongPass1");
       await page.getByRole("button", { name: "Login" }).click();
       // Login errors surface as a sonner toast (auto-dismisses) — assert promptly.
@@ -73,7 +73,7 @@ test.describe("Login Page", () => {
 
     test("shows validation error for empty password", async ({ page }) => {
       await gotoLogin(page);
-      await page.getByPlaceholder("you@email.com").fill("demo@usdx.com");
+      await page.getByPlaceholder("name@email.com").fill("demo@usdx.com");
       await page.getByRole("button", { name: "Login" }).click();
       await expect(page.getByText("Password is required")).toBeVisible({
         timeout: 10000,
@@ -82,7 +82,13 @@ test.describe("Login Page", () => {
   });
 
   test.describe("negative — unverified account", () => {
-    test("shows verification banner with Forgot password link", async ({ page }) => {
+    // The banner used to say "reset your password via Forgot password" — the
+    // Phase 1 migration path. Figma 31 (state "belum diverifikasi") replaced it:
+    // a self-signup user has no password to reset, so the banner now carries the
+    // action it actually needs, "Resend the link", which re-sends the activation
+    // mail and lands on /register/check-email. Same guarantee as before — the
+    // banner names the situation and offers a way out — asserted on the new one.
+    test("shows verification banner whose action resends the activation link", async ({ page }) => {
       // Register a fresh (unverified) account, then reach /login via client-side
       // nav so the in-memory mock account survives (mock state is per page load).
       await forceEnglish(page);
@@ -93,31 +99,38 @@ test.describe("Login Page", () => {
       await page.getByPlaceholder("Enter your email").fill(email);
       await page.getByPlaceholder("08xx or +62xx").fill(`0812${String(Date.now()).slice(-8)}`);
       await page.getByPlaceholder("Create a password").fill("TestPass1");
-      await page.getByPlaceholder("Confirm your password").fill("TestPass1");
+      await page.getByPlaceholder("Type the password again").fill("TestPass1");
       await page.getByRole("checkbox").check();
-      await page.getByRole("button", { name: "Create Account" }).click();
+      await page.getByRole("button", { name: "Create account" }).click();
       await page.waitForURL(/\/register\/check-email/, { timeout: 10000 });
 
-      await page.getByRole("link", { name: "Back to Login" }).click();
+      await page.getByRole("link", { name: "Back to sign in" }).click();
       await page.waitForURL(/\/login/, { timeout: 10000 });
-      await page.getByPlaceholder("you@email.com").fill(email);
+      await page.getByPlaceholder("name@email.com").fill(email);
       await page.getByPlaceholder("Enter your password").fill("TestPass1");
       await page.getByRole("button", { name: "Login" }).click();
 
       // Sonner's live region is also role=alert — filter to the banner by text.
       const banner = page.getByRole("alert").filter({
-        hasText: "Your account needs verification",
+        hasText: "Email not verified yet",
       });
       await expect(banner).toBeVisible({ timeout: 10000 });
-      const forgotLink = banner.getByRole("link", { name: "Forgot password" });
-      await expect(forgotLink).toHaveAttribute("href", "/forgot-password");
+      // The banner names the address the mail went to, so the user can tell a
+      // typo from a missing mail.
+      await expect(banner).toContainText(email);
+
+      await banner.getByRole("button", { name: "Resend the link" }).click();
+      await page.waitForURL(/\/register\/check-email/, { timeout: 10000 });
+      await expect(
+        page.getByRole("heading", { name: "Check your email" })
+      ).toBeVisible();
     });
   });
 
   test.describe("edge cases", () => {
     test("shows error for email that fails server validation", async ({ page }) => {
       await gotoLogin(page);
-      await page.getByPlaceholder("you@email.com").fill("notregistered@test.com");
+      await page.getByPlaceholder("name@email.com").fill("notregistered@test.com");
       await page.getByPlaceholder("Enter your password").fill("WrongPass1");
       await page.getByRole("button", { name: "Login" }).click();
       await expect(page.getByText("Invalid email or password")).toBeVisible({
@@ -129,7 +142,7 @@ test.describe("Login Page", () => {
       page,
     }) => {
       await gotoLogin(page);
-      await page.getByPlaceholder("you@email.com").fill("demo@usdx.com");
+      await page.getByPlaceholder("name@email.com").fill("demo@usdx.com");
       // 5 wrong attempts trip the mock's per-email limit (week1.md § Login);
       // the 6th returns 429 and the button switches to a ticking countdown.
       for (let attempt = 0; attempt < 5; attempt++) {
@@ -151,7 +164,7 @@ test.describe("Login Page", () => {
       await gotoLogin(page);
       await seedRetryAfter(page, 76451); // daily-limit-scale 429 TOO_MANY_ATTEMPTS
       await page.reload();
-      await page.getByPlaceholder("you@email.com").fill("demo@usdx.com");
+      await page.getByPlaceholder("name@email.com").fill("demo@usdx.com");
       await page.getByPlaceholder("Enter your password").fill("Demo1234");
       await page.getByRole("button", { name: "Login" }).click();
       const cooldownButton = page.getByRole("button", {
@@ -162,14 +175,20 @@ test.describe("Login Page", () => {
       await expect(page.getByText("76451")).not.toBeVisible();
     });
 
-    test("Google and Web3 buttons are disabled", async ({ page }) => {
+    // Was: "Google and Web3 buttons are disabled". Figma 30 C weighed keeping
+    // them behind a "coming soon" badge against removing them and chose removal
+    // (finding F9): two permanently dead controls on the one screen whose job is
+    // to sign you in, and wallet sign-in contradicts the email-first KYC flow
+    // (USDX-153) anyway. The assertion is inverted rather than deleted, so the
+    // buttons cannot creep back in as dead controls without a test failing.
+    test("no dead social sign-in controls below the form", async ({ page }) => {
       await gotoLogin(page);
-      await expect(
-        page.getByRole("button", { name: "Google" })
-      ).toBeDisabled();
-      await expect(
-        page.getByRole("button", { name: "Web3 Wallet" })
-      ).toBeDisabled();
+      await expect(page.getByRole("button", { name: "Google" })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Web3 Wallet" })).toHaveCount(0);
+      await expect(page.getByText("Or continue with")).toHaveCount(0);
+      // Every button left on the screen is live.
+      const disabled = page.locator("button:disabled");
+      await expect(disabled).toHaveCount(0);
     });
   });
 });

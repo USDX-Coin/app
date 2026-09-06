@@ -36,7 +36,16 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
           src="/image/balance-watermark.svg"
           alt=""
           aria-hidden
-          className="pointer-events-none absolute -right-24 -top-10 h-[520px] w-[600px] opacity-10"
+          // Ukuran PROPORSIONAL, bukan piksel tetap. Node Figma menulis "600×520" —
+          // dan itu benar UNTUK panel 576×840 di papan, tempat X menutupi 104 % lebar
+          // panel. Di layar nyata panelnya ~900×1200, jadi angka px yang sama cuma
+          // menutupi 67 % dan monogramnya nyaris hilang. Yang harus dipertahankan
+          // adalah RASIONYA terhadap panel, bukan angkanya.
+          //
+          // `aspect-[600/520]` wajib: SVG-nya ditulis `width="100%" height="100%"`
+          // dengan `preserveAspectRatio="none"`, jadi ia meregang mengikuti kotaknya
+          // dan tanpa tinggi eksplisit ia kolaps (terukur 150 px, bukan 585).
+          className="pointer-events-none absolute -top-10 -right-24 aspect-[600/520] w-[104%] max-w-none opacity-10"
         />
 
         <div className="relative">

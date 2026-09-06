@@ -4,9 +4,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Coins,
-  ArrowDownToLine,
+  Banknote,
   ArrowLeftRight,
-  ArrowUp,
+  Send,
   History,
   Settings,
   ChevronDown,
@@ -48,9 +48,9 @@ interface NavItem {
 // teaser before the click, so nobody lands on ComingSoon expecting a transfer.
 const transactionItems: NavItem[] = [
   { href: "/mint", labelKey: "nav.mint", icon: Coins },
-  { href: "/redeem", labelKey: "nav.redeem", icon: ArrowDownToLine },
+  { href: "/redeem", labelKey: "nav.redeem", icon: Banknote },
   { href: "/bridge", labelKey: "nav.bridge", icon: ArrowLeftRight, comingSoon: true },
-  { href: "/send", labelKey: "nav.send", icon: ArrowUp, comingSoon: true },
+  { href: "/send", labelKey: "nav.send", icon: Send, comingSoon: true },
 ];
 
 // /kyc is intentionally not a nav item (USDX-153): users reach it via the status

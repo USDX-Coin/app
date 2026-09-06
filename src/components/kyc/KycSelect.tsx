@@ -1,7 +1,13 @@
 "use client";
 
 import { Field, FieldHelp, FieldLabel } from "@/components/ui/field";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useLang } from "@/providers/LanguageProvider";
 
 // Satu dropdown form KYC. Sebelum USDX-586 komponen ini hidup sebagai `CddSelect`
@@ -9,14 +15,24 @@ import { useLang } from "@/providers/LanguageProvider";
 // butuh dropdown — supaya identitas dan CDD memakai kontrol yang sama persis,
 // bukan dua salinan className yang bisa melenceng.
 //
-// `<select>` bawaan, bukan Radix Select: `<fieldset disabled>` (keadaan PENDING
-// form ini) merambat ke sana gratis, dan di ponsel nasabah dapat picker OS. Papan
-// Figma `07` menuliskan pengecualian itu hitam di atas putih — lima dropdown app
-// menyatu jadi satu Select (Radix), "untuk form KYC tetap <select> native (shadcn
-// native-select) karena picker OS dan fieldset disabled". Sejak PR 2 kelasnya tidak
-// lagi disalin manual — `ui/native-select.tsx` yang memegang tinggi, radius, dan
-// ring fokusnya (temuan C3). Nilai teknis enum HANYA hidup di `value` option; teks
-// yang terlihat selalu hasil `t(...)`.
+// Radix `ui/select`, BUKAN `<select>` native. Papan `07` sempat memilih native demi
+// `<fieldset disabled>` dan picker OS, tapi keputusan finalnya membalikkan itu:
+// "KycSelect (native <select>) → Select (07) untuk 7 dropdown ≤ 15 opsi;
+// OccupationCombobox tetap Combobox (07b)". Alasannya konsistensi — dropdown bawaan
+// OS tampil sebagai kotak hitam sistem di tengah form, satu-satunya kontrol di app
+// yang tidak mengikuti design system.
+//
+// Papan itu menyebut satu syarat: "keputusan pindah ke Radix Select perlu memastikan
+// disabled merambat (prop disabled dari fieldset tidak otomatis)". Diuji di browser,
+// dan syarat itu ternyata TERPENUHI SENDIRI: trigger Radix adalah `<button>`, dan
+// `<fieldset disabled>` menonaktifkan semua form control di dalamnya secara native.
+// Terukur pada keadaan KYC PENDING — Radix memang tidak menulis atribut `disabled`
+// di trigger, tapi panelnya tetap tidak terbuka saat diklik, dan `:disabled` tetap
+// cocok sehingga gaya pudar ikut berlaku.
+//
+// Prop `disabled` tetap disediakan untuk pemakaian DI LUAR fieldset, bukan sebagai
+// tambalan untuk yang di dalamnya.
+// Nilai teknis enum HANYA hidup di `value`; teks yang terlihat selalu hasil `t(...)`.
 //
 // Untuk daftar panjang (99 pekerjaan Permendagri) `<select>` polos tidak lagi bisa
 // dipakai manusia — itu memakai `OccupationCombobox`, bukan komponen ini.
@@ -41,6 +57,11 @@ export interface KycSelectProps {
    */
   placeholder?: string;
   error?: string;
+  /**
+   * Untuk pemakaian di LUAR `<fieldset disabled>`. Di dalam fieldset tidak perlu:
+   * trigger Radix adalah `<button>`, jadi ia sudah dinonaktifkan native (diuji).
+   */
+  disabled?: boolean;
   onChange: (value: string) => void;
 }
 
@@ -52,6 +73,7 @@ export function KycSelect({
   labelKey,
   placeholder,
   error,
+  disabled,
   onChange,
 }: KycSelectProps) {
   const { t } = useLang();
@@ -59,23 +81,23 @@ export function KycSelect({
   return (
     <Field>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
-      <NativeSelect
-        id={id}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        aria-invalid={!!error}
-        aria-describedby={`${id}-error`}
-        className={value === "" ? "text-muted-text" : undefined}
-      >
-        {placeholder !== undefined && (
-          <NativeSelectOption value="">{placeholder}</NativeSelectOption>
-        )}
-        {options.map((option) => (
-          <NativeSelectOption key={option} value={option} className="text-foreground">
-            {t(labelKey(option))}
-          </NativeSelectOption>
-        ))}
-      </NativeSelect>
+      <Select value={value || undefined} onValueChange={onChange} disabled={disabled}>
+        <SelectTrigger
+          id={id}
+          aria-invalid={!!error}
+          aria-describedby={`${id}-error`}
+          className="w-full"
+        >
+          <SelectValue placeholder={placeholder} />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((option) => (
+            <SelectItem key={option} value={option}>
+              {t(labelKey(option))}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
       <FieldHelp id={id} error={error} />
     </Field>
   );

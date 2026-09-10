@@ -65,15 +65,27 @@ export function useMint() {
   // a flat rupiah amount), so the figures here are the same ones checkout bills.
   // null while the config or the rate is missing — a payment screen shows a real
   // number or none at all.
+  //
+  // The arithmetic mirrors `mint-order.pricing.ts` step for step, because the
+  // whole point of showing a total here is that it equals the invoice:
+  //   1. each component is settled to 2 decimals first (`resolveMintAmounts`
+  //      stores them as 2-dp strings), then
+  //   2. the SUM is floored to whole rupiah (`floorTotalPayIdr`).
+  // Flooring a raw float sum instead drifts by a rupiah whenever a component's
+  // third decimal would have rounded up — the exact surprise this ticket exists
+  // to remove.
   const { mintFeeIdr, vaFeeIdr, totalPayIdr } = useMemo(() => {
     if (config.mintFeePct == null || config.pgFeeVaFlat == null || subtotalIdr <= 0) {
       return { mintFeeIdr: null, vaFeeIdr: null, totalPayIdr: null };
     }
-    const fee = subtotalIdr * (config.mintFeePct / 100);
+    const settle = (value: number) => Number(value.toFixed(2));
+    const subtotal = settle(subtotalIdr);
+    const fee = settle(subtotalIdr * (config.mintFeePct / 100));
+    const va = settle(config.pgFeeVaFlat);
     return {
       mintFeeIdr: fee,
-      vaFeeIdr: config.pgFeeVaFlat,
-      totalPayIdr: subtotalIdr + fee + config.pgFeeVaFlat,
+      vaFeeIdr: va,
+      totalPayIdr: Math.floor(subtotal + fee + va),
     };
   }, [subtotalIdr, config.mintFeePct, config.pgFeeVaFlat]);
 

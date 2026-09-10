@@ -247,6 +247,44 @@ describe("useMint", () => {
         expect(result.current.vaFeeIdr).toBeNull();
         expect(result.current.totalPayIdr).toBeNull();
       });
+
+      // The backend floors total_pay to whole rupiah (`floorTotalPayIdr`,
+      // mint-order.pricing.ts). A USDX-denominated amount almost always produces
+      // a fractional subtotal, so without the same flooring the review would
+      // quote a rupiah more than the VA actually bills.
+      test("a fractional subtotal is floored to whole rupiah, like the invoice", async () => {
+        useMintStore.getState().setAmount("0.123"); // USD side
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+
+        await waitFor(() => expect(result.current.isConfigReady).toBe(true));
+        await waitFor(() => expect(result.current.subtotalIdr).toBeCloseTo(2017.2, 4));
+
+        // 2017.20 subtotal + 20.17 mint fee (1%, settled to 2 dp) + 4000.00 VA
+        // = 6037.37 → floored to 6037.
+        expect(result.current.mintFeeIdr).toBe(20.17);
+        expect(result.current.vaFeeIdr).toBe(4_000);
+        expect(result.current.totalPayIdr).toBe(6_037);
+      });
+
+      test("components settle to 2 dp BEFORE the sum is floored", async () => {
+        // 0.7 USDX × 16,400 = 11,480 exactly; a 0.755% fee lands on 86.674 and
+        // must become 86.67 before the sum, which is what the backend stores.
+        getAppConfigMock.mockResolvedValue(config({ mintFeePct: "0.755" }));
+        useMintStore.getState().setAmount("0.7");
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+
+        await waitFor(() => expect(result.current.mintFeeIdr).toBe(86.67));
+        expect(result.current.totalPayIdr).toBe(15_566); // 11480 + 86.67 + 4000 = 15566.67
+      });
+
+      test("the total is always a whole number of rupiah", async () => {
+        for (const amount of ["0.123", "1.7", "13.31"]) {
+          useMintStore.getState().setAmount(amount);
+          const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+          await waitFor(() => expect(result.current.totalPayIdr).not.toBeNull());
+          expect(Number.isInteger(result.current.totalPayIdr)).toBe(true);
+        }
+      });
     });
   });
 

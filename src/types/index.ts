@@ -199,8 +199,18 @@ export interface AppConfig {
   mintFeePct: string;
   /** Payment-gateway VA fee, flat IDR (fee.yaml `pgFeeVaFlat`, e.g. "4000.00"). */
   pgFeeVaFlat: string;
-  /** USDX token address on `chain`. null when the chain isn't configured backend-side. */
+  /**
+   * USDX token address on `chain`. This ALWAYS means the production token — it
+   * is never swapped for the test one, in any mode. null when the chain isn't
+   * configured backend-side.
+   */
   contractAddress: string | null;
+  /**
+   * Test-mint token address, non-null ONLY while `mintMode === "TEST"`
+   * (USDX-636). OPTIONAL: the field does not exist until that ships, and its
+   * absence must read exactly like `null` — no test-mint strip.
+   */
+  testContractAddress?: string | null;
   /** Chain the address belongs to — "polygon" in Phase 2. */
   chain: string;
   /**

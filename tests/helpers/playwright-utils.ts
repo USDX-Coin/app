@@ -174,14 +174,39 @@ export async function seedWallet(page: import("@playwright/test").Page, address?
  */
 export async function seedWalletState(
   page: import("@playwright/test").Page,
-  state: { chainId?: number; balanceUsdx?: number; gasPol?: number },
+  state: {
+    chainId?: number;
+    balanceUsdx?: number;
+    /** Balance of the test-mint token — the strip in TEST mode (USDX-640). */
+    testBalanceUsdx?: number;
+    gasPol?: number;
+  },
 ) {
   await page.addInitScript((s) => {
     if (s.chainId !== undefined) localStorage.setItem("usdx-mock-wallet-chain", String(s.chainId));
     if (s.balanceUsdx !== undefined)
       localStorage.setItem("usdx-mock-wallet-balance", String(s.balanceUsdx));
+    if (s.testBalanceUsdx !== undefined)
+      localStorage.setItem("usdx-mock-wallet-balance-test", String(s.testBalanceUsdx));
     if (s.gasPol !== undefined) localStorage.setItem("usdx-mock-wallet-gas", String(s.gasPol));
   }, state);
+}
+
+/**
+ * Arm the mock's mint-mode seam (mock-api MINT_MODE_OVERRIDE_KEY, USDX-640) so
+ * `GET /api/v2/config` reports the test bundle the way the back-office switch
+ * will (USDX-636). In TEST the mock also returns `testContractAddress` alongside
+ * the unchanged production `contractAddress` — the strip reads that second field.
+ * Call before the first page.goto().
+ */
+export async function seedMintMode(
+  page: import("@playwright/test").Page,
+  mode: "PROD" | "TEST",
+) {
+  await page.addInitScript((m) => {
+    if (m === "TEST") localStorage.setItem("usdx-mock-mint-mode", "TEST");
+    else localStorage.removeItem("usdx-mock-mint-mode");
+  }, mode);
 }
 
 /**

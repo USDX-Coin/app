@@ -39,12 +39,24 @@ describe("useAppConfig", () => {
       );
     });
 
-    test("reports TEST when the backend says the test bundle is in force", async () => {
-      getAppConfigMock.mockResolvedValue(config({ mintMode: "TEST" }));
+    test("reports TEST and the test token when the test bundle is in force", async () => {
+      getAppConfigMock.mockResolvedValue(
+        config({
+          mintMode: "TEST",
+          testContractAddress: "0x2702000000000000000000000000000000000000",
+        }),
+      );
       const { result } = renderHook(() => useAppConfig(), { wrapper: createWrapper() });
 
       await waitFor(() => expect(result.current.isReady).toBe(true));
       expect(result.current.mintMode).toBe("TEST");
+      expect(result.current.testContractAddress).toBe(
+        "0x2702000000000000000000000000000000000000",
+      );
+      // The production address is untouched by the mode.
+      expect(result.current.contractAddress).toBe(
+        "0x1FF2000000000000000000000000000000000000",
+      );
     });
   });
 
@@ -70,6 +82,16 @@ describe("useAppConfig", () => {
       await waitFor(() => expect(result.current.isReady).toBe(true));
       expect(result.current.config?.mintMode).toBeUndefined();
       expect(result.current.mintMode).toBe("PROD");
+    });
+
+    test("an absent testContractAddress reads exactly like null", async () => {
+      // The field does not exist until USDX-636 ships; "absent" and "null" must
+      // not take different code paths.
+      const { result } = renderHook(() => useAppConfig(), { wrapper: createWrapper() });
+
+      await waitFor(() => expect(result.current.isReady).toBe(true));
+      expect(result.current.config?.testContractAddress).toBeUndefined();
+      expect(result.current.testContractAddress).toBeNull();
     });
 
     test("an unparseable number stays null instead of collapsing to 0", async () => {

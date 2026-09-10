@@ -14,6 +14,10 @@ const en: Dict = {
   "balance.connectWallet": "Connect wallet",
   "balance.loading": "Loading balance…",
   "balance.unavailable": "Balance unavailable",
+  // Test-mint strip (USDX-640). Shown under the balance card while the backend
+  // reports the test bundle; the card above still shows real USDX.
+  "balance.testMode": "Test mode",
+  "balance.testModeNote": "Test token from a test mint — not your USDX.",
   "sidebar.transaction": "Transaction",
   "sidebar.more": "More",
   "sidebar.selectedLanguage": "Selected Language",
@@ -877,6 +881,10 @@ const id: Dict = {
   "balance.connectWallet": "Hubungkan wallet",
   "balance.loading": "Memuat saldo…",
   "balance.unavailable": "Saldo tidak tersedia",
+  // Strip mode uji (USDX-640). Muncul di bawah kartu saldo selama backend
+  // melaporkan bundle uji; kartu di atasnya tetap menampilkan USDX asli.
+  "balance.testMode": "Mode uji",
+  "balance.testModeNote": "Token uji dari mint uji — bukan USDX Anda.",
   "sidebar.transaction": "Transaksi",
   "sidebar.more": "Lainnya",
   "sidebar.selectedLanguage": "Bahasa",

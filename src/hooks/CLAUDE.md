@@ -11,7 +11,7 @@ Significant reusable hooks that orchestrate state, validation, calculations, and
 | `useAppConfig` | — | `useQuery` (`GET /api/v2/config`) | Runtime config: mint minimum (IDR), fee rates, token address, mint mode. Numbers are `null` — never a guessed default — until it loads (USDX-635/638) |
 | `useMintHandoffReset` | `mintStore` | — | Wipes the mint form + Ringkasan when /mint comes back from the cross-origin checkout handoff (bfcache restore or fresh load) |
 | `useRedeem` | `redeemStore` | `useMutation` (createRedeem) | Redeem form logic, validation |
-| `useWalletBalance` | — | on-chain `balanceOf` (wagmi) | Real USDX balance of the connected wallet — the app's only balance surface API (USDX-396) |
+| `useWalletBalance` | — | on-chain `balanceOf` (wagmi) | Real USDX balance of the connected wallet — the app's only balance surface API (USDX-396). Token address comes from `useAppConfig`, env only as fallback; in `mintMode: TEST` the main balance **stays** the production token and the test token is reported separately as `testBalance` (USDX-640) |
 | `useTransactions` | — | `useQuery` (transactions) | Transaction history list |
 | `useChainSelector` | — | — | Chain search/filter state |
 

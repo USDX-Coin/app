@@ -302,6 +302,39 @@ export function Sidebar({
           </Button>
         </div>
 
+        {/* Test-mint strip (USDX-640). Only while the backend reports the test
+            bundle in force, and only as a SEPARATE row: the card above keeps
+            reading the production token in every mode, because swapping it
+            globally would show someone holding real USDX a balance of 0. This
+            strip exists so a test mint is visibly received during the recorded
+            demo — its number is a different token, and it says so. */}
+        {balance.testBalance && (
+          <div
+            className="flex flex-col gap-1 rounded-xl border border-warning/40 bg-warning/10 p-3"
+            data-slot="test-mint-balance"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="rounded-full bg-warning/20 px-2 py-0.5 text-xs font-medium text-warning-text">
+                {t("balance.testMode")}
+              </span>
+              <span className="truncate text-sm font-medium tracking-tight text-sidebar-foreground">
+                {balance.testBalance.balanceUsdx != null
+                  ? formatAmount(balance.testBalance.balanceUsdx)
+                  : "—"}
+              </span>
+            </div>
+            <p className="text-xs text-sidebar-muted">
+              {balance.testBalance.state === "ready"
+                ? t("balance.testModeNote")
+                : balance.testBalance.state === "disconnected"
+                  ? t("balance.connectPrompt")
+                  : balance.testBalance.state === "loading"
+                    ? t("balance.loading")
+                    : t("balance.unavailable")}
+            </p>
+          </div>
+        )}
+
         <NavGroup
           label={t("sidebar.transaction")}
           items={transactionItems}

@@ -34,8 +34,10 @@ export interface AppConfigRead {
   mintFeePct: number | null;
   /** Flat VA fee in IDR (`pgFeeVaFlat`). */
   pgFeeVaFlat: number | null;
-  /** USDX token address for `chain`, or null when the backend has none. */
+  /** Production USDX token address for `chain`, or null when the backend has none. */
   contractAddress: string | null;
+  /** Test-mint token address — non-null only in TEST mode, absent before USDX-636. */
+  testContractAddress: string | null;
   /**
    * Which mint bundle is in force. Absent in the response → "PROD": the field
    * only exists from USDX-636 onwards, and an unknown mode must never read as
@@ -69,6 +71,7 @@ export function useAppConfig(): AppConfigRead {
     mintFeePct,
     pgFeeVaFlat,
     contractAddress: config?.contractAddress ?? null,
+    testContractAddress: config?.testContractAddress ?? null,
     mintMode: config?.mintMode === "TEST" ? "TEST" : "PROD",
     isReady: minMintIdr != null && mintFeePct != null && pgFeeVaFlat != null,
     isLoading: query.isLoading,

@@ -524,17 +524,35 @@ export async function mockGetConsumerRate(): Promise<ConsumerRate> {
 // would return for Polygon; offline it only has to be a well-formed address, and
 // it deliberately matches nothing real so a mock balance read stays empty.
 const MOCK_CONTRACT_ADDRESS = "0x1FF2000000000000000000000000000000000000";
+// The test-bundle token (USDX-636 ships the real one), returned as
+// `testContractAddress` alongside the unchanged production `contractAddress`.
+const MOCK_TEST_CONTRACT_ADDRESS = "0x2702000000000000000000000000000000000000";
+// E2E seam (mock-only): arm to "TEST" to make the mock backend report the test
+// mint bundle, the way the back-office switch will (USDX-636). Nothing else in
+// the app can reach that state offline.
+const MINT_MODE_OVERRIDE_KEY = "usdx-mock-mint-mode";
+
+function mockMintMode(): "PROD" | "TEST" {
+  if (typeof localStorage === "undefined") return "PROD";
+  return localStorage.getItem(MINT_MODE_OVERRIDE_KEY) === "TEST" ? "TEST" : "PROD";
+}
 
 export async function mockGetAppConfig(): Promise<AppConfig> {
   await delay(120);
+  const mode = mockMintMode();
+  // In PROD `mintMode` and `testContractAddress` are left off entirely: neither
+  // field exists until USDX-636 ships, and the app must behave as PROD when the
+  // backend doesn't send them. `contractAddress` is the production token in both
+  // modes — it is never swapped.
   return {
     minMintIdr: idr(MOCK_MIN_MINT_IDR),
     mintFeePct: String(MOCK_MINT_FEE_PCT),
     pgFeeVaFlat: idr(MOCK_PG_FEE_VA),
     contractAddress: MOCK_CONTRACT_ADDRESS,
     chain: "polygon",
-    // `mintMode` is deliberately absent here: it only exists once USDX-636 ships,
-    // and the app must behave as PROD when the backend doesn't send it.
+    ...(mode === "TEST"
+      ? { mintMode: "TEST" as const, testContractAddress: MOCK_TEST_CONTRACT_ADDRESS }
+      : {}),
   };
 }
 

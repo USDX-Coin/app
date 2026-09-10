@@ -1,5 +1,4 @@
 import {
-  MIN_MINT_AMOUNT,
   MAX_MINT_AMOUNT,
   MIN_REDEEM_AMOUNT,
   MAX_REDEEM_AMOUNT,
@@ -57,9 +56,33 @@ export function passwordScore(password: string): number {
   return PASSWORD_RULES.filter((rule) => rule(password)).length;
 }
 
+/**
+ * The two bounds a mint amount is judged against. They are deliberately in
+ * DIFFERENT units, because the two rules are about different things:
+ *
+ *   minIdr / subtotalIdr — "is this purchase big enough to be worth a VA?" That
+ *     question is about rupiah, and the answer comes from the back office
+ *     (`minMintIdr`, GET /api/v2/config). Comparing it in USDX is the bug this
+ *     replaced: the same 10-USDX floor meant Rp 176.182 at one day's rate, so a
+ *     user typing Rp 20.000 was told the minimum was "10 USDX".
+ *   amountUsdx — the ceiling is a token-supply guard, so it stays in USDX.
+ *
+ * Both converted values are supplied by the caller (it already holds the rate);
+ * this function does no conversion of its own.
+ */
+export interface MintAmountBounds {
+  /** Minimum mint value in IDR, from GET /api/v2/config. */
+  minIdr: number;
+  /** The entered amount as its IDR subtotal — what the minimum is judged on. */
+  subtotalIdr: number;
+  /** The entered amount as USDX — what MAX_MINT_AMOUNT is judged on. */
+  amountUsdx: number;
+}
+
 export function validateAmount(
   amount: string,
-  type: "mint" | "redeem"
+  type: "mint" | "redeem",
+  bounds?: MintAmountBounds
 ): string | null {
   if (!amount || amount.trim() === "") return "validation.amount.required";
   const cleaned = amount.replace(/,/g, "");
@@ -67,13 +90,20 @@ export function validateAmount(
   if (isNaN(num)) return "validation.amount.invalid";
   if (num <= 0) return "validation.amount.positive";
 
-  const min = type === "mint" ? MIN_MINT_AMOUNT : MIN_REDEEM_AMOUNT;
-  const max = type === "mint" ? MAX_MINT_AMOUNT : MAX_REDEEM_AMOUNT;
-
   // Mint and redeem get their own keys because the bound is part of the
   // message; one key with a caller-supplied number would let the two drift.
-  if (num < min) return type === "mint" ? "validation.amount.minMint" : "validation.amount.minRedeem";
-  if (num > max) return type === "mint" ? "validation.amount.maxMint" : "validation.amount.maxRedeem";
+  if (type === "mint") {
+    // No bounds means the config hasn't loaded. Shape is still checked (the
+    // three rules above), but no limit is invented — the caller keeps the Mint
+    // button disabled until the real numbers arrive (USDX-638).
+    if (!bounds) return null;
+    if (bounds.subtotalIdr < bounds.minIdr) return "validation.amount.minMint";
+    if (bounds.amountUsdx > MAX_MINT_AMOUNT) return "validation.amount.maxMint";
+    return null;
+  }
+
+  if (num < MIN_REDEEM_AMOUNT) return "validation.amount.minRedeem";
+  if (num > MAX_REDEEM_AMOUNT) return "validation.amount.maxRedeem";
   return null;
 }
 
@@ -141,9 +171,11 @@ export function validateBankAccountName(value: string): string | null {
 // come from `constants.ts` and copying them into two language files is how the
 // copy and the rule drift apart. `formatAmount` is the same formatter the amount
 // on screen uses, so the limit in the error reads like the figure above it.
+// `validation.amount.minMint` is absent on purpose: its number is the rupiah
+// minimum from GET /api/v2/config, which only the caller has. It passes it as
+// `vars` below.
 const VALIDATION_VARS: Record<string, Record<string, string>> = {
   "validation.password.minLength": { min: String(PASSWORD_MIN_LENGTH) },
-  "validation.amount.minMint": { amount: formatAmount(MIN_MINT_AMOUNT) },
   "validation.amount.maxMint": { amount: formatAmount(MAX_MINT_AMOUNT) },
   "validation.amount.minRedeem": { amount: formatAmount(MIN_REDEEM_AMOUNT) },
   "validation.amount.maxRedeem": { amount: formatAmount(MAX_REDEEM_AMOUNT) },
@@ -152,11 +184,17 @@ const VALIDATION_VARS: Record<string, Record<string, string>> = {
 /**
  * Turn a validator's key into the sentence the user reads. Pass the `t` from
  * `useLang()`; a null key stays null so `{error && …}` keeps working.
+ *
+ * `vars` is for the numbers that DON'T live in `constants.ts` — the runtime ones
+ * from GET /api/v2/config. They win over the static table so a bound the backend
+ * owns can never be overwritten by a stale constant.
  */
 export function translateValidation(
   t: (key: string, vars?: Record<string, string>) => string,
-  key: string | null | undefined
+  key: string | null | undefined,
+  vars?: Record<string, string>
 ): string | null {
   if (!key) return null;
-  return t(key, VALIDATION_VARS[key]);
+  const merged = { ...VALIDATION_VARS[key], ...vars };
+  return t(key, Object.keys(merged).length > 0 ? merged : undefined);
 }

@@ -96,8 +96,13 @@ export function MintForm() {
     destinationAddress,
     setDestinationAddress,
     amountError,
+    amountErrorVars,
     addressError,
     isFormValid,
+    isConfigReady,
+    isConfigLoading,
+    isConfigFetching,
+    refetchConfig,
     selectedChain,
     // Ringkasan visibility is store state, not component state: the
     // post-handoff reset has to be able to close it from outside React.
@@ -121,7 +126,9 @@ export function MintForm() {
 
   // The hooks hand back i18n keys (validations.ts returns keys, not sentences —
   // finding D1); the sentence is made here, where the language is known.
-  const amountErrorText = translateValidation(t, amountError);
+  // The mint minimum is a rupiah figure from GET /api/v2/config, so the number
+  // in the message travels with the error rather than living in the dictionary.
+  const amountErrorText = translateValidation(t, amountError, amountErrorVars);
   const addressErrorText = translateValidation(t, addressError);
 
   // Which currency the amount is denominated in. The denominated box is the
@@ -305,6 +312,32 @@ export function MintForm() {
           <FieldHelp id="mint-address" error={addressErrorText} />
         </Field>
       </div>
+
+      {/* The minimum and the fees are backend-owned (USDX-635/638). Until they
+          land there is no honest amount to validate against and no fee to show,
+          so Mint is off and says why — rather than falling back to a guessed
+          bound that would silently reject a perfectly valid Rp 20.000. */}
+      {!isConfigReady && (
+        <Alert
+          tone={isConfigLoading ? "info" : "danger"}
+          shape="strip"
+          action={
+            isConfigLoading ? undefined : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refetchConfig()}
+                loading={isConfigFetching}
+                loadingLabel={t("common.processing")}
+              >
+                {t("common.retry")}
+              </Button>
+            )
+          }
+        >
+          {isConfigLoading ? t("mint.configLoading") : t("mint.configError")}
+        </Alert>
+      )}
 
       {/* Non-VERIFIED stays clickable so the KYC gate dialog can explain why
           the action is locked (USDX-153); form validation only gates VERIFIED. */}

@@ -46,6 +46,9 @@ export function MintReview({ open, onOpenChange }: MintReviewProps) {
     destinationAddress,
     amountUsdx,
     subtotalIdr,
+    mintFeeIdr,
+    vaFeeIdr,
+    totalPayIdr,
     effectiveBuyRate,
     submitMint,
     isSubmitting,
@@ -93,11 +96,22 @@ export function MintReview({ open, onOpenChange }: MintReviewProps) {
             </Row>
           </div>
 
+          {/* What the user is about to be billed, itemised (USDX-638). This block
+              used to print the SUBTOTAL under the label "Total Pembayaran" and
+              then a sentence saying a fee would be added later — so on a Rp 20.000
+              purchase the Rp 4.000 VA fee, a fifth of the order, first appeared
+              on the next origin. The rates are the backend's (`mintFeePct`,
+              `pgFeeVaFlat`), so this total is the one checkout bills. */}
           <div className="flex flex-col gap-1 border-t border-border pt-3">
-            <div className="flex items-center justify-between">
+            <Row label={t("sum.mintValue")}>{formatIDR(subtotalIdr)}</Row>
+            <Row label={t("sum.mintFee")}>
+              {mintFeeIdr == null ? "—" : formatIDR(mintFeeIdr)}
+            </Row>
+            <Row label={t("sum.vaFee")}>{vaFeeIdr == null ? "—" : formatIDR(vaFeeIdr)}</Row>
+            <div className="mt-2 flex items-center justify-between border-t border-border pt-2">
               <span className="text-sm font-medium text-foreground">{t("sum.totalPayment")}</span>
               <span className="text-sm font-semibold text-foreground">
-                ≈ {formatIDR(subtotalIdr)}
+                {totalPayIdr == null ? "—" : `≈ ${formatIDR(totalPayIdr)}`}
               </span>
             </div>
             <p className="text-xs text-muted-text">{t("sum.feeNote")}</p>

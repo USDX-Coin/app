@@ -8,8 +8,9 @@ Shared utilities, validation rules, constants, chain config, and mock API layer.
 |------|---------|
 | `utils.ts` | `cn()`, `formatAmount()`, `formatUSD()`, `truncateAddress()`, `parseAmount()` |
 | `validations.ts` | All form validators — return an i18n key or `null`; `translateValidation(t, key)` renders it |
-| `constants.ts` | Exchange rate (1:1), min/max amounts, fee (0.7%), brand color |
+| `constants.ts` | Exchange rate (1:1), redeem min/max, mint ceiling, brand color. The mint MINIMUM is not here — it comes from `GET /api/v2/config` (USDX-638) |
 | `chains.ts` | 8 supported chains with id, name, icon, contract address |
+| `api/config-api.ts` | `getAppConfig()` → `GET /api/v2/config` — mint minimum (IDR), fee rates, token address, mint mode |
 | `api/mock-api.ts` | Mock backend — login, register, transactions, mint/redeem orders |
 | `api/types.ts` | Request DTOs: `LoginRequest`, `RegisterRequest`, `CreateMintRequest`, `CreateRedeemRequest` |
 
@@ -30,11 +31,17 @@ const { t } = useLang();
 ```
 
 `translateValidation` also supplies the numbers a message carries (password minimum,
-mint/redeem bounds) from `constants.ts`, so a limit is never copied into the dictionary.
+redeem bounds, mint ceiling) from `constants.ts`, so a limit is never copied into the
+dictionary. Runtime bounds — the ones the backend owns — are passed as its third
+argument instead and win over the static table.
 
 Validators: `validateEmail`, `validatePassword`, `validateAmount`, `validateAddress`, `validateConfirmPassword`, `validateFullName`, `validatePhone`, `validateBankAccountNumber`, `validateBankAccountName`. `passwordScore` reports how many password rules are met, for `ui/password-strength.tsx`.
 
-Amount validation accepts `"mint" | "redeem"` type parameter for different min/max bounds.
+Amount validation accepts a `"mint" | "redeem"` type. Mint additionally takes a
+`MintAmountBounds` third argument, because its two limits are in different units: the
+minimum is a RUPIAH figure from `GET /api/v2/config` judged on the order subtotal, the
+ceiling stays USDX. Without that argument the shape is still checked but **no limit is
+invented** — the caller disables the action until the config lands (USDX-638).
 
 Address validation auto-detects EVM (starts with `0x`, 42 chars) vs Solana (base58, 32-44 chars).
 
@@ -56,7 +63,7 @@ To wire a new real endpoint: add a function to the relevant `*-api.ts` that bran
 ## Constants
 
 - `EXCHANGE_RATE = 1` (1 USDX = 1 USD)
-- `MIN_MINT_AMOUNT = 10`, `MAX_MINT_AMOUNT = 1,000,000`
+- `MAX_MINT_AMOUNT = 1,000,000` (the mint minimum is runtime config, not a constant)
 - `MINTING_FEE_PERCENT = 0.007` (0.7%)
 
 ## Adding a New Chain

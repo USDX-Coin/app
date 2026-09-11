@@ -177,6 +177,12 @@ describe("useRedeem — custodial source", () => {
       });
       await waitFor(() => expect(result.current.createErrorKey).toBe("redeem.errWalletNotActive"));
       expect(useRedeemStore.getState().pinOpen).toBe(false);
+      // "tampilkan status wallet, jangan tawarkan retry" (wallet.yaml § 409): the
+      // status word is supplied and the confirm button is blocked.
+      expect(result.current.walletBlocked).toBe(true);
+      expect(result.current.createErrorStatusKey).toBe("wallet.statusInactive");
+      // The stale profile copy is re-read so the message can follow reality.
+      await waitFor(() => expect(getWalletMock.mock.calls.length).toBeGreaterThanOrEqual(2));
     });
 
     test("TOO_MANY_ATTEMPTS → PIN cooldown from Retry-After", async () => {

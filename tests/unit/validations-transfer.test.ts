@@ -28,6 +28,16 @@ describe("validateTransferAddress", () => {
       expect(validateTransferAddress("", OWN)).toBe("validation.address.required");
     });
   });
+
+  describe("edge cases", () => {
+    test("uppercase hex is a valid EVM address", () => {
+      expect(validateTransferAddress("0x" + "AB".repeat(20), OWN)).toBeNull();
+    });
+
+    test("without a known own address the self-transfer rule cannot fire", () => {
+      expect(validateTransferAddress(OWN, undefined)).toBeNull();
+    });
+  });
 });
 
 describe("validateTransferAmount", () => {

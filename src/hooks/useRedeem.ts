@@ -14,6 +14,7 @@ import { useRedeemStore } from "@/stores/redeemStore";
 import { useConsumerRate } from "@/hooks/useConsumerRate";
 import { useCustodialWallet } from "@/hooks/useCustodialWallet";
 import { useCooldown, DEFAULT_COOLDOWN_SECONDS } from "@/hooks/useCooldown";
+import { walletStatusKey } from "@/hooks/useTransfer";
 import { useRedeemPreconditions } from "@/lib/redeem/wallet";
 import { useRedeemBurn } from "@/hooks/useRedeemBurn";
 import { createRedeemOrder } from "@/lib/api/redeem-api";
@@ -210,12 +211,19 @@ export function useRedeem() {
       if (isTooManyAttempts(error)) {
         pinCooldown.start(getRateLimitSeconds(error) || DEFAULT_COOLDOWN_SECONDS);
       }
+      // Backend says the wallet is not ACTIVE while the profile copy said it was →
+      // the copy is stale; refetch so the message + the disabled button follow reality.
+      if (isWalletNotActive(error)) custodial.invalidate();
       // Non-PIN failures show in the Ringkasan: close the PIN dialog so they are seen.
       if (!isInvalidPin(error) && !isPinNotSet(error) && !isTooManyAttempts(error)) {
         store.setPinOpen(false);
       }
     },
   });
+
+  // 409 WALLET_NOT_ACTIVE: "tampilkan status wallet, jangan tawarkan retry"
+  // (wallet.yaml § 409) — the status does not change by pressing again.
+  const walletBlocked = isWalletNotActive(createMutation.error);
 
   function toggleCurrency() {
     store.setAmountCurrency(store.amountCurrency === "USD" ? "IDR" : "USD");
@@ -329,6 +337,9 @@ export function useRedeem() {
     submitRedeem,
     isCreating: createMutation.isPending,
     createErrorKey: redeemErrorKey(createMutation.error),
+    // `{status}` for redeem.errWalletNotActive — an i18n key the component translates.
+    createErrorStatusKey: walletBlocked ? walletStatusKey(custodial.status) : null,
+    walletBlocked,
     resetCreateError: createMutation.reset,
   };
 }

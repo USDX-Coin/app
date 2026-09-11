@@ -65,8 +65,12 @@ export interface TransferError {
   vars?: Record<string, string>;
 }
 
-function walletStatusKey(status: CustodialWalletStatus | null): string {
-  return status === "SUSPENDED" ? "transfer.errWalletSuspended" : "transfer.errWalletProvisioning";
+// Kata status untuk pesan 409 WALLET_NOT_ACTIVE. Salinan profil bisa basi (backend
+// menolak padahal profil masih ACTIVE) → "belum aktif", sambil status di-refetch.
+export function walletStatusKey(status: CustodialWalletStatus | null): string {
+  if (status === "SUSPENDED") return "wallet.statusSuspended";
+  if (status === "PROVISIONING") return "wallet.statusProvisioning";
+  return "wallet.statusInactive";
 }
 
 // Pemetaan error create → kunci i18n + lokasi tampil. Diekspor untuk diuji tanpa
@@ -171,6 +175,9 @@ export function useTransfer(t: (key: string, vars?: Record<string, string>) => s
       if (isTooManyAttempts(error)) {
         pinCooldown.start(getRateLimitSeconds(error) || DEFAULT_COOLDOWN_SECONDS);
       }
+      // Backend menolak karena statusnya bukan ACTIVE → salinan di profil basi;
+      // tarik status sebenarnya supaya pesan dan tombol mengikuti keadaan nyata.
+      if (isWalletNotActive(error)) wallet.invalidate();
       if (isIdempotencyKeyReused(error)) {
         // Bug FE menurut kontrak: key tidak dibuat ulang saat body berubah.
         console.error("[transfer] IDEMPOTENCY_KEY_REUSED — key dibuang", error);

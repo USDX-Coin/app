@@ -307,7 +307,7 @@ const en: Dict = {
   "redeem.pinDescription": "Burn {amount} USDX from my custodial wallet",
   "redeem.statusAwaitingBurnCustodialDesc": "The system is processing the burn — nothing to do on your side.",
   "redeem.custodialBurnProcessing": "Processing burn from your custodial wallet — waiting for on-chain confirmation.",
-  "redeem.errWalletNotActive": "Your custodial wallet can't burn right now — it is still being set up or has been suspended. No order was created.",
+  "redeem.errWalletNotActive": "Your custodial wallet can't burn right now ({status}). No order was created.",
   // redeem — precondition gate (network / balance / gas), USDX-259
   "redeem.wrongNetwork": "Switch your wallet to Polygon to continue.",
   "redeem.switchNetwork": "Switch to Polygon",
@@ -343,6 +343,13 @@ const en: Dict = {
   "pin.errInvalid": "Wrong PIN. Please try again.",
   "pin.errNotSet": "Your account has no PIN yet. Set a PIN before using your custodial wallet.",
   "pin.errLocked": "Too many wrong attempts. Try again in {time}.",
+  // Custodial wallet status words, spliced into 409 WALLET_NOT_ACTIVE messages on
+  // transfer and redeem (wallet.yaml: "FE tampilkan status wallet, jangan tawarkan
+  // retry"). `statusInactive` is the fallback when the backend says not-active but
+  // the profile copy still reads ACTIVE (stale) — refetched in the background.
+  "wallet.statusProvisioning": "still being set up",
+  "wallet.statusSuspended": "suspended",
+  "wallet.statusInactive": "not active",
   // transfer custodial — errors (wallet.yaml, USDX-567). One sentence per code:
   // the contract promises specific answers (limit, rate limit, blacklist,
   // wallet status) and a generic failure would hide the one thing the user can
@@ -353,8 +360,6 @@ const en: Dict = {
   "transfer.errLimitPerTx": "This transfer exceeds the per-transaction limit of {limit} USDX.",
   "transfer.errLimitDaily": "This transfer exceeds today's limit of {limit} USDX — {remaining} USDX left until {resetAt}.",
   "transfer.errWalletNotActive": "Your custodial wallet can't send right now ({status}). No transfer was made.",
-  "transfer.errWalletProvisioning": "still being set up",
-  "transfer.errWalletSuspended": "suspended",
   "transfer.errNoWallet": "You don't have a custodial wallet yet.",
   "transfer.errServiceUnavailable": "The wallet service is temporarily unavailable. Nothing was sent — try again in a moment.",
   "transfer.errInProgress": "This transfer is still being processed. Wait a moment, then press Send again — it won't be sent twice.",
@@ -1234,7 +1239,7 @@ const id: Dict = {
   "redeem.pinDescription": "Bakar {amount} USDX dari wallet custodial saya",
   "redeem.statusAwaitingBurnCustodialDesc": "Sistem sedang memproses burn — tidak ada yang perlu Anda lakukan.",
   "redeem.custodialBurnProcessing": "Memproses burn dari wallet custodial Anda — menunggu konfirmasi on-chain.",
-  "redeem.errWalletNotActive": "Wallet custodial Anda belum bisa burn saat ini — masih disiapkan atau ditangguhkan. Tidak ada pesanan yang dibuat.",
+  "redeem.errWalletNotActive": "Wallet custodial Anda belum bisa burn saat ini ({status}). Tidak ada pesanan yang dibuat.",
   // redeem — precondition gate (jaringan / saldo / gas), USDX-259
   "redeem.wrongNetwork": "Alihkan wallet Anda ke Polygon untuk melanjutkan.",
   "redeem.switchNetwork": "Alihkan ke Polygon",
@@ -1270,6 +1275,13 @@ const id: Dict = {
   "pin.errInvalid": "PIN salah. Coba lagi.",
   "pin.errNotSet": "Akun Anda belum punya PIN. Buat PIN dulu sebelum memakai wallet custodial.",
   "pin.errLocked": "Terlalu banyak percobaan salah. Coba lagi dalam {time}.",
+  // Kata status wallet custodial, disisipkan ke pesan 409 WALLET_NOT_ACTIVE di
+  // transfer dan redeem (wallet.yaml: "FE tampilkan status wallet, jangan tawarkan
+  // retry"). `statusInactive` = fallback saat backend bilang tidak aktif tapi
+  // salinan profil masih ACTIVE (basi) — di-refetch di latar.
+  "wallet.statusProvisioning": "masih disiapkan",
+  "wallet.statusSuspended": "ditangguhkan",
+  "wallet.statusInactive": "belum aktif",
   // transfer custodial — error (wallet.yaml, USDX-567). Satu kalimat per kode:
   // kontraknya menjanjikan jawaban spesifik (plafon, rate limit, blacklist,
   // status wallet) dan pesan generik menyembunyikan satu-satunya hal yang bisa
@@ -1280,8 +1292,6 @@ const id: Dict = {
   "transfer.errLimitPerTx": "Transfer ini melebihi batas per transaksi {limit} USDX.",
   "transfer.errLimitDaily": "Transfer ini melebihi batas harian {limit} USDX — sisa {remaining} USDX sampai {resetAt}.",
   "transfer.errWalletNotActive": "Wallet custodial Anda belum bisa mengirim saat ini ({status}). Tidak ada transfer yang dibuat.",
-  "transfer.errWalletProvisioning": "masih disiapkan",
-  "transfer.errWalletSuspended": "ditangguhkan",
   "transfer.errNoWallet": "Anda belum punya wallet custodial.",
   "transfer.errServiceUnavailable": "Layanan wallet sedang tidak tersedia. Tidak ada yang terkirim — coba lagi sebentar.",
   "transfer.errInProgress": "Transfer ini masih diproses. Tunggu sebentar, lalu tekan Kirim lagi — tidak akan terkirim dua kali.",

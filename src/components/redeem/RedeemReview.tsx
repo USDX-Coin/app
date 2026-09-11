@@ -61,6 +61,8 @@ export function RedeemReview({ open, onOpenChange }: RedeemReviewProps) {
     submitRedeem,
     isCreating,
     createErrorKey,
+    createErrorStatusKey,
+    walletBlocked,
     isCustodialSource,
     pinOpen,
     setPinOpen,
@@ -177,7 +179,14 @@ export function RedeemReview({ open, onOpenChange }: RedeemReviewProps) {
             <Alert tone="warning">{t("redeem.lowGas")}</Alert>
           )}
 
-          {createErrorKey && <Alert tone="danger">{t(createErrorKey)}</Alert>}
+          {createErrorKey && (
+            <Alert tone="danger" data-testid="redeem-create-error">
+              {t(
+                createErrorKey,
+                createErrorStatusKey ? { status: t(createErrorStatusKey) } : undefined,
+              )}
+            </Alert>
+          )}
         </DialogBody>
 
         <DialogFooter>
@@ -195,7 +204,8 @@ export function RedeemReview({ open, onOpenChange }: RedeemReviewProps) {
             size="lg"
             className="flex-1"
             onClick={handleConfirm}
-            disabled={!canBurn}
+            // WALLET_NOT_ACTIVE: no retry — the status does not change by pressing again.
+            disabled={!canBurn || walletBlocked}
             loading={isCreating}
             loadingLabel={t("common.processing")}
           >

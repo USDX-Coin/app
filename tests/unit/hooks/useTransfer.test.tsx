@@ -178,7 +178,7 @@ describe("useTransfer", () => {
           await result.current.submitWithPin("123456");
         });
         await waitFor(() => expect(result.current.formErrorKey).toBe("transfer.errWalletNotActive"));
-        expect(result.current.formErrorVars).toEqual({ status: "transfer.errWalletProvisioning" });
+        expect(result.current.formErrorVars).toEqual({ status: "wallet.statusInactive" });
         expect(result.current.walletBlocked).toBe(true);
         expect(useTransferStore.getState().pinOpen).toBe(false); // message shows in the summary
       });
@@ -277,18 +277,49 @@ describe("useTransfer", () => {
   });
 
   describe("mapTransferError", () => {
-    test("RATE_LIMITED is left to the global toast (null)", () => {
-      expect(mapTransferError(new ApiError(429, "RATE_LIMITED", "x"), t, "ACTIVE")).toBeNull();
+    describe("positive", () => {
+      test("every contract code lands on its own sentence and location", () => {
+        expect(mapTransferError(new ApiError(401, "INVALID_PIN", "x"), t, "ACTIVE")).toEqual({ where: "pin", key: "pin.errInvalid" });
+        expect(mapTransferError(new ApiError(422, "RECIPIENT_BLACKLISTED", "x"), t, "ACTIVE")?.key).toBe("transfer.errBlacklisted");
+        expect(mapTransferError(new ApiError(422, "INSUFFICIENT_BALANCE", "x"), t, "ACTIVE")?.key).toBe("transfer.errInsufficient");
+        expect(mapTransferError(new ApiError(503, "WALLET_SERVICE_UNAVAILABLE", "x"), t, "ACTIVE")?.key).toBe("transfer.errServiceUnavailable");
+        expect(mapTransferError(new ApiError(403, "KYC_NOT_VERIFIED", "x"), t, "ACTIVE")?.key).toBe("transfer.errGate");
+      });
+
+      test("SUSPENDED / PROVISIONING wallets are named by status", () => {
+        expect(mapTransferError(new ApiError(409, "WALLET_NOT_ACTIVE", "x"), t, "SUSPENDED")?.vars).toEqual({
+          status: "wallet.statusSuspended",
+        });
+        expect(mapTransferError(new ApiError(409, "WALLET_NOT_ACTIVE", "x"), t, "PROVISIONING")?.vars).toEqual({
+          status: "wallet.statusProvisioning",
+        });
+      });
     });
 
-    test("network failure → error.offline; 5xx → error.server", () => {
-      expect(mapTransferError(new TypeError("Failed to fetch"), t, "ACTIVE")?.key).toBe("error.offline");
-      expect(mapTransferError(new ApiError(500, "INTERNAL", "x"), t, "ACTIVE")?.key).toBe("error.server");
+    describe("negative", () => {
+      test("RATE_LIMITED is left to the global toast (null)", () => {
+        expect(mapTransferError(new ApiError(429, "RATE_LIMITED", "x"), t, "ACTIVE")).toBeNull();
+      });
+
+      test("network failure → error.offline; 5xx → error.server", () => {
+        expect(mapTransferError(new TypeError("Failed to fetch"), t, "ACTIVE")?.key).toBe("error.offline");
+        expect(mapTransferError(new ApiError(500, "INTERNAL", "x"), t, "ACTIVE")?.key).toBe("error.server");
+      });
     });
 
-    test("SUSPENDED wallet is named as suspended", () => {
-      expect(mapTransferError(new ApiError(409, "WALLET_NOT_ACTIVE", "x"), t, "SUSPENDED")?.vars).toEqual({
-        status: "transfer.errWalletSuspended",
+    describe("edge cases", () => {
+      test("a stale ACTIVE profile copy still gets a status word, not an empty bracket", () => {
+        expect(mapTransferError(new ApiError(409, "WALLET_NOT_ACTIVE", "x"), t, "ACTIVE")?.vars).toEqual({
+          status: "wallet.statusInactive",
+        });
+      });
+
+      test("TRANSFER_LIMIT_EXCEEDED with malformed details still names a limit, not undefined", () => {
+        expect(mapTransferError(new ApiError(422, "TRANSFER_LIMIT_EXCEEDED", "x"), t, "ACTIVE")).toEqual({
+          where: "form",
+          key: "transfer.errLimitPerTx",
+          vars: { limit: "—" },
+        });
       });
     });
   });

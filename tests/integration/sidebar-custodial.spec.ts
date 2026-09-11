@@ -24,4 +24,32 @@ test.describe("Sidebar — custodial owner", () => {
       await expect(sidebar.getByRole("link", { name: "Bridge Coming Soon" })).toBeVisible();
     });
   });
+
+  test.describe("negative", () => {
+    test("without a custodial wallet the Send pill stays", async ({ page }) => {
+      await forceEnglish(page);
+      await loginViaStorage(page);
+      await page.setViewportSize({ width: 1280, height: 720 });
+      await page.goto("/mint");
+      await expect(page.getByText("You will mint")).toBeVisible({ timeout: 15000 });
+      await expect(page.locator("aside").getByRole("link", { name: "Send Coming Soon" })).toBeVisible();
+    });
+  });
+
+  test.describe("edge cases", () => {
+    test("the Send link of a custodial owner lands on the transfer form, not ComingSoon", async ({
+      page,
+    }) => {
+      await forceEnglish(page);
+      await seedCustodialWallet(page);
+      await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
+      await page.setViewportSize({ width: 1280, height: 720 });
+      await page.goto("/mint");
+      await expect(page.getByText("You will mint")).toBeVisible({ timeout: 15000 });
+      await page.locator("aside").getByRole("link", { name: "Send", exact: true }).click();
+      await expect(page).toHaveURL(/\/send$/);
+      await expect(page.getByText("You will send")).toBeVisible({ timeout: 15000 });
+      await expect(page.getByRole("main").getByText("Coming soon", { exact: true })).toHaveCount(0);
+    });
+  });
 });

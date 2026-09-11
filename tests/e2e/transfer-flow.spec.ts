@@ -3,6 +3,7 @@ import {
   loginViaStorage,
   forceEnglish,
   seedCustodialWallet,
+  seedRateLimit,
   MOCK_CUSTODIAL_WALLET_SUMMARY,
   MOCK_PIN,
 } from "../helpers/playwright-utils";
@@ -106,6 +107,23 @@ test.describe("Transfer Flow (custodial)", () => {
         "exceeds the per-transaction limit of 10 USDX",
         { timeout: 15000 },
       );
+      await expect(page.getByTestId("transfer-result")).toHaveCount(0);
+    });
+
+    test("429 RATE_LIMITED → the throttle toast, and the PIN dialog stays for a same-key retry", async ({
+      page,
+    }) => {
+      await forceEnglish(page);
+      await seedCustodialWallet(page);
+      await seedRateLimit(page, 3); // every mint/redeem/transfer call → 429 RATE_LIMITED
+      await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
+      const pin = await openPinDialog(page);
+      await pin.getByLabel("6-digit PIN").fill(MOCK_PIN);
+      await pin.getByRole("button", { name: "Send", exact: true }).click();
+      await expect(page.getByText("Too many requests, please try again shortly.")).toBeVisible({
+        timeout: 15000,
+      });
+      await expect(pin).toBeVisible();
       await expect(page.getByTestId("transfer-result")).toHaveCount(0);
     });
 

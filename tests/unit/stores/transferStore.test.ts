@@ -66,6 +66,23 @@ describe("transferStore", () => {
       expect(useTransferStore.getState().idempotencyKey).toBe(key);
     });
 
+    test("the intent (to, amount, key) survives a reload via sessionStorage — nothing else does", () => {
+      const s = useTransferStore.getState();
+      s.setTo("0xA");
+      s.setAmount("10");
+      s.setReviewOpen(true);
+      const key = s.ensureIdempotencyKey();
+      const raw = JSON.parse(sessionStorage.getItem("usdx-transfer-intent") ?? "{}");
+      expect(raw.state).toEqual({ to: "0xA", amount: "10", idempotencyKey: key });
+      // A finished intent leaves no key behind for the next one to pick up.
+      useTransferStore.getState().setResult({
+        txHash: "0x" + "ab".repeat(32), from: "0xF", to: "0xA", amount: "10", amountWei: "10000000",
+        chain: "polygon", submittedAt: "2026-08-28T04:20:11.000Z",
+      });
+      const after = JSON.parse(sessionStorage.getItem("usdx-transfer-intent") ?? "{}");
+      expect(after.state.idempotencyKey).toBeNull();
+    });
+
     test("reset returns to the empty form", () => {
       const s = useTransferStore.getState();
       s.setTo("0xA");

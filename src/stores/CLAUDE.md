@@ -9,7 +9,7 @@ Client-side state stores using Zustand 5.
 | `authStore` | Yes (localStorage `usdx-auth`) | `user`, `token`, `isAuthenticated` |
 | `mintStore` | No | `chainId`, `amount`, `amountCurrency`, `destinationAddress`, `destinationSource` (`custodial` \| `manual`, USDX-567), `reviewOpen`, `handoffPending` |
 | `redeemStore` | No | `step`, `source` (`custodial` \| `external`, USDX-567), `pinOpen`, `amount`, `amountCurrency`, `bankCode`, `bankAccountNumber`, `bankAccountName`, `orderId`, `burnState`, `burnErrorKey` |
-| `transferStore` | No | `step` (`form` \| `done`), `to`, `amount`, `reviewOpen`, `pinOpen`, `idempotencyKey`, `result` (USDX-567) |
+| `transferStore` | Partly (sessionStorage `usdx-transfer-intent`: `to`, `amount`, `idempotencyKey` only) | `step` (`form` \| `done`), `to`, `amount`, `reviewOpen`, `pinOpen`, `idempotencyKey`, `result` (USDX-567) |
 
 ## Pattern
 
@@ -49,6 +49,9 @@ explicitly by `hooks/useMintHandoffReset`, keyed on `handoffPending`.
   contract: minted once per INTENT by `ensureIdempotencyKey()`, reused by every retry,
   and dropped by `setTo`/`setAmount` (a new intent) or `setResult` (intent finished).
   `clearIdempotencyKey()` exists only for `409 IDEMPOTENCY_KEY_REUSED` (an FE bug).
+  The intent is persisted to **sessionStorage** so a reload mid-request (the
+  "connection lost after broadcast" case the key exists for) reuses the same key
+  instead of minting a new one for the same destination + amount.
 - `mintStore.destinationSource` / `redeemStore.source` default to `custodial`; the hooks
   ignore that for users without an ACTIVE custodial wallet, so non-custodial behaviour is
   unchanged.

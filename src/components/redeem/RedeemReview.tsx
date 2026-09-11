@@ -147,6 +147,15 @@ export function RedeemReview({ open, onOpenChange }: RedeemReviewProps) {
             {isCustodialSource ? t("redeem.custodialNote") : t("redeem.burnNote")}
           </Alert>
 
+          {/* Custodial + no PIN on the account: nothing can be approved on this
+              path (redeem.yaml 401 PIN_NOT_SET). The app has no set-PIN screen
+              yet — say so and do not open a dialog that must fail. */}
+          {isCustodialSource && pinNotSet && (
+            <Alert tone="warning" data-testid="redeem-pin-not-set">
+              {t("pin.errNotSet")}
+            </Alert>
+          )}
+
           {/* Precondition gate (week3.md § Precondition connect-wallet, USDX-259):
               wrong network blocks with a switch prompt; insufficient USDX blocks;
               low POL is a non-blocking warning. On the custodial source the hook
@@ -205,7 +214,7 @@ export function RedeemReview({ open, onOpenChange }: RedeemReviewProps) {
             className="flex-1"
             onClick={handleConfirm}
             // WALLET_NOT_ACTIVE: no retry — the status does not change by pressing again.
-            disabled={!canBurn || walletBlocked}
+            disabled={!canBurn || walletBlocked || (isCustodialSource && pinNotSet)}
             loading={isCreating}
             loadingLabel={t("common.processing")}
           >

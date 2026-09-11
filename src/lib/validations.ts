@@ -179,17 +179,29 @@ export function validateTransferAmount(
   balanceUsdx: number | null | undefined
 ): string | null {
   if (!amount || amount.trim() === "") return "validation.amount.required";
-  const cleaned = amount.replace(/,/g, "").trim();
-  if (!/^[0-9]*\.?[0-9]*$/.test(cleaned) || cleaned === "." || cleaned === "") {
-    return "validation.amount.invalid";
-  }
+  const cleaned = normalizeTransferAmount(amount);
+  if (!/^[0-9]+(\.[0-9]+)?$/.test(cleaned)) return "validation.amount.invalid";
   const num = parseFloat(cleaned);
-  if (isNaN(num)) return "validation.amount.invalid";
   if (num <= 0) return "validation.amount.positive";
   const decimals = cleaned.split(".")[1]?.length ?? 0;
   if (decimals > 6) return "validation.amount.decimals";
   if (balanceUsdx != null && num > balanceUsdx) return "validation.amount.insufficient";
   return null;
+}
+
+// Bentuk yang DIKIRIM ke `POST /api/v2/wallet/transfer` (wallet.yaml: desimal
+// positif, maks 6 desimal — backend memvalidasi `^(0|[1-9][0-9]*)(\.[0-9]{1,6})?$`).
+// Yang boleh diketik user lebih longgar daripada yang boleh dikirim: "25." saat
+// masih mengetik, "007" dari keypad, "1,000" dengan pemisah ribuan. Dinormalkan
+// di sini — bukan lewat `String(parseFloat())`, yang bisa mengeluarkan notasi
+// eksponen untuk pecahan kecil dan membulatkan diam-diam.
+export function normalizeTransferAmount(amount: string): string {
+  let s = amount.replace(/,/g, "").trim();
+  if (s.endsWith(".")) s = s.slice(0, -1);
+  if (s.startsWith(".")) s = "0" + s;
+  s = s.replace(/^0+(?=[0-9])/, "");
+  if (s.includes(".")) s = s.replace(/0+$/, "").replace(/\.$/, "");
+  return s;
 }
 
 // Redeem destination bank account (USDX-243). Number is digits-only (6–20);

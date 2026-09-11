@@ -41,8 +41,8 @@ const AMOUNT_INPUT_CLASS =
   "h-auto min-w-0 flex-1 rounded-md border-0 bg-transparent px-1 py-0 text-right text-2xl font-semibold tracking-tight shadow-none ring-0 outline-none focus-visible:border-0 focus-visible:ring-0 md:text-2xl dark:bg-transparent pointer-fine:hover:border-transparent";
 
 export function TransferForm() {
-  const { t } = useLang();
-  const transfer = useTransfer(t);
+  const { t, lang } = useLang();
+  const transfer = useTransfer(t, lang);
   const {
     step,
     result,

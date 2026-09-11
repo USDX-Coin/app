@@ -1,5 +1,9 @@
 import { describe, test, expect } from "vitest";
-import { validateTransferAddress, validateTransferAmount } from "@/lib/validations";
+import {
+  validateTransferAddress,
+  validateTransferAmount,
+  normalizeTransferAmount,
+} from "@/lib/validations";
 
 const OWN = "0x000000C528aE908fB929a0898B65e913623c9aFf";
 const OTHER = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed";
@@ -75,6 +79,38 @@ describe("validateTransferAmount", () => {
     test("a lone dot is invalid, a trailing dot is fine while typing", () => {
       expect(validateTransferAmount(".", 100)).toBe("validation.amount.invalid");
       expect(validateTransferAmount("25.", 100)).toBeNull();
+    });
+  });
+});
+
+// What is SENT must match the backend regex `^(0|[1-9][0-9]*)(\.[0-9]{1,6})?$`
+// even when what was TYPED is looser.
+describe("normalizeTransferAmount", () => {
+  describe("positive", () => {
+    test("leaves a contract-shaped amount alone", () => {
+      expect(normalizeTransferAmount("25")).toBe("25");
+      expect(normalizeTransferAmount("0.000001")).toBe("0.000001");
+    });
+  });
+
+  describe("negative", () => {
+    test("strips what the backend would reject: trailing dot, leading zeros, separators", () => {
+      expect(normalizeTransferAmount("25.")).toBe("25");
+      expect(normalizeTransferAmount("007.50")).toBe("7.5");
+      expect(normalizeTransferAmount("1,000")).toBe("1000");
+      expect(normalizeTransferAmount(".5")).toBe("0.5");
+    });
+  });
+
+  describe("edge cases", () => {
+    test("does not round or switch to exponent notation", () => {
+      expect(normalizeTransferAmount("0.000001")).toBe("0.000001");
+      expect(normalizeTransferAmount("123456789.123456")).toBe("123456789.123456");
+    });
+
+    test("zero stays zero", () => {
+      expect(normalizeTransferAmount("0.000")).toBe("0");
+      expect(normalizeTransferAmount("000")).toBe("0");
     });
   });
 });

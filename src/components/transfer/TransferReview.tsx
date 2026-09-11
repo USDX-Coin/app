@@ -51,6 +51,7 @@ export function TransferReview({ transfer }: TransferReviewProps) {
     formErrorKey,
     formErrorVars,
     walletBlocked,
+    pinNotSet,
   } = transfer;
 
   return (
@@ -80,6 +81,16 @@ export function TransferReview({ transfer }: TransferReviewProps) {
 
           <Alert tone="warning">{t("transfer.note")}</Alert>
 
+          {/* Akun tanpa PIN tidak bisa menyetujui apa pun di jalur ini (wallet.yaml
+              401 PIN_NOT_SET → arahkan membuat PIN). Aplikasi belum punya layar
+              set-PIN, jadi yang bisa dilakukan: katakan, dan jangan buka dialog
+              PIN yang pasti gagal. */}
+          {pinNotSet && (
+            <Alert tone="warning" data-testid="transfer-pin-not-set">
+              {t("pin.errNotSet")}
+            </Alert>
+          )}
+
           {formErrorKey && (
             <Alert tone="danger" data-testid="transfer-error">
               {t(formErrorKey, formErrorVars)}
@@ -104,7 +115,7 @@ export function TransferReview({ transfer }: TransferReviewProps) {
             size="lg"
             className="flex-1"
             onClick={openPin}
-            disabled={walletBlocked}
+            disabled={walletBlocked || pinNotSet}
             loading={isSubmitting}
             loadingLabel={t("common.processing")}
           >

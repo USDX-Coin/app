@@ -106,7 +106,7 @@ describe("useTransfer", () => {
         useAuthStore.setState({ user: { ...USER, custodialWallet: null } });
         fillValidForm();
         const { result } = renderHook(() => useTransfer(t), { wrapper: createWrapper() });
-        expect(result.current.hasWallet).toBe(false);
+        expect(result.current.isWalletActive).toBe(false);
         expect(result.current.isFormValid).toBe(false);
       });
     });
@@ -199,6 +199,8 @@ describe("useTransfer", () => {
         });
         await waitFor(() => expect(result.current.formErrorKey).toBe("transfer.errLimitDaily"));
         expect(result.current.formErrorVars).toMatchObject({ limit: "5,000", remaining: "120" });
+        // resetAt is rendered with the app's locale + date, not the browser default.
+        expect(result.current.formErrorVars?.resetAt).toMatch(/2026/);
       });
 
       test("TOO_MANY_ATTEMPTS → PIN cooldown runs from Retry-After", async () => {
@@ -256,6 +258,33 @@ describe("useTransfer", () => {
         expect(useTransferStore.getState().idempotencyKey).toBeNull();
         expect(spy).toHaveBeenCalled();
         spy.mockRestore();
+      });
+
+      test("the amount is sent in the contract's shape (\"25.\" → \"25\", \"007.50\" → \"7.5\")", async () => {
+        useTransferStore.getState().setTo(TO);
+        useTransferStore.getState().setAmount("007.50");
+        const { result } = await renderReady();
+        await act(async () => {
+          await result.current.submitWithPin("123456");
+        });
+        expect(transferMock.mock.calls[0][0].amount).toBe("7.5");
+      });
+
+      test("RATE_LIMITED (global toast) leaves the PIN dialog open for a same-key retry", async () => {
+        fillValidForm();
+        transferMock.mockRejectedValueOnce(new ApiError(429, "RATE_LIMITED", "x", undefined, 1));
+        const { result } = await renderReady();
+        act(() => result.current.openPin());
+        await act(async () => {
+          await result.current.submitWithPin("123456");
+        });
+        expect(useTransferStore.getState().pinOpen).toBe(true);
+        expect(result.current.formErrorKey).toBeNull();
+        const firstKey = transferMock.mock.calls[0][1];
+        await act(async () => {
+          await result.current.submitWithPin("123456");
+        });
+        expect(transferMock.mock.calls[1][1]).toBe(firstKey);
       });
 
       test("changing the amount after a failure starts a new intent (new key)", async () => {
@@ -317,8 +346,7 @@ describe("useTransfer", () => {
       test("TRANSFER_LIMIT_EXCEEDED with malformed details still names a limit, not undefined", () => {
         expect(mapTransferError(new ApiError(422, "TRANSFER_LIMIT_EXCEEDED", "x"), t, "ACTIVE")).toEqual({
           where: "form",
-          key: "transfer.errLimitPerTx",
-          vars: { limit: "—" },
+          key: "transfer.errLimitGeneric",
         });
       });
     });

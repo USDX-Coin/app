@@ -29,8 +29,12 @@ import { useTransferStore } from "@/stores/transferStore";
 import { useCustodialWallet } from "@/hooks/useCustodialWallet";
 import { useCooldown, DEFAULT_COOLDOWN_SECONDS } from "@/hooks/useCooldown";
 import { transferCustodial } from "@/lib/api/wallet-api";
-import { validateTransferAddress, validateTransferAmount } from "@/lib/validations";
-import { parseAmount, formatAmount } from "@/lib/utils";
+import {
+  validateTransferAddress,
+  validateTransferAmount,
+  normalizeTransferAmount,
+} from "@/lib/validations";
+import { parseAmount, formatAmount, formatDateTime } from "@/lib/utils";
 import {
   isApiError,
   isValidationError,
@@ -79,6 +83,7 @@ export function mapTransferError(
   error: unknown,
   t: (key: string, vars?: Record<string, string>) => string,
   walletStatus: CustodialWalletStatus | null,
+  lang: "id" | "en" = "id",
 ): TransferError | null {
   if (!error) return null;
   if (isRateLimited(error)) return null;
@@ -104,11 +109,12 @@ export function mapTransferError(
         vars: {
           limit: formatAmount(Number(d.limit)),
           remaining: formatAmount(Number(d.remaining)),
-          resetAt: d.resetAt ? new Date(d.resetAt).toLocaleTimeString() : "—",
+          resetAt: d.resetAt ? formatDateTime(d.resetAt, lang) : "—",
         },
       };
     }
-    return { where: "form", key: "transfer.errLimitPerTx", vars: { limit: "—" } };
+    // `details` tidak berbentuk seperti kontrak → kalimat netral, bukan menebak jenisnya.
+    return { where: "form", key: "transfer.errLimitGeneric" };
   }
   if (isRecipientBlacklisted(error)) return { where: "form", key: "transfer.errBlacklisted" };
   if (isInsufficientBalance(error)) return { where: "form", key: "transfer.errInsufficient" };
@@ -125,7 +131,10 @@ export function mapTransferError(
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-export function useTransfer(t: (key: string, vars?: Record<string, string>) => string) {
+export function useTransfer(
+  t: (key: string, vars?: Record<string, string>) => string,
+  lang: "id" | "en" = "id",
+) {
   const store = useTransferStore();
   const wallet = useCustodialWallet();
   const pinCooldown = useCooldown();
@@ -148,7 +157,9 @@ export function useTransfer(t: (key: string, vars?: Record<string, string>) => s
   const mutation = useMutation({
     mutationFn: async (pin: string) => {
       const key = store.ensureIdempotencyKey();
-      const body = { to: store.to.trim(), amount: store.amount.trim(), pin };
+      // Jumlah dinormalkan ke bentuk kontrak ("25." → "25", "007" → "7"): yang
+      // lolos validator FE tidak boleh ditolak 422 oleh regex backend.
+      const body = { to: store.to.trim(), amount: normalizeTransferAmount(store.amount), pin };
       // Retry IN_PROGRESS dengan key yang SAMA. Yang pertama bisa saja sudah
       // ter-broadcast — key baru = transfer kedua, persis yang kontrak cegah.
       for (let attempt = 0; ; attempt++) {
@@ -183,15 +194,17 @@ export function useTransfer(t: (key: string, vars?: Record<string, string>) => s
         console.error("[transfer] IDEMPOTENCY_KEY_REUSED — key dibuang", error);
         store.clearIdempotencyKey();
       }
-      const mapped = mapTransferError(error, t, wallet.status);
+      const mapped = mapTransferError(error, t, wallet.status, lang);
       // Error non-PIN tampil di Ringkasan: tutup dialog PIN supaya pesannya terlihat.
-      if (mapped?.where !== "pin") store.setPinOpen(false);
+      // `null` (RATE_LIMITED → toast global) membiarkan dialog apa adanya: user
+      // cukup menekan kirim lagi setelah throttle lewat, dengan key yang sama.
+      if (mapped && mapped.where !== "pin") store.setPinOpen(false);
     },
   });
 
   const error = useMemo(
-    () => mapTransferError(mutation.error, t, wallet.status),
-    [mutation.error, t, wallet.status],
+    () => mapTransferError(mutation.error, t, wallet.status, lang),
+    [mutation.error, t, wallet.status, lang],
   );
 
   const setMaxAmount = useCallback(() => {
@@ -205,15 +218,11 @@ export function useTransfer(t: (key: string, vars?: Record<string, string>) => s
 
   return {
     // wallet
-    hasWallet: wallet.hasWallet,
     walletAddress: wallet.address,
     walletStatus: wallet.status,
     isWalletActive: wallet.isActive,
-    isWalletLoading: wallet.isLoading,
     balanceUsdx: wallet.balanceUsdx,
     balanceState: wallet.balanceState,
-    refetchWallet: wallet.refetch,
-    pinSet: wallet.pinSet,
     // form
     to: store.to,
     setTo: store.setTo,
@@ -244,14 +253,11 @@ export function useTransfer(t: (key: string, vars?: Record<string, string>) => s
     // submit
     submitWithPin: (pin: string) => mutation.mutateAsync(pin).catch(() => undefined),
     isSubmitting: mutation.isPending,
-    idempotencyKey: store.idempotencyKey,
-    // errors
-    error, // { where, key, vars } | null
+    // errors — PIN-related stay in the PIN dialog, the rest go to the Ringkasan
     formErrorKey: error?.where === "form" ? error.key : null,
     formErrorVars: error?.where === "form" ? error.vars : undefined,
     pinErrorKey: error?.where === "pin" && error.key !== "pin.errLocked" ? error.key : null,
     pinNotSet: pinNotSet || wallet.pinSet === false,
     pinCooldownSeconds: pinCooldown.remaining,
-    resetError: mutation.reset,
   };
 }

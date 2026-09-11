@@ -7,12 +7,13 @@ components/
   ui/          # Design system. OURS — hand-written wrappers, meant to be edited.
   animate-ui/  # Animate UI primitives (motion + Radix). Registry files, edit sparingly.
   layout/      # App layout: AuthLayout, Sidebar, Logo, ThemeToggle
-  shared/      # Cross-feature: PageHeader, ComingSoonPage, RouteErrorState
+  shared/      # Cross-feature: PageHeader, ComingSoonPage, RouteErrorState, PinConfirmDialog (USDX-567)
   auth/        # Login, Register, Forgot/Reset password, CheckEmail, VerifyEmail
   kyc/         # KYC form: identity + CDD blocks, document dropzones
   mint/        # Mint flow: MintForm, MintReview, ChainSelector
-  redeem/      # Redeem flow: RedeemForm, RedeemReview, RedeemStatus (tracker), BankSelect, BankAccountPicker + AddBankAccountModal (bank book, USDX-261)
-  transactions/ profile/ bridge/ send/ system/
+  redeem/      # Redeem flow: RedeemForm, RedeemReview, RedeemStatus (tracker), BankSelect, BankAccountPicker + AddBankAccountModal (bank book, USDX-261). Custodial source switch + PIN dialog in the review (USDX-567)
+  transfer/    # Custodial transfer (USDX-567): TransferPageContent (custodial owner → form, else ComingSoon), TransferForm, TransferReview, TransferResult
+  transactions/ profile/ system/
 ```
 
 ## Conventions
@@ -66,3 +67,18 @@ components/
 
 - Mobile: < `lg` (1024px) — sidebar collapses to Sheet, review panel stacks below form
 - Desktop: >= `lg` — sidebar visible, review panel side-by-side with form
+
+## Custodial money paths (USDX-567)
+
+- **PinConfirmDialog** (`shared/`) is the single approval step for the custodial
+  transfer and the custodial redeem — after it there is no wallet signature screen. It
+  does not call an API: the caller sends the PIN inside the transfer/redeem body and maps
+  `401 INVALID_PIN` / `PIN_NOT_SET` / `429 TOO_MANY_ATTEMPTS` into `errorKey` /
+  `pinNotSet` / `cooldownSeconds`. Non-PIN failures close the dialog and show in the
+  Ringkasan next to the figures.
+- `mint/MintForm` shows a destination switch (custodial default · another address) only
+  when `useMint().custodialAvailable`; `MintReview` marks the recipient "wallet custodial
+  saya" by a byte-identical address match — there is no flag on the order.
+- `redeem/RedeemStatus` hides `BurnGate` for `order.burnMode === "CUSTODIAL"` and shows
+  the "sistem sedang memproses burn" strip instead; `useRedeemBurn.runBurn` refuses such
+  an order too, so the resume-from-history path cannot trigger a wallet either.

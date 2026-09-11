@@ -7,8 +7,9 @@ Client-side state stores using Zustand 5.
 | Store | Persisted | State |
 |-------|-----------|-------|
 | `authStore` | Yes (localStorage `usdx-auth`) | `user`, `token`, `isAuthenticated` |
-| `mintStore` | No | `chainId`, `amount`, `amountCurrency`, `destinationAddress`, `reviewOpen`, `handoffPending` |
-| `redeemStore` | No | `step`, `amount`, `amountCurrency`, `bankCode`, `bankAccountNumber`, `bankAccountName`, `orderId`, `burnState`, `burnErrorKey` |
+| `mintStore` | No | `chainId`, `amount`, `amountCurrency`, `destinationAddress`, `destinationSource` (`custodial` \| `manual`, USDX-567), `reviewOpen`, `handoffPending` |
+| `redeemStore` | No | `step`, `source` (`custodial` \| `external`, USDX-567), `pinOpen`, `amount`, `amountCurrency`, `bankCode`, `bankAccountNumber`, `bankAccountName`, `orderId`, `burnState`, `burnErrorKey` |
+| `transferStore` | No | `step` (`form` \| `done`), `to`, `amount`, `reviewOpen`, `pinOpen`, `idempotencyKey`, `result` (USDX-567) |
 
 ## Pattern
 
@@ -43,7 +44,16 @@ explicitly by `hooks/useMintHandoffReset`, keyed on `handoffPending`.
   and marks the page as "wipe me" if it comes back from the back-forward cache.
 - **Redeem**: `"form" | "tracker"` (Ringkasan is a modal over the form; `tracker` polls the created order — USDX-243). `burnState` (`idle | submitting | submitted | error`) guards the on-chain burn against double-submit and drives retry (USDX-259); `resumeOrder(id)` opens the tracker for an existing order (resume from /history).
 
-Step transitions are controlled by hooks (`useMint`, `useRedeem`), not by components directly.
+- **Transfer**: `"form" | "done"` — no tracker, because 202 is proof of broadcast and
+  there is no confirmation endpoint yet (USDX-577). `idempotencyKey` is part of the
+  contract: minted once per INTENT by `ensureIdempotencyKey()`, reused by every retry,
+  and dropped by `setTo`/`setAmount` (a new intent) or `setResult` (intent finished).
+  `clearIdempotencyKey()` exists only for `409 IDEMPOTENCY_KEY_REUSED` (an FE bug).
+- `mintStore.destinationSource` / `redeemStore.source` default to `custodial`; the hooks
+  ignore that for users without an ACTIVE custodial wallet, so non-custodial behaviour is
+  unchanged.
+
+Step transitions are controlled by hooks (`useMint`, `useRedeem`, `useTransfer`), not by components directly.
 
 ## Testing
 

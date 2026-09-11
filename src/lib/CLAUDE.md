@@ -11,6 +11,8 @@ Shared utilities, validation rules, constants, chain config, and mock API layer.
 | `constants.ts` | Exchange rate (1:1), redeem min/max, mint ceiling, brand color. The mint MINIMUM is not here — it comes from `GET /api/v2/config` (USDX-638) |
 | `chains.ts` | 8 supported chains with id, name, icon, contract address |
 | `api/config-api.ts` | `getAppConfig()` → `GET /api/v2/config` — mint minimum (IDR), fee rates, token address, mint mode |
+| `api/wallet-api.ts` | `getCustodialWallet()` → `GET /api/v2/wallet` (404 `WALLET_NOT_FOUND` → `null`); `transferCustodial(req, idempotencyKey)` → `POST /api/v2/wallet/transfer` with the `Idempotency-Key` header, `skipUnauthorizedHandler` (401 here is `INVALID_PIN`, not a dead session) (USDX-567) |
+| `uuid.ts` | `uuidv7()` — the `Idempotency-Key` (RFC 9562 v7, time-ordered) |
 | `api/mock-api.ts` | Mock backend — login, register, transactions, mint/redeem orders |
 | `api/types.ts` | Request DTOs: `LoginRequest`, `RegisterRequest`, `CreateMintRequest`, `CreateRedeemRequest` |
 
@@ -35,7 +37,7 @@ redeem bounds, mint ceiling) from `constants.ts`, so a limit is never copied int
 dictionary. Runtime bounds — the ones the backend owns — are passed as its third
 argument instead and win over the static table.
 
-Validators: `validateEmail`, `validatePassword`, `validateAmount`, `validateAddress`, `validateConfirmPassword`, `validateFullName`, `validatePhone`, `validateBankAccountNumber`, `validateBankAccountName`. `passwordScore` reports how many password rules are met, for `ui/password-strength.tsx`.
+Validators: `validateEmail`, `validatePassword`, `validateAmount`, `validateAddress`, `validateConfirmPassword`, `validateFullName`, `validatePhone`, `validateBankAccountNumber`, `validateBankAccountName`, `validateTransferAddress` (EVM only, not the user's own custodial address), `validateTransferAmount` (positive, ≤ 6 decimals, ≤ the KNOWN balance — `null` balance never blocks). `passwordScore` reports how many password rules are met, for `ui/password-strength.tsx`.
 
 Amount validation accepts a `"mint" | "redeem"` type. Mint additionally takes a
 `MintAmountBounds` third argument, because its two limits are in different units: the
@@ -59,6 +61,19 @@ Auth + KYC now route through real-or-mock dispatchers; mint/redeem/transactions 
 | `api/mock-api.ts` | In-memory mock backend used when `env.useMock` is true. Demo user: `demo@usdx.com` / `Demo1234` |
 
 To wire a new real endpoint: add a function to the relevant `*-api.ts` that branches on `env.useMock`, calling `apiFetch` for the real path and a `mock*` fn otherwise.
+
+Wallet-custodial error helpers in `api/errors.ts` (USDX-567): `isWalletNotFound`,
+`isWalletNotActive`, `isWalletServiceUnavailable`, `isInvalidPin`, `isPinNotSet`,
+`isTooManyAttempts`, `isIdempotencyKeyInProgress`, `isIdempotencyKeyReused`,
+`isRecipientBlacklisted`, `isTransferLimitExceeded` + `getTransferLimitDetails`. They
+branch on `code` AND status because three 409s overlap (wallet.yaml § PETA KODE 409).
+
+Mock custodial wallet (`api/mock-api.ts`): one wallet per browser in localStorage
+`usdx-mock-custodial` (`MockCustodialState`), mock PIN `123456`, lockout after 5 wrong,
+transfer idempotency enforced like the contract (replay before the balance pre-check).
+Seams: `pinSet: false`, `serviceDown`, `transferLimit`, `slowFirstTransfer`. Redeem:
+`burnMode` is derived from `userAddress`, the custodial burn is dispatched 1.5 s after
+create (hash only; the scanner owns the status), `burn-tx` on a CUSTODIAL order → 409.
 
 ## Constants
 

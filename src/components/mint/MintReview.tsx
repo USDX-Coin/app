@@ -44,6 +44,7 @@ export function MintReview({ open, onOpenChange }: MintReviewProps) {
   const {
     selectedChain,
     destinationAddress,
+    isCustodialDestination,
     amountUsdx,
     subtotalIdr,
     mintFeeIdr,
@@ -90,7 +91,17 @@ export function MintReview({ open, onOpenChange }: MintReviewProps) {
               )}
               {selectedChain?.name}
             </Row>
-            <Row label={t("sum.recipientAddress")}>{truncateAddress(destinationAddress)}</Row>
+            {/* "Ke wallet custodial saya" is the FE matching the order's address
+                against the user's custodial address byte for byte (custodial-
+                wallet.md §5.2) — there is no flag on the order. */}
+            <Row label={t("sum.recipientAddress")}>
+              {isCustodialDestination && (
+                <span className="text-muted-text" data-testid="mint-review-custodial">
+                  {t("mint.destCustodial")} ·
+                </span>
+              )}
+              {truncateAddress(destinationAddress)}
+            </Row>
             <Row label={t("sum.exchangeRate")}>
               1 USDX ≈ {effectiveBuyRate ? formatAmount(effectiveBuyRate) : "—"} IDR
             </Row>

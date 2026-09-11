@@ -116,6 +116,12 @@ const en: Dict = {
   "mint.errDisabled": "Minting isn't available yet. Please try again later.",
   "mint.errGate": "Your account isn't eligible to mint yet.",
   "mint.errGeneric": "Couldn't create the order. Please try again.",
+  // mint destination: "my custodial wallet" (USDX-567, custodial-wallet.md §5.2).
+  // No new API field — the custodial address simply fills `userAddress`.
+  "mint.destLabel": "Destination",
+  "mint.destCustodial": "My custodial wallet",
+  "mint.destManual": "Another address",
+  "mint.destCustodialHint": "USDX is minted straight into your custodial wallet — nothing to type.",
   // address book (USDX-201 picker + USDX-203 add/delete)
   "addrbook.pickTitle": "Address book",
   "addrbook.empty": "No saved addresses yet.",
@@ -1033,6 +1039,12 @@ const id: Dict = {
   "mint.errDisabled": "Mint belum tersedia. Coba lagi nanti.",
   "mint.errGate": "Akun Anda belum memenuhi syarat untuk mint.",
   "mint.errGeneric": "Gagal membuat pesanan. Coba lagi.",
+  // tujuan mint: "wallet custodial saya" (USDX-567, custodial-wallet.md §5.2).
+  // Tanpa field API baru — address custodial hanya mengisi `userAddress`.
+  "mint.destLabel": "Tujuan",
+  "mint.destCustodial": "Wallet custodial saya",
+  "mint.destManual": "Alamat lain",
+  "mint.destCustodialHint": "USDX dimint langsung ke wallet custodial Anda — tidak perlu mengetik alamat.",
   // address book picker (USDX-201; tambah wallet di USDX-203)
   "addrbook.pickTitle": "Buku alamat",
   "addrbook.empty": "Belum ada alamat tersimpan.",

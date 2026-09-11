@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowUpDown, BookText, ScanLine } from "lucide-react";
+import { ArrowUpDown, BookText, ScanLine, Wallet } from "lucide-react";
 import { useMint } from "@/hooks/useMint";
 import { useKycGate } from "@/hooks/useKycGate";
 import { formatAmount } from "@/lib/utils";
@@ -17,6 +17,7 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { KycGateDialog } from "@/components/kyc/KycGateDialog";
 import { MintReview } from "@/components/mint/MintReview";
 import { AddressBookPicker } from "@/components/mint/AddressBookPicker";
@@ -96,8 +97,12 @@ export function MintForm() {
     isRateError,
     isRateFetching,
     refetchRate,
-    destinationAddress,
+    manualAddress,
     setDestinationAddress,
+    destinationSource,
+    setDestinationSource,
+    custodialAvailable,
+    custodialAddress,
     amountError,
     amountErrorVars,
     addressError,
@@ -282,62 +287,110 @@ export function MintForm() {
           )}
         </div>
 
-        {/* Destination address — manual / pick from address book / scan (W3) */}
-        <Field>
-          <div className="mb-1.5 flex items-center justify-between gap-2">
-            <FieldLabel htmlFor="mint-address">{t("form.toThisAddress")}</FieldLabel>
-            <Button
-              type="button"
-              variant="link"
-              size="sm"
-              className="-mr-3"
-              disabled={isMintUnavailable}
-              onClick={() => setPickerOpen(true)}
+        {/* Destination source (USDX-567): a user with an ACTIVE custodial wallet
+            sees "Wallet custodial saya" first and by default — the address is
+            filled from the profile, nothing to type. "Alamat lain" is the
+            unchanged manual / address-book / scan path. Users without a
+            custodial wallet never see this switch. */}
+        {custodialAvailable && (
+          <div className="flex flex-col gap-2">
+            <p className="text-sm font-medium text-muted-text">{t("mint.destLabel")}</p>
+            <ToggleGroup
+              type="single"
+              value={destinationSource}
+              onValueChange={(v) => {
+                if (v === "custodial" || v === "manual") setDestinationSource(v);
+              }}
+              aria-label={t("mint.destLabel")}
+              className="w-full"
+              size="default"
             >
-              {t("form.addAddressBook")}
-            </Button>
+              <ToggleGroupItem value="custodial" className="flex-1" disabled={isMintUnavailable}>
+                <Wallet />
+                {t("mint.destCustodial")}
+              </ToggleGroupItem>
+              <ToggleGroupItem value="manual" className="flex-1" disabled={isMintUnavailable}>
+                <BookText />
+                {t("mint.destManual")}
+              </ToggleGroupItem>
+            </ToggleGroup>
           </div>
-          <InputGroup>
-            <InputGroupInput
-              id="mint-address"
-              placeholder={t("form.addressPh")}
-              value={destinationAddress}
-              onChange={(e) => setDestinationAddress(e.target.value)}
-              disabled={isMintUnavailable}
-              aria-invalid={!!addressErrorText}
-              aria-describedby="mint-address-error"
-            />
-            <InputGroupAddon align="inline-end">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <InputGroupButton
-                    size="icon"
-                    disabled={isMintUnavailable}
-                    onClick={() => setPickerOpen(true)}
-                    aria-label={t("addrbook.pickTitle")}
-                  >
-                    <BookText />
-                  </InputGroupButton>
-                </TooltipTrigger>
-                <TooltipContent>{t("addrbook.pickTitle")}</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <InputGroupButton
-                    size="icon"
-                    disabled={isMintUnavailable}
-                    onClick={() => setScanOpen(true)}
-                    aria-label={t("scan.open")}
-                  >
-                    <ScanLine />
-                  </InputGroupButton>
-                </TooltipTrigger>
-                <TooltipContent>{t("scan.open")}</TooltipContent>
-              </Tooltip>
-            </InputGroupAddon>
-          </InputGroup>
-          <FieldHelp id="mint-address" error={addressErrorText} />
-        </Field>
+        )}
+
+        {custodialAvailable && destinationSource === "custodial" ? (
+          <div
+            className="flex items-center gap-3 rounded-xl bg-muted p-3"
+            data-testid="mint-dest-custodial"
+          >
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-card text-muted-text">
+              <Wallet className="size-4" />
+            </span>
+            <div className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate text-sm font-medium text-foreground">
+                {t("mint.destCustodial")}
+              </span>
+              <span className="truncate font-mono text-xs text-muted-text">{custodialAddress}</span>
+              <span className="text-xs text-muted-text">{t("mint.destCustodialHint")}</span>
+            </div>
+          </div>
+        ) : (
+          /* Destination address — manual / pick from address book / scan (W3) */
+          <Field>
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+              <FieldLabel htmlFor="mint-address">{t("form.toThisAddress")}</FieldLabel>
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                className="-mr-3"
+                disabled={isMintUnavailable}
+                onClick={() => setPickerOpen(true)}
+              >
+                {t("form.addAddressBook")}
+              </Button>
+            </div>
+            <InputGroup>
+              <InputGroupInput
+                id="mint-address"
+                placeholder={t("form.addressPh")}
+                value={manualAddress}
+                onChange={(e) => setDestinationAddress(e.target.value)}
+                disabled={isMintUnavailable}
+                aria-invalid={!!addressErrorText}
+                aria-describedby="mint-address-error"
+              />
+              <InputGroupAddon align="inline-end">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <InputGroupButton
+                      size="icon"
+                      disabled={isMintUnavailable}
+                      onClick={() => setPickerOpen(true)}
+                      aria-label={t("addrbook.pickTitle")}
+                    >
+                      <BookText />
+                    </InputGroupButton>
+                  </TooltipTrigger>
+                  <TooltipContent>{t("addrbook.pickTitle")}</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <InputGroupButton
+                      size="icon"
+                      disabled={isMintUnavailable}
+                      onClick={() => setScanOpen(true)}
+                      aria-label={t("scan.open")}
+                    >
+                      <ScanLine />
+                    </InputGroupButton>
+                  </TooltipTrigger>
+                  <TooltipContent>{t("scan.open")}</TooltipContent>
+                </Tooltip>
+              </InputGroupAddon>
+            </InputGroup>
+            <FieldHelp id="mint-address" error={addressErrorText} />
+          </Field>
+        )}
       </div>
 
       {/* The minimum and the fees are backend-owned (USDX-635/638). Until they

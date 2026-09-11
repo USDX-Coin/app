@@ -13,6 +13,11 @@ const AUTH_STATE = {
       emailVerifiedAt: "2026-01-01T00:00:00Z",
       createdAt: "2026-01-01T00:00:00Z",
       updatedAt: "2026-01-01T00:00:00Z",
+      // users.yaml § User (USDX-607/567): most users have no custodial wallet.
+      // Specs for the custodial paths override this together with
+      // `seedCustodialWallet`, so the first render and the /me refresh agree.
+      pinSet: true,
+      custodialWallet: null as null | { address: string | null; status: string },
     },
     token: "mock-token",
     isAuthenticated: true,
@@ -255,4 +260,44 @@ export async function seedBurnReject(page: import("@playwright/test").Page) {
  */
 export async function seedRateLimit(page: import("@playwright/test").Page, seconds = 3) {
   await page.addInitScript((s) => localStorage.setItem("usdx-mock-ratelimit", s), String(seconds));
+}
+
+/**
+ * Seed the mock custodial wallet (mock-api `usdx-mock-custodial`, USDX-567) so a
+ * spec plays a user who was "given a wallet". Default: ACTIVE, 1,000 USDX, PIN
+ * set (mock PIN "123456"). Pass a status/balance/seam override to exercise the
+ * other states — PROVISIONING/SUSPENDED (409 WALLET_NOT_ACTIVE), `pinSet: false`
+ * (401 PIN_NOT_SET), `transferLimit`, `serviceDown`, `slowFirstTransfer`.
+ * Call before the first page.goto(), and pair it with
+ * `loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY })` so
+ * the persisted profile already carries the wallet before /me refreshes it.
+ */
+export const MOCK_CUSTODIAL_ADDRESS = "0x000000C528aE908fB929a0898B65e913623c9aFf";
+export const MOCK_CUSTODIAL_WALLET_SUMMARY = { address: MOCK_CUSTODIAL_ADDRESS, status: "ACTIVE" };
+export const MOCK_PIN = "123456";
+
+export async function seedCustodialWallet(
+  page: Page,
+  overrides: {
+    status?: "PROVISIONING" | "ACTIVE" | "SUSPENDED";
+    address?: string | null;
+    balance?: string | null;
+    pinSet?: boolean;
+    serviceDown?: boolean;
+    transferLimit?: { perTx?: string; daily?: string };
+    slowFirstTransfer?: boolean;
+  } = {},
+) {
+  const state = {
+    status: "ACTIVE",
+    address: MOCK_CUSTODIAL_ADDRESS,
+    createdAt: "2026-08-28T04:10:00.000Z",
+    balance: "1000.00",
+    pinSet: true,
+    ...overrides,
+  };
+  await page.addInitScript(
+    (json) => localStorage.setItem("usdx-mock-custodial", json),
+    JSON.stringify(state),
+  );
 }

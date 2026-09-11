@@ -20,6 +20,8 @@ const AUTH_STATE = {
         address: string | null;
         status: "PROVISIONING" | "ACTIVE" | "SUSPENDED";
       },
+      // users.yaml § User.pinSet (USDX-567): the custodial money paths need a PIN.
+      pinSet: true,
     },
     token: "mock-token",
     isAuthenticated: true,
@@ -266,6 +268,10 @@ export async function seedRateLimit(page: import("@playwright/test").Page, secon
 
 /** Address the mock hands every custodial wallet (mock-api MOCK_CUSTODIAL_ADDRESS). */
 export const MOCK_CUSTODIAL_ADDRESS = "0x000000C528aE908fB929a0898B65e913623c9aFf";
+/** Profile summary of an ACTIVE mock wallet — pass to `loginViaStorage` next to `seedCustodialWallet` (USDX-567). */
+export const MOCK_CUSTODIAL_WALLET_SUMMARY = { address: MOCK_CUSTODIAL_ADDRESS, status: "ACTIVE" as const };
+/** The mock account PIN (mock-custodial-wallet MOCK_PIN). */
+export const MOCK_PIN = "123456";
 
 /**
  * Arm the mock's custodial-wallet seam (mock-api CUSTODIAL_SEAM_KEY, USDX-566).
@@ -288,6 +294,13 @@ export async function seedCustodialWallet(
         status: "PROVISIONING" | "ACTIVE" | "SUSPENDED";
         balance?: string | null;
         stuck?: boolean;
+        // USDX-567 seams (mock-custodial-wallet): PIN missing → 401 PIN_NOT_SET;
+        // key zone down → 503; transfer limits → 422 TRANSFER_LIMIT_EXCEEDED;
+        // first transfer per key hangs → 409 IDEMPOTENCY_KEY_IN_PROGRESS then settles.
+        pinSet?: boolean;
+        serviceDown?: boolean;
+        transferLimit?: { perTx?: string; daily?: string };
+        slowFirstTransfer?: boolean;
       },
 ) {
   await page.addInitScript(
@@ -307,6 +320,10 @@ export async function seedCustodialWallet(
           activateAt: null,
           balance: s.status === "PROVISIONING" ? null : (s.balance === undefined ? "0.00" : s.balance),
           stuck: s.stuck ?? false,
+          pinSet: s.pinSet ?? true,
+          serviceDown: s.serviceDown ?? false,
+          transferLimit: s.transferLimit,
+          slowFirstTransfer: s.slowFirstTransfer ?? false,
         }),
       );
     },

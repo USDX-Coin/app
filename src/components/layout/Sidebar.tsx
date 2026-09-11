@@ -19,6 +19,7 @@ import { MenuProfil } from "@/components/ui/menu-profil";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn, formatAmount } from "@/lib/utils";
 import { useWalletBalance } from "@/hooks/useWalletBalance";
+import { useCustodialWallet } from "@/hooks/useCustodialWallet";
 import { CustodialBalanceCard } from "@/components/wallet/CustodialBalanceCard";
 import { useAuthStore } from "@/stores/authStore";
 import { logout as revokeSession } from "@/lib/api/auth-api";
@@ -47,6 +48,9 @@ interface NavItem {
 // The nav items stay VISIBLE on purpose (PM decision, 13 Aug): they promote the
 // upcoming features. The pill is what keeps that honest — it announces the
 // teaser before the click, so nobody lands on ComingSoon expecting a transfer.
+//
+// USDX-567: for a user WITH a custodial wallet, /send is a real transfer form,
+// so the Send pill comes off for them (`navItemsFor`). Everyone else keeps it.
 const transactionItems: NavItem[] = [
   { href: "/mint", labelKey: "nav.mint", icon: Coins },
   { href: "/redeem", labelKey: "nav.redeem", icon: Banknote },
@@ -65,6 +69,12 @@ const moreItems: NavItem[] = [
   { href: "/history", labelKey: "nav.history", icon: History },
   { href: "/settings", labelKey: "nav.settings", icon: Settings },
 ];
+
+// Send stops being a teaser once the user owns a custodial wallet (USDX-567).
+export function navItemsFor(items: NavItem[], hasCustodialWallet: boolean): NavItem[] {
+  if (!hasCustodialWallet) return items;
+  return items.map((item) => (item.href === "/send" ? { ...item, comingSoon: false } : item));
+}
 
 function NavLink({ item, active, onNavigate }: { item: NavItem; active: boolean; onNavigate?: () => void }) {
   const { t } = useLang();
@@ -161,6 +171,10 @@ export function Sidebar({
   // `reconnectOnMount={false}`), so "disconnected" is the normal first state —
   // the card then offers a connect action instead of printing a number.
   const balance = useWalletBalance();
+  // Send is a live transfer form for custodial-wallet owners (USDX-567); the
+  // "Coming Soon" pill only stays for users without one.
+  const custodial = useCustodialWallet();
+  const transactionNav = navItemsFor(transactionItems, custodial.hasWallet);
   // users.name is null until KYC submit auto-sets it — fall back to email (USDX-153).
   const name = user?.name ?? user?.email ?? "";
   const currentLang = LANGUAGES.find((l) => l.value === lang) ?? LANGUAGES[0];
@@ -343,7 +357,7 @@ export function Sidebar({
 
         <NavGroup
           label={t("sidebar.transaction")}
-          items={transactionItems}
+          items={transactionNav}
           pathname={pathname}
           onNavigate={onNavigate}
         />

@@ -246,3 +246,72 @@ describe("useCustodialWallet", () => {
     });
   });
 });
+
+// Turunan untuk layar transaksi (USDX-567): transfer, tujuan mint, sumber redeem
+// membaca `hasWallet` / `address` / `isActive` / `balanceState` / `pinSet`.
+describe("useCustodialWallet — derived fields (USDX-567)", () => {
+  describe("positive", () => {
+    test("ACTIVE wallet: isActive, address, and a ready balance", async () => {
+      signIn({ address: ADDRESS, status: "ACTIVE" });
+      useAuthStore.getState().setUser({ ...useAuthStore.getState().user!, pinSet: true });
+      getMock.mockResolvedValue(wallet());
+      const { result } = renderHook(() => useCustodialWallet(), { wrapper: createWrapper() });
+      expect(result.current.hasWallet).toBe(true);
+      expect(result.current.address).toBe(ADDRESS);
+      expect(result.current.isActive).toBe(true);
+      await waitFor(() => expect(result.current.balanceState).toBe("ready"));
+      expect(result.current.balanceUsdx).toBe(125.5);
+      expect(result.current.pinSet).toBe(true);
+    });
+  });
+
+  describe("negative", () => {
+    test("no wallet on the profile: nothing custodial, GET never called", () => {
+      signIn(null);
+      const { result } = renderHook(() => useCustodialWallet(), { wrapper: createWrapper() });
+      expect(result.current.hasWallet).toBe(false);
+      expect(result.current.isActive).toBe(false);
+      expect(result.current.address).toBeNull();
+      expect(result.current.balanceState).toBe("none");
+      expect(getMock).not.toHaveBeenCalled();
+    });
+
+    test("PROVISIONING is not active and has no balance", async () => {
+      signIn({ address: null, status: "PROVISIONING" });
+      getMock.mockResolvedValue(PROVISIONING);
+      const { result } = renderHook(() => useCustodialWallet(), { wrapper: createWrapper() });
+      await waitFor(() => expect(result.current.isFetching).toBe(false));
+      expect(result.current.hasWallet).toBe(true);
+      expect(result.current.isActive).toBe(false);
+      expect(result.current.balanceUsdx).toBeNull();
+    });
+  });
+
+  describe("edge case", () => {
+    test("an unreadable balance (null) is 'unavailable', never 0, on an ACTIVE wallet", async () => {
+      signIn({ address: ADDRESS, status: "ACTIVE" });
+      getMock.mockResolvedValue(wallet({ balance: null, balanceWei: null, balanceAt: null }));
+      const { result } = renderHook(() => useCustodialWallet(), { wrapper: createWrapper() });
+      await waitFor(() => expect(result.current.balanceState).toBe("unavailable"));
+      expect(result.current.balanceUsdx).toBeNull();
+      expect(result.current.isActive).toBe(true);
+    });
+
+    test("pinSet is null (unknown) when the persisted session predates the field", () => {
+      signIn({ address: ADDRESS, status: "ACTIVE" });
+      getMock.mockResolvedValue(wallet());
+      const { result } = renderHook(() => useCustodialWallet(), { wrapper: createWrapper() });
+      expect(result.current.pinSet).toBeNull();
+    });
+
+    test("invalidate() re-reads the wallet", async () => {
+      signIn({ address: ADDRESS, status: "ACTIVE" });
+      getMock.mockResolvedValue(wallet());
+      const { result } = renderHook(() => useCustodialWallet(), { wrapper: createWrapper() });
+      await waitFor(() => expect(result.current.balanceState).toBe("ready"));
+      const calls = getMock.mock.calls.length;
+      act(() => result.current.invalidate());
+      await waitFor(() => expect(getMock.mock.calls.length).toBeGreaterThan(calls));
+    });
+  });
+});

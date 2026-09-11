@@ -195,6 +195,25 @@ export interface CreateRedeemOrderRequest {
   bankCode?: string; // manual path — destination bank (provider-specific code)
   bankAccountNumber?: string; // manual path — account number (plaintext over TLS)
   bankAccountName?: string; // manual path — holder name (plaintext over TLS)
+  // Jalur CUSTODIAL saja (redeem.yaml § CreateRedeemOrder.pin, USDX-565/567):
+  // `userAddress` = wallet custodial user → PIN 6-digit WAJIB dan diverifikasi di
+  // langkah ini — satu-satunya titik persetujuan user, karena setelahnya tidak
+  // ada layar tanda tangan wallet. Diabaikan backend di jalur SELF_SIGN; FE tidak
+  // mengirimkannya di sana (field dihilangkan dari body).
+  pin?: string;
+}
+
+// ── Gelombang 1 Custodial Wallet — transfer (USDX-567) ───────────────────────
+// POST /api/v2/wallet/transfer body (wallet.yaml § CreateTransfer). Tidak ada
+// `chain` (Polygon-only, wallet custodial hanya ada di satu chain) dan tidak ada
+// `amountCurrency` (transfer memindahkan token, bukan menjual/membeli). Header
+// `Idempotency-Key` WAJIB dan dibawa terpisah oleh `transferCustodial` — bukan
+// bagian body. "Body sama" untuk replay = `to` + `amount`; `pin` bukan identitas
+// niat transfer.
+export interface CreateTransferRequest {
+  to: string; // EVM address tujuan; address custodial sendiri → 422 VALIDATION_ERROR
+  amount: string; // decimal USDX, positif, maks 6 desimal
+  pin: string; // PIN 6-digit akun (pin.yaml); berbagi lockout scope `pin`
 }
 
 // POST /api/v2/redeem/{id}/burn-tx body (redeem.yaml redeemV2BurnTx, USDX-259).

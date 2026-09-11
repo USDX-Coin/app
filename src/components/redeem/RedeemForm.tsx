@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldHelp, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { KycGateDialog } from "@/components/kyc/KycGateDialog";
 import { BankSelect } from "./BankSelect";
 import { BankAccountPicker, type BankFill } from "./BankAccountPicker";
@@ -131,6 +132,11 @@ export function RedeemForm() {
     walletAddress,
     connectWallet,
     balanceUsdx,
+    source,
+    setSource,
+    custodialAvailable,
+    isCustodialSource,
+    custodialBalanceState,
   } = useRedeem();
 
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -159,7 +165,8 @@ export function RedeemForm() {
   const idrDisplay = isRateLoading && amount ? "…" : grossIdr > 0 ? formatAmount(grossIdr) : "0";
   const isUsd = amountCurrency === "USD";
   const showBreakdown = amount !== "" && effectiveSellRate != null && amountUsdx > 0;
-  // Max fills the amount from the connected wallet's USDX balance (USDX-249).
+  // Max fills the amount from the burning wallet's USDX balance (USDX-249) —
+  // connected external wallet, or the custodial wallet (USDX-567).
   const canMax = isWalletConnected && balanceUsdx != null && balanceUsdx > 0;
   const onMax = canMax ? setMaxAmount : undefined;
 
@@ -171,10 +178,20 @@ export function RedeemForm() {
 
   // Contextual connect: the first click opens the wallet connect (no global
   // button); once connected the button becomes "Redeem" and opens the Ringkasan.
+  // Custodial source (USDX-567): nothing to connect — straight to the Ringkasan,
+  // where the PIN is asked.
   function handleRedeem() {
-    if (!isWalletConnected) connectWallet();
+    if (!isCustodialSource && !isWalletConnected) connectWallet();
     else setReviewOpen(true);
   }
+
+  // Unknown custodial balance is "—", never 0 (GET /api/v2/wallet `balance` null).
+  const custodialBalanceText =
+    balanceUsdx != null
+      ? `${formatAmount(balanceUsdx)} USDX`
+      : custodialBalanceState === "loading"
+        ? t("balance.loading")
+        : "—";
 
   const usdxChip = (
     <div className="flex shrink-0 items-center gap-2 rounded-full bg-primary py-1.5 pl-1.5 pr-3 text-primary-foreground">
@@ -238,7 +255,42 @@ export function RedeemForm() {
           address + live USDX balance. Balance is only read AFTER connect (the
           on-chain read is gated on isConnected) — no global connect button. */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        {!isWalletConnected ? (
+        {/* Burn source (USDX-567): a custodial-wallet owner picks between their
+            custodial wallet (default — PIN, system signs) and an external wallet
+            (connect + self-sign, the unchanged path). Absent for everyone else. */}
+        {custodialAvailable && (
+          <ToggleGroup
+            type="single"
+            value={source}
+            onValueChange={(v) => {
+              if (v === "custodial" || v === "external") setSource(v);
+            }}
+            aria-label={t("redeem.sourceLabel")}
+            size="default"
+          >
+            <ToggleGroupItem value="custodial" data-testid="redeem-source-custodial">
+              <Wallet />
+              {t("redeem.sourceCustodial")}
+            </ToggleGroupItem>
+            <ToggleGroupItem value="external" data-testid="redeem-source-external">
+              {t("redeem.sourceExternal")}
+            </ToggleGroupItem>
+          </ToggleGroup>
+        )}
+        {isCustodialSource ? (
+          <div
+            className="flex shrink-0 items-center gap-2 rounded-lg border border-border bg-muted px-3 py-1.5 text-sm"
+            data-testid="redeem-custodial-source"
+          >
+            <Wallet className="size-4 text-muted-text" />
+            <span className="font-medium text-foreground">
+              {walletAddress ? truncateAddress(walletAddress) : "—"}
+            </span>
+            <span className="text-muted-text">·</span>
+            <span className="sr-only">{t("redeem.balanceLabel")}</span>
+            <span className="font-semibold text-foreground">{custodialBalanceText}</span>
+          </div>
+        ) : !isWalletConnected ? (
           <Button type="button" variant="outline" onClick={connectWallet}>
             <Wallet />
             {t("redeem.connectWallet")}

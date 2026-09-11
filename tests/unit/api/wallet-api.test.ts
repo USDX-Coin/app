@@ -5,9 +5,9 @@ vi.mock("@/lib/env", () => ({
   env: { apiBaseUrl: "", useMock: false },
 }));
 
-import { createCustodialWallet, getCustodialWallet } from "@/lib/api/wallet-api";
+import { createCustodialWallet, getCustodialWallet, transferCustodial } from "@/lib/api/wallet-api";
 import { configureApiClient } from "@/lib/api/client";
-import type { CustodialWallet } from "@/types";
+import type { CustodialWallet, TransferAccepted } from "@/types";
 
 function jsonResponse(status: number, payload: unknown): Response {
   return {
@@ -192,6 +192,79 @@ describe("createCustodialWallet", () => {
 
       await expect(createCustodialWallet()).rejects.toMatchObject({ status: 401 });
       expect(onUnauthorized).toHaveBeenCalledTimes(1);
+    });
+  });
+});
+
+// POST /api/v2/wallet/transfer (USDX-567, wallet.yaml § transfer).
+describe("transferCustodial", () => {
+  const req = { to: "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed", amount: "25.00", pin: "123456" };
+  const KEY = "0193abcd-2c4d-7abc-91ff-9a7fcd0d2bf1";
+  const ACCEPTED: TransferAccepted = {
+    txHash: "0x" + "ab".repeat(32),
+    from: ACTIVE.address!,
+    to: req.to,
+    amount: "25.00",
+    amountWei: "25000000",
+    chain: "polygon",
+    submittedAt: "2026-08-28T04:20:11.000Z",
+  };
+
+  describe("positive", () => {
+    test("POSTs /api/v2/wallet/transfer with the Idempotency-Key header and the body", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse(202, { status: "success", data: ACCEPTED }));
+      await expect(transferCustodial(req, KEY)).resolves.toEqual(ACCEPTED);
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe("/api/v2/wallet/transfer");
+      expect(init.method).toBe("POST");
+      const headers = init.headers as Headers;
+      expect(headers.get("Idempotency-Key")).toBe(KEY);
+      expect(headers.get("Authorization")).toBe("Bearer session-token");
+      expect(headers.get("Content-Type")).toBe("application/json");
+      expect(JSON.parse(init.body)).toEqual(req);
+    });
+
+    test("a 200 replay unwraps to the same shape as a 202", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse(200, { status: "success", data: ACCEPTED }));
+      await expect(transferCustodial(req, KEY)).resolves.toEqual(ACCEPTED);
+    });
+  });
+
+  describe("negative", () => {
+    test("401 INVALID_PIN is an inline error — the global logout handler is NOT fired", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(401, { status: "error", error: { code: "INVALID_PIN", message: "PIN salah" } }),
+      );
+      await expect(transferCustodial(req, KEY)).rejects.toMatchObject({ status: 401, code: "INVALID_PIN" });
+      expect(onUnauthorized).not.toHaveBeenCalled();
+    });
+
+    test("propagates 409 WALLET_NOT_ACTIVE and 422 TRANSFER_LIMIT_EXCEEDED with details", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(409, { status: "error", error: { code: "WALLET_NOT_ACTIVE", message: "x" } }),
+      );
+      await expect(transferCustodial(req, KEY)).rejects.toMatchObject({ status: 409, code: "WALLET_NOT_ACTIVE" });
+      const details = { limitType: "DAILY", limit: "5000.00", remaining: "120.00", resetAt: "2026-08-29T00:00:00.000Z" };
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(422, { status: "error", error: { code: "TRANSFER_LIMIT_EXCEEDED", message: "x", details } }),
+      );
+      await expect(transferCustodial(req, KEY)).rejects.toMatchObject({ status: 422, details });
+    });
+  });
+
+  describe("edge case", () => {
+    test("429 TOO_MANY_ATTEMPTS carries Retry-After from the header", async () => {
+      const res = jsonResponse(429, {
+        status: "error",
+        error: { code: "TOO_MANY_ATTEMPTS", message: "x", details: { retryAfterSeconds: 900 } },
+      });
+      (res.headers as Headers).set("Retry-After", "900");
+      fetchMock.mockResolvedValueOnce(res);
+      await expect(transferCustodial(req, KEY)).rejects.toMatchObject({
+        status: 429,
+        code: "TOO_MANY_ATTEMPTS",
+        retryAfterSeconds: 900,
+      });
     });
   });
 });

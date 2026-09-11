@@ -54,10 +54,26 @@ function resolvePollBudgetMs(): number {
 /** "none" = user tidak punya wallet custodial (mayoritas non-custodial). */
 export type CustodialWalletView = "none" | CustodialWalletStatus;
 
+/** Saldo untuk layar transaksi (USDX-567): "none" tanpa wallet, "ready" hanya saat angka ada. */
+export type CustodialBalanceState = "none" | "loading" | "unavailable" | "ready";
+
 export interface CustodialWalletState {
   /** Ringkasan dari `/auth/me` — yang menentukan routing. */
   summary: CustodialWalletSummary | null;
   status: CustodialWalletView;
+  // ── Turunan untuk layar transaksi (transfer / tujuan mint / sumber redeem, USDX-567) ──
+  /** User punya wallet custodial, apa pun statusnya. */
+  hasWallet: boolean;
+  /** Address dari GET (lebih segar) atau ringkasan profil; null selama PROVISIONING / tanpa wallet. */
+  address: string | null;
+  /** ACTIVE + address terisi — satu-satunya keadaan yang boleh bertransaksi. */
+  isActive: boolean;
+  /** "ready" hanya kalau `balanceUsdx` non-null; null tidak pernah dirender 0. */
+  balanceState: CustodialBalanceState;
+  /** `false` = akun belum punya PIN (users.yaml `pinSet`); `null` = tidak diketahui. */
+  pinSet: boolean | null;
+  /** Tandai wallet basi (setelah transfer/redeem, atau 409 WALLET_NOT_ACTIVE) — refetch di latar. */
+  invalidate: () => void;
   /** Bentuk penuh dari `GET /api/v2/wallet`; null sebelum dibaca / tanpa wallet. */
   wallet: CustodialWallet | null;
   /** Saldo USDX. Non-null HANYA kalau backend memberi angka — null bukan nol. */
@@ -176,9 +192,28 @@ export function useCustodialWallet({
   const balanceUsdx =
     balance != null && Number.isFinite(Number(balance)) ? Number(balance) : null;
 
+  const hasWallet = status !== "none";
+  const address = wallet?.address ?? (hasWallet ? (summary?.address ?? null) : null);
+  const isActive = status === "ACTIVE" && !!address;
+  const balanceState: CustodialBalanceState = !hasWallet
+    ? "none"
+    : enabled && query.isPending
+      ? "loading"
+      : balanceUsdx == null
+        ? "unavailable"
+        : "ready";
+
   return {
     summary,
     status,
+    hasWallet,
+    address,
+    isActive,
+    balanceState,
+    pinSet: typeof user?.pinSet === "boolean" ? user.pinSet : null,
+    invalidate: () => {
+      void queryClient.invalidateQueries({ queryKey: CUSTODIAL_WALLET_KEY });
+    },
     wallet,
     balanceUsdx,
     balanceAt: balanceUsdx == null ? null : (wallet?.balanceAt ?? null),

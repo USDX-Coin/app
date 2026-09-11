@@ -14,6 +14,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMintStore } from "@/stores/mintStore";
 import { useConsumerRate } from "@/hooks/useConsumerRate";
 import { useAppConfig } from "@/hooks/useAppConfig";
+import { useCustodialWallet } from "@/hooks/useCustodialWallet";
 import { createMintOrder } from "@/lib/api/mint-api";
 import { mintCheckoutCode } from "@/lib/api/auth-api";
 import { env } from "@/lib/env";
@@ -56,6 +57,21 @@ export function useMint() {
   // from a constant: ops move the minimum from the back office, and the VA fee
   // is the provider's, not ours.
   const config = useAppConfig();
+  // Tujuan "wallet custodial saya" (USDX-567, custodial-wallet.md §5.2 —
+  // mengikat `mint.yaml#CreateMintOrderV2.userAddress`): TIDAK ada field baru.
+  // FE cukup mengisi `userAddress` dengan address custodial dari profil; backend
+  // tidak membedakannya dari alamat manual. Karena itu "tujuan custodial" di sini
+  // hanyalah alamat mana yang dipakai — dan penanda "ke wallet custodial saya"
+  // adalah kecocokan byte-identik alamat itu, bukan flag tersendiri.
+  const custodial = useCustodialWallet();
+  const custodialAvailable = custodial.isActive && !!custodial.address;
+  const destinationSource = custodialAvailable ? store.destinationSource : "manual";
+  const destinationAddress =
+    destinationSource === "custodial" && custodial.address
+      ? custodial.address
+      : store.destinationAddress;
+  const isCustodialDestination =
+    custodialAvailable && destinationAddress !== "" && destinationAddress === custodial.address;
 
   const effectiveBuyRate = rateQuery.data ? Number(rateQuery.data.effectiveBuyRate) : null;
   const enteredAmount = parseAmount(store.amount);
@@ -127,16 +143,14 @@ export function useMint() {
       ? { amount: formatIDR(config.minMintIdr) }
       : undefined;
 
-  const addressError = store.destinationAddress
-    ? validateAddress(store.destinationAddress)
-    : null;
+  const addressError = destinationAddress ? validateAddress(destinationAddress) : null;
 
   const selectedChain = useMemo(() => getChainById(store.chainId), [store.chainId]);
 
   const createMutation = useMutation({
     mutationFn: () =>
       createMintOrder({
-        userAddress: store.destinationAddress.trim(),
+        userAddress: destinationAddress.trim(),
         // Backend interprets `amount` by `amountCurrency`: USD = USDX amount,
         // IDR = subtotal (mint value). Pass the raw input either way.
         amount: store.amount.trim(),
@@ -195,7 +209,7 @@ export function useMint() {
 
   const isFormValid =
     store.amount !== "" &&
-    store.destinationAddress !== "" &&
+    destinationAddress !== "" &&
     !amountError &&
     !addressError &&
     effectiveBuyRate != null &&
@@ -216,8 +230,17 @@ export function useMint() {
     amountCurrency: store.amountCurrency,
     setAmountCurrency: store.setAmountCurrency,
     toggleCurrency,
-    destinationAddress: store.destinationAddress,
+    // Effective destination: the custodial address when that source is chosen,
+    // otherwise the typed/picked one. `manualAddress` is the typed value itself,
+    // kept so switching back to "Alamat lain" restores what the user had entered.
+    destinationAddress,
+    manualAddress: store.destinationAddress,
     setDestinationAddress: store.setDestinationAddress,
+    destinationSource,
+    setDestinationSource: store.setDestinationSource,
+    custodialAvailable,
+    custodialAddress: custodialAvailable ? custodial.address : null,
+    isCustodialDestination,
     chainId: store.chainId,
     selectedChain,
     reset: store.reset,

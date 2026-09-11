@@ -39,6 +39,12 @@ export function useRedeemBurn() {
 
   const runBurn = useCallback(
     async (order: RedeemOrderCreated, fromAddress: string) => {
+      // Jalur CUSTODIAL (redeem.yaml § burnMode, USDX-567): yang menandatangani &
+      // mem-broadcast adalah sistem. Tidak ada tanda tangan wallet dan TIDAK ada
+      // laporan burn-tx dari klien (→ 409 INVALID_ORDER_STATE). Dijaga di sini,
+      // bukan hanya di UI, supaya jalur resume dari /history pun tidak bisa
+      // memicunya.
+      if (order.burnMode === "CUSTODIAL") return;
       // Guard double-burn: never start a second burn while one is in flight.
       const current = useRedeemStore.getState().burnState;
       if (current === "submitting" || current === "submitted") return;

@@ -71,6 +71,10 @@ export function RedeemStatus() {
   }
 
   const isExpired = order.status === "EXPIRED";
+  // Jalur CUSTODIAL (redeem.yaml § burnMode, USDX-567): sistem yang membakar.
+  // Tidak ada BurnGate (connect / tanda tangan / burn-tx), dan langkah pertama
+  // berkata "sistem memproses", bukan "tanda tangani di wallet".
+  const isCustodialBurn = order.burnMode === "CUSTODIAL";
   const currentIndex = STEPS.findIndex((s) => s.key === order.status);
   const remainingSec =
     order.status === "AWAITING_BURN"
@@ -140,7 +144,13 @@ export function RedeemStatus() {
                   {t(failed ? "redeem.statusExpired" : step.label)}
                 </span>
                 <span className="text-xs text-muted-text">
-                  {t(failed ? "redeem.statusExpiredDesc" : step.desc)}
+                  {t(
+                    failed
+                      ? "redeem.statusExpiredDesc"
+                      : isCustodialBurn && step.key === "AWAITING_BURN"
+                        ? "redeem.statusAwaitingBurnCustodialDesc"
+                        : step.desc,
+                  )}
                 </span>
                 {active && step.key === "AWAITING_BURN" && remainingSec > 0 && (
                   <span className="mt-1 text-xs text-warning-text">
@@ -153,8 +163,21 @@ export function RedeemStatus() {
         })}
       </div>
 
-      {/* Burn action gate — only while awaiting the on-chain burn (USDX-259). */}
-      {order.status === "AWAITING_BURN" && (
+      {/* Custodial: no wallet action at all — the dispatcher signs; the tracker
+          just says so until the scanner confirms (custodial-wallet.md §5.3). */}
+      {order.status === "AWAITING_BURN" && isCustodialBurn && (
+        <p
+          className="flex items-center gap-2 rounded-lg border border-border bg-muted p-3 text-sm text-foreground"
+          data-testid="redeem-custodial-processing"
+        >
+          <Spinner className="shrink-0 text-primary" />
+          {t("redeem.custodialBurnProcessing")}
+        </p>
+      )}
+
+      {/* Burn action gate — only while awaiting the on-chain burn (USDX-259),
+          and only for SELF_SIGN orders. */}
+      {order.status === "AWAITING_BURN" && !isCustodialBurn && (
         <BurnGate
           order={order}
           pre={pre}

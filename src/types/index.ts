@@ -15,6 +15,11 @@ export interface User {
   emailVerifiedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  // Akun sudah punya PIN 6-digit (`users.pin_hash` terisi — users.yaml § User
+  // `pinSet`, pola pin.yaml). Transfer & redeem custodial memakai PIN itu; `false`
+  // → arahkan user membuat PIN dulu, jangan buka dialog PIN yang pasti gagal.
+  // Opsional: sesi yang di-persist sebelum field ini ada tidak membawanya.
+  pinSet?: boolean;
   // Wallet custodial user (users.yaml § User → `custodialWallet`, USDX-607/566).
   // `null` = user tidak punya (mayoritas non-custodial). Ini yang menentukan
   // routing: tawarkan "dikasih wallet" atau tampilkan saldo — TANPA memanggil
@@ -57,6 +62,27 @@ export interface CustodialWallet extends CustodialWalletSummary {
   balanceAt: string | null; // waktu pembacaan; null bersama `balance`
   createdAt: string; // permintaan diterima, bukan waktu ACTIVE
 }
+
+// POST /api/v2/wallet/transfer → 202 (wallet.yaml § TransferAccepted). **Bukti
+// BROADCAST, bukan bukti settle**: tx sudah di mempool, konfirmasi on-chain terjadi
+// setelahnya dan belum ada endpoint pemantaunya di gelombang 1 (USDX-577). UI
+// menampilkan tx hash + tautan explorer, tidak boleh mengklaim "berhasil".
+export interface TransferAccepted {
+  txHash: string; // 0x-prefixed, 66 chars
+  from: string; // address custodial pengirim (echo)
+  to: string;
+  amount: string; // decimal USDX
+  amountWei: string; // uint256 string
+  chain: string;
+  // Waktu broadcast. Pada replay idempotency ini tetap waktu broadcast ASLI.
+  submittedAt: string;
+}
+
+// Siapa yang menandatangani burn sebuah redeem order (common.yaml § BurnMode).
+// Ditentukan BACKEND saat create dari salinan kerja wallet custodial — FE tidak
+// mengirimkannya. CUSTODIAL → FE tidak menampilkan layar tanda tangan wallet dan
+// tidak memanggil `POST /redeem/{id}/burn-tx` (→ 409 INVALID_ORDER_STATE).
+export type BurnMode = "SELF_SIGN" | "CUSTODIAL";
 
 // Own KYC status (consumer) — openapi KycMyStatus (kyc.yaml). No PII payload.
 // Fields besides `status` are absent when the user has never submitted KYC —
@@ -355,6 +381,10 @@ export interface RedeemOrderCreated {
   // Burn wallet bound at create (echo of the request `userAddress`, USDX-259);
   // the scanner only accepts a Redeem event from it.
   userAddress: string;
+  // Jalur burn (redeem.yaml § RedeemOrderCreated.burnMode, USDX-565). Snapshot saat
+  // create. Opsional di tipe: payload backend sebelum USDX-565 tidak membawanya,
+  // dan yang tidak membawa dibaca SELF_SIGN — alur existing, bukan alur baru.
+  burnMode?: BurnMode;
   contractAddress: string; // USDX proxy address on this chain
   redeemId: string; // bytes32 hex (0x-prefixed) — `id` arg for redeem(id, amount)
   amount: string; // decimal USDX

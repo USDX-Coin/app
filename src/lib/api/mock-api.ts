@@ -39,8 +39,18 @@ import type {
   RedeemOrderCreated,
   RedeemOrderDetail,
   RedeemStatus,
+  BurnMode,
 } from "@/types";
-import { MOCK_CONTRACT_ADDRESS, withCustodialWallet } from "./mock-custodial-wallet";
+import {
+  MOCK_CONTRACT_ADDRESS,
+  MOCK_BLACKLISTED_ADDRESS,
+  withCustodialWallet,
+  isMockCustodialAddress,
+  requireAndVerifyMockPin,
+  requireActiveCustodialWallet,
+  mockCustodialBalanceUsdx,
+  debitMockCustodialBalance,
+} from "./mock-custodial-wallet";
 import { ApiError, type Paginated } from "./client";
 import { validatePassword, validateAddress } from "@/lib/validations";
 import { getBankName } from "@/lib/banks";
@@ -499,7 +509,10 @@ const MOCK_PG_FEE_QRIS_PCT = 0.7; // % of subtotal
 // and returns 422 RECIPIENT_BLACKLISTED (USDX-192, week2.md § Endpoints Mint).
 // The mock mirrors that for this sentinel so the FE inline-error path (USDX-201)
 // is exercisable offline.
-export const MOCK_BLACKLISTED_ADDRESS = "0x000000000000000000000000000000000000dead";
+// `MOCK_BLACKLISTED_ADDRESS` (mint + redeem + transfer) lives in
+// mock-custodial-wallet.ts so the transfer mock can use it without a cyclic
+// import; re-exported here for the mint/redeem tests that always imported it.
+export { MOCK_BLACKLISTED_ADDRESS };
 const MOCK_MIN_TOTAL_PAY_IDR = 10_000; // Asasta floor (week2.md § Min amount)
 const MOCK_VA_BANKS: VaBank[] = [
   "BCA", "BNI", "BRI", "CIMB", "DANAMON", "INA", "MANDIRI", "PERMATA", "MAYBANK",
@@ -894,6 +907,11 @@ const MOCK_PAYOUT_COMPLETE_MS = 8_500; // PROCESSING_PAYOUT → PAYOUT_COMPLETE
 // week3.md REDEEM_LATE_BURN_GRACE default (24h): a burn past expires_at within the
 // grace still auto-pays (late_burn); beyond it → stale_burn, payout held.
 const MOCK_REDEEM_LATE_BURN_GRACE_MS = 24 * 60 * 60_000;
+// Jalur CUSTODIAL (custodial-wallet.md §5.3, USDX-565): Custodial Burn Dispatcher
+// (cron JOB, default tiap 10 s di backend) meminta wallet-service menandatangani
+// burn — di mock, hash + burn_submitted_at "muncul" sekian ms setelah create,
+// terbaca saat GET berikutnya. Status tetap dihitung scanner (lifecycle di atas).
+const MOCK_CUSTODIAL_DISPATCH_MS = 1_500;
 // Test seam: a redeem to this account number fails inquiry → 422
 // INVALID_BANK_ACCOUNT (week3.md § Validasi rekening), so the FE inline-error
 // path is exercisable offline. Any other number passes (mock inquiry always valid).
@@ -929,6 +947,9 @@ interface MockRedeemRecord {
   burnSubmittedAtMs: number | null;
   burnTxHash: string | null;
   userAddress: string; // bound at create from the request userAddress (USDX-259)
+  // Siapa yang menandatangani (redeem.yaml § burnMode, USDX-565): snapshot saat
+  // create dari kecocokan `userAddress` dengan wallet custodial user.
+  burnMode: BurnMode;
 }
 const redeemOrders = new Map<string, MockRedeemRecord>();
 
@@ -999,6 +1020,7 @@ function seedResumableRedeemOrder() {
     burnSubmittedAtMs: null,
     burnTxHash: null,
     userAddress: SEED_RESUME_USER_ADDRESS,
+    burnMode: "SELF_SIGN",
   });
 }
 seedResumableRedeemOrder();
@@ -1056,6 +1078,16 @@ export async function mockCreateRedeemOrder(
   req: CreateRedeemOrderRequest,
 ): Promise<RedeemOrderCreated> {
   await delay(600);
+  // Dua jalur burn — `burnMode` ditentukan di sini, dari kecocokan `userAddress`
+  // dengan wallet custodial user (redeem.yaml § redeemV2Create). Urutan gate
+  // jalur custodial (keputusan review backend#315, sama dengan /wallet/transfer):
+  // validasi bentuk → `pin` wajib (422) → PIN diverifikasi (401/429) →
+  // 409 WALLET_NOT_ACTIVE — semuanya SEBELUM rate limit / pre-check / inquiry.
+  const burnMode: BurnMode = isMockCustodialAddress(req.userAddress) ? "CUSTODIAL" : "SELF_SIGN";
+  if (burnMode === "CUSTODIAL") {
+    requireAndVerifyMockPin(req.pin);
+    requireActiveCustodialWallet();
+  }
   maybeThrowRateLimited(); // 429 RATE_LIMITED seam (USDX-252)
   const rate = mockEffectiveSellRate();
   const b = computeRedeemBreakdown({
@@ -1080,7 +1112,9 @@ export async function mockCreateRedeemOrder(
   if (req.userAddress.toLowerCase() === MOCK_BLACKLISTED_WALLET) {
     throw new ApiError(422, "WALLET_BLACKLISTED", "Wallet ini tidak dapat melakukan burn");
   }
-  const balanceUsdx = mockWalletBalanceUsdx();
+  // Saldo: wallet eksternal dari seam wagmi; wallet custodial dari state mock-nya.
+  const balanceUsdx =
+    burnMode === "CUSTODIAL" ? mockCustodialBalanceUsdx() : mockWalletBalanceUsdx();
   if (balanceUsdx !== null && balanceUsdx < b.amountUsdx) {
     throw new ApiError(422, "INSUFFICIENT_BALANCE", "Saldo USDX tidak cukup");
   }
@@ -1107,6 +1141,7 @@ export async function mockCreateRedeemOrder(
     customerName: currentAccount()?.user.name ?? "Demo User",
     chain: req.chain || "polygon",
     userAddress: req.userAddress, // bound at create (echo) — USDX-259
+    burnMode,
     contractAddress: MOCK_USDX_CONTRACT,
     redeemId: "0x" + randomHex(32),
     amount: String(req.amountCurrency === "USD" ? Number(req.amount) : b.amountUsdx),
@@ -1136,6 +1171,7 @@ export async function mockCreateRedeemOrder(
     burnSubmittedAtMs: null,
     burnTxHash: null,
     userAddress: req.userAddress,
+    burnMode,
   });
   return order;
 }
@@ -1185,6 +1221,11 @@ export async function mockReportBurnTx(id: string, txHash: string): Promise<Rede
   if (!/^0x[0-9a-fA-F]{64}$/.test(txHash)) {
     throw new ApiError(422, "VALIDATION_ERROR", "Hash transaksi tidak valid");
   }
+  // Hanya SELF_SIGN: di jalur custodial yang mem-broadcast adalah sistem, hash-nya
+  // sudah diketahui backend, dan klien tidak boleh menempelkan hash sembarangan.
+  if (record.burnMode === "CUSTODIAL") {
+    throw new ApiError(409, "INVALID_ORDER_STATE", "Burn order custodial dilakukan sistem");
+  }
   const status = resolveRedeemDetail(record).status;
   // Only AWAITING_BURN / EXPIRED (late burn) may report — beyond that the scanner
   // already owns the order (week3.md § burn-tx endpoint).
@@ -1201,7 +1242,22 @@ export async function mockReportBurnTx(id: string, txHash: string): Promise<Rede
 // Derives the live status + payout fields from elapsed time since the burn was
 // reported, mirroring the W3 job lifecycle (finality gate → BURNED →
 // PROCESSING_PAYOUT → PAYOUT_COMPLETE) and the late-burn / stale-burn cutoffs.
+// Custodial Burn Dispatcher (mock): order CUSTODIAL AWAITING_BURN tanpa hash,
+// belum lewat expires_at → "ditandatangani sistem" MOCK_CUSTODIAL_DISPATCH_MS
+// setelah create. Hanya hash + burn_submitted_at yang dicatat — status tetap
+// milik scanner (lifecycle di resolveRedeemDetail). Saldo wallet custodial ikut
+// turun sebesar yang dibakar, supaya layar saldo di-refresh sesudahnya.
+function dispatchCustodialBurn(record: MockRedeemRecord): void {
+  if (record.burnMode !== "CUSTODIAL" || record.burnSubmittedAtMs != null) return;
+  const dueAt = record.createdAtMs + MOCK_CUSTODIAL_DISPATCH_MS;
+  if (Date.now() < dueAt || dueAt > record.expiresAtMs) return;
+  record.burnSubmittedAtMs = dueAt;
+  record.burnTxHash = "0x" + randomHex(32);
+  debitMockCustodialBalance(Number(record.order.amount));
+}
+
 function resolveRedeemDetail(record: MockRedeemRecord): RedeemOrderDetail {
+  dispatchCustodialBurn(record);
   const { order, burnSubmittedAtMs, expiresAtMs } = record;
   const now = Date.now();
 
@@ -1247,6 +1303,7 @@ function resolveRedeemDetail(record: MockRedeemRecord): RedeemOrderDetail {
     status,
     type: "REDEEM",
     userAddress: record.userAddress,
+    burnMode: record.burnMode,
     inputCurrency: record.inputCurrency,
     lateBurn,
     staleBurn,

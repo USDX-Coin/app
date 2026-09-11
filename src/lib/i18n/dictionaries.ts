@@ -116,6 +116,12 @@ const en: Dict = {
   "mint.errDisabled": "Minting isn't available yet. Please try again later.",
   "mint.errGate": "Your account isn't eligible to mint yet.",
   "mint.errGeneric": "Couldn't create the order. Please try again.",
+  // mint destination: "my custodial wallet" (USDX-567, custodial-wallet.md §5.2).
+  // No new API field — the custodial address simply fills `userAddress`.
+  "mint.destLabel": "Destination",
+  "mint.destCustodial": "My custodial wallet",
+  "mint.destManual": "Another address",
+  "mint.destCustodialHint": "USDX is minted straight into your custodial wallet — nothing to type.",
   // address book (USDX-201 picker + USDX-203 add/delete)
   "addrbook.pickTitle": "Address book",
   "addrbook.empty": "No saved addresses yet.",
@@ -291,6 +297,17 @@ const en: Dict = {
   "redeem.errGeneric": "Something went wrong. Please try again.",
   "redeem.errInsufficientBalance": "Your USDX balance is not enough for this redeem.",
   "redeem.errWalletBlacklisted": "This wallet cannot burn USDX.",
+  // redeem — custodial burn source (USDX-567, custodial-wallet.md §5.3). The
+  // system signs after the PIN; there is no wallet signature screen and the
+  // tracker says "processing" instead of "sign in your wallet".
+  "redeem.sourceLabel": "Burn from",
+  "redeem.sourceCustodial": "My custodial wallet",
+  "redeem.sourceExternal": "External wallet",
+  "redeem.custodialNote": "After you confirm with your PIN the system burns the USDX for you — no wallet signature needed. IDR is sent to your bank account once the burn is confirmed.",
+  "redeem.pinDescription": "Burn {amount} USDX from my custodial wallet",
+  "redeem.statusAwaitingBurnCustodialDesc": "The system is processing the burn — nothing to do on your side.",
+  "redeem.custodialBurnProcessing": "Processing burn from your custodial wallet — waiting for on-chain confirmation.",
+  "redeem.errWalletNotActive": "Your custodial wallet can't burn right now ({status}). No order was created.",
   // redeem — precondition gate (network / balance / gas), USDX-259
   "redeem.wrongNetwork": "Switch your wallet to Polygon to continue.",
   "redeem.switchNetwork": "Switch to Polygon",
@@ -315,6 +332,57 @@ const en: Dict = {
   "sum.accountName": "Account holder",
   "btn.connectWallet": "Connect Wallet",
   "btn.confirmBurn": "Confirm & Burn",
+  // PIN confirmation (pin.yaml, USDX-567) — the single approval step for the
+  // custodial transfer and the custodial redeem: after it there is no wallet
+  // signature screen, so this dialog is where the user says yes to moving money.
+  "pin.title": "Confirm with PIN",
+  "pin.label": "6-digit PIN",
+  "pin.hint": "Enter your account PIN to approve this transaction.",
+  "pin.confirm": "Confirm",
+  "pin.errFormat": "Enter the 6 digits of your PIN",
+  "pin.errInvalid": "Wrong PIN. Please try again.",
+  "pin.errNotSet": "Your account has no PIN yet. Set a PIN before using your custodial wallet.",
+  "pin.errLocked": "Too many wrong attempts. Try again in {time}.",
+  // Fallback status word for 409 WALLET_NOT_ACTIVE messages (transfer/redeem)
+  // when the backend says not-active but the profile copy still reads ACTIVE
+  // (stale, refetched in the background). The real statuses use `wallet.status.*`.
+  "wallet.status.notActive": "not active",
+  // transfer custodial — errors (wallet.yaml, USDX-567). One sentence per code:
+  // the contract promises specific answers (limit, rate limit, blacklist,
+  // wallet status) and a generic failure would hide the one thing the user can
+  // act on.
+  "transfer.errValidation": "Please check the destination and the amount, then try again.",
+  "transfer.errInsufficient": "Your custodial wallet balance is not enough for this transfer.",
+  "transfer.errBlacklisted": "This destination address can't receive USDX.",
+  "transfer.errLimitPerTx": "This transfer exceeds the per-transaction limit of {limit} USDX.",
+  "transfer.errLimitDaily": "This transfer exceeds today's limit of {limit} USDX — {remaining} USDX left until {resetAt}.",
+  "transfer.errLimitGeneric": "This transfer exceeds your transfer limit.",
+  "transfer.errWalletNotActive": "Your custodial wallet can't send right now ({status}). No transfer was made.",
+  "transfer.errNoWallet": "You don't have a custodial wallet yet.",
+  "transfer.errServiceUnavailable": "The wallet service is temporarily unavailable. Nothing was sent — try again in a moment.",
+  "transfer.errInProgress": "This transfer is still being processed. Wait a moment, then press Send again — it won't be sent twice.",
+  "transfer.errGate": "Your account isn't eligible to send yet.",
+  "transfer.errGeneric": "Couldn't send the transfer. Please try again.",
+  // transfer custodial — screen copy (USDX-567). "Sent to the network", never
+  // "successful": 202 is proof of broadcast, not of on-chain settlement, and
+  // there is no endpoint yet to watch the confirmation (USDX-577).
+  "transfer.from": "From",
+  "transfer.myWallet": "My custodial wallet",
+  "transfer.balance": "Balance",
+  "transfer.walletNotActiveTitle": "Sending unavailable",
+  "transfer.walletProvisioning": "Your custodial wallet is still being set up. Sending opens as soon as it is active.",
+  "transfer.walletSuspended": "Your custodial wallet is suspended. Sending is disabled — please contact support.",
+  "transfer.note": "Transfers on the blockchain cannot be reversed. Double-check the destination address.",
+  "transfer.continueToPin": "Continue to PIN",
+  "transfer.pinDescription": "Send {amount} USDX to {to}",
+  "transfer.sentTitle": "Transfer sent to the network",
+  "transfer.sentDesc": "Your transfer has been signed and broadcast. On-chain confirmation follows in a moment — this screen is not that confirmation.",
+  "transfer.txHash": "Transaction hash",
+  "transfer.viewOnExplorer": "View on explorer",
+  "transfer.copyHash": "Copy hash",
+  "transfer.again": "Send another transfer",
+  "route.send.desc": "No transfer was made and your balance did not change.",
+  "route.send.title": "The send page could not be loaded",
   // auth — branding panel
   "auth.brand.headline": "The Transparent & Regulated USD Stablecoin",
   "auth.brand.tagline": "Mint, redeem, bridge, and send USDX across 8 networks — fast, secure, and fully backed.",
@@ -801,11 +869,16 @@ const en: Dict = {
   "validation.amount.maxMint": "Maximum mint is {amount} USDX",
   "validation.amount.minRedeem": "Minimum redeem is {amount} USDX",
   "validation.amount.maxRedeem": "Maximum redeem is {amount} USDX",
+  // transfer custodial (USDX-567)
+  "validation.amount.decimals": "Use at most 6 decimal places",
+  "validation.amount.insufficient": "The amount exceeds your USDX balance",
   "validation.address.required": "Enter the destination address",
   "validation.address.evmLength": "An EVM address has 42 characters — this one is a different length",
   "validation.address.evmFormat": "This EVM address contains characters that aren't allowed",
   "validation.address.solanaLength": "A Solana address has 32–44 characters — this one is a different length",
   "validation.address.solanaFormat": "This Solana address contains characters that aren't allowed",
+  "validation.address.evmOnly": "Enter a Polygon (EVM) address starting with 0x",
+  "validation.address.own": "That is your own custodial wallet — pick another destination",
   "validation.fullName.required": "Full name is required",
   "validation.fullName.minLength": "Name must be at least 2 characters",
   "validation.phone.required": "Phone number is required",
@@ -1022,6 +1095,12 @@ const id: Dict = {
   "mint.errDisabled": "Mint belum tersedia. Coba lagi nanti.",
   "mint.errGate": "Akun Anda belum memenuhi syarat untuk mint.",
   "mint.errGeneric": "Gagal membuat pesanan. Coba lagi.",
+  // tujuan mint: "wallet custodial saya" (USDX-567, custodial-wallet.md §5.2).
+  // Tanpa field API baru — address custodial hanya mengisi `userAddress`.
+  "mint.destLabel": "Tujuan",
+  "mint.destCustodial": "Wallet custodial saya",
+  "mint.destManual": "Alamat lain",
+  "mint.destCustodialHint": "USDX dimint langsung ke wallet custodial Anda — tidak perlu mengetik alamat.",
   // address book picker (USDX-201; tambah wallet di USDX-203)
   "addrbook.pickTitle": "Buku alamat",
   "addrbook.empty": "Belum ada alamat tersimpan.",
@@ -1190,6 +1269,17 @@ const id: Dict = {
   "redeem.errGeneric": "Terjadi kesalahan. Silakan coba lagi.",
   "redeem.errInsufficientBalance": "Saldo USDX Anda tidak cukup untuk redeem ini.",
   "redeem.errWalletBlacklisted": "Wallet ini tidak dapat melakukan burn USDX.",
+  // redeem — sumber burn custodial (USDX-567, custodial-wallet.md §5.3). Sistem
+  // menandatangani setelah PIN; tidak ada layar tanda tangan wallet dan tracker
+  // berkata "memproses", bukan "tanda tangani di wallet".
+  "redeem.sourceLabel": "Burn dari",
+  "redeem.sourceCustodial": "Wallet custodial saya",
+  "redeem.sourceExternal": "Wallet eksternal",
+  "redeem.custodialNote": "Setelah konfirmasi PIN, sistem membakar USDX atas nama Anda — tanpa tanda tangan wallet. IDR dikirim ke rekening Anda setelah burn terkonfirmasi.",
+  "redeem.pinDescription": "Bakar {amount} USDX dari wallet custodial saya",
+  "redeem.statusAwaitingBurnCustodialDesc": "Sistem sedang memproses burn — tidak ada yang perlu Anda lakukan.",
+  "redeem.custodialBurnProcessing": "Memproses burn dari wallet custodial Anda — menunggu konfirmasi on-chain.",
+  "redeem.errWalletNotActive": "Wallet custodial Anda belum bisa burn saat ini ({status}). Tidak ada pesanan yang dibuat.",
   // redeem — precondition gate (jaringan / saldo / gas), USDX-259
   "redeem.wrongNetwork": "Alihkan wallet Anda ke Polygon untuk melanjutkan.",
   "redeem.switchNetwork": "Alihkan ke Polygon",
@@ -1214,6 +1304,57 @@ const id: Dict = {
   "sum.accountName": "Atas nama",
   "btn.connectWallet": "Hubungkan Wallet",
   "btn.confirmBurn": "Konfirmasi & Burn",
+  // Konfirmasi PIN (pin.yaml, USDX-567) — satu-satunya langkah persetujuan untuk
+  // transfer custodial dan redeem custodial: setelahnya tidak ada layar tanda
+  // tangan wallet, jadi dialog inilah tempat user mengiyakan uangnya bergerak.
+  "pin.title": "Konfirmasi dengan PIN",
+  "pin.label": "PIN 6 digit",
+  "pin.hint": "Masukkan PIN akun Anda untuk menyetujui transaksi ini.",
+  "pin.confirm": "Konfirmasi",
+  "pin.errFormat": "Masukkan 6 digit PIN Anda",
+  "pin.errInvalid": "PIN salah. Coba lagi.",
+  "pin.errNotSet": "Akun Anda belum punya PIN. Buat PIN dulu sebelum memakai wallet custodial.",
+  "pin.errLocked": "Terlalu banyak percobaan salah. Coba lagi dalam {time}.",
+  // Kata status cadangan untuk pesan 409 WALLET_NOT_ACTIVE (transfer/redeem)
+  // saat backend bilang tidak aktif tapi salinan profil masih ACTIVE (basi,
+  // di-refetch di latar). Status sebenarnya memakai `wallet.status.*` (USDX-566).
+  "wallet.status.notActive": "belum aktif",
+  // transfer custodial — error (wallet.yaml, USDX-567). Satu kalimat per kode:
+  // kontraknya menjanjikan jawaban spesifik (plafon, rate limit, blacklist,
+  // status wallet) dan pesan generik menyembunyikan satu-satunya hal yang bisa
+  // user lakukan.
+  "transfer.errValidation": "Periksa tujuan dan jumlahnya, lalu coba lagi.",
+  "transfer.errInsufficient": "Saldo wallet custodial Anda tidak cukup untuk transfer ini.",
+  "transfer.errBlacklisted": "Alamat tujuan ini tidak dapat menerima USDX.",
+  "transfer.errLimitPerTx": "Transfer ini melebihi batas per transaksi {limit} USDX.",
+  "transfer.errLimitDaily": "Transfer ini melebihi batas harian {limit} USDX — sisa {remaining} USDX sampai {resetAt}.",
+  "transfer.errLimitGeneric": "Transfer ini melebihi batas transfer Anda.",
+  "transfer.errWalletNotActive": "Wallet custodial Anda belum bisa mengirim saat ini ({status}). Tidak ada transfer yang dibuat.",
+  "transfer.errNoWallet": "Anda belum punya wallet custodial.",
+  "transfer.errServiceUnavailable": "Layanan wallet sedang tidak tersedia. Tidak ada yang terkirim — coba lagi sebentar.",
+  "transfer.errInProgress": "Transfer ini masih diproses. Tunggu sebentar, lalu tekan Kirim lagi — tidak akan terkirim dua kali.",
+  "transfer.errGate": "Akun Anda belum bisa mengirim USDX.",
+  "transfer.errGeneric": "Gagal mengirim transfer. Coba lagi.",
+  // transfer custodial — teks layar (USDX-567). "Dikirim ke jaringan", bukan
+  // "berhasil": 202 adalah bukti broadcast, bukan bukti settle on-chain, dan
+  // belum ada endpoint pemantau konfirmasinya (USDX-577).
+  "transfer.from": "Dari",
+  "transfer.myWallet": "Wallet custodial saya",
+  "transfer.balance": "Saldo",
+  "transfer.walletNotActiveTitle": "Belum bisa mengirim",
+  "transfer.walletProvisioning": "Wallet custodial Anda masih disiapkan. Pengiriman terbuka begitu wallet aktif.",
+  "transfer.walletSuspended": "Wallet custodial Anda ditangguhkan. Pengiriman dinonaktifkan — hubungi dukungan.",
+  "transfer.note": "Transfer di blockchain tidak dapat dibatalkan. Periksa kembali alamat tujuan.",
+  "transfer.continueToPin": "Lanjut ke PIN",
+  "transfer.pinDescription": "Kirim {amount} USDX ke {to}",
+  "transfer.sentTitle": "Transfer dikirim ke jaringan",
+  "transfer.sentDesc": "Transfer sudah ditandatangani dan disiarkan. Konfirmasi on-chain menyusul beberapa saat lagi — layar ini bukan konfirmasi itu.",
+  "transfer.txHash": "Hash transaksi",
+  "transfer.viewOnExplorer": "Lihat di explorer",
+  "transfer.copyHash": "Salin hash",
+  "transfer.again": "Transfer lagi",
+  "route.send.desc": "Tidak ada transfer yang dibuat dan saldo Anda tidak berubah.",
+  "route.send.title": "Halaman kirim gagal dimuat",
   // auth — branding panel
   "auth.brand.headline": "Stablecoin USD yang Transparan & Teregulasi",
   "auth.brand.tagline": "Mint, redeem, bridge, dan kirim USDX di 8 jaringan — cepat, aman, dan sepenuhnya dijamin.",
@@ -1695,11 +1836,16 @@ const id: Dict = {
   "validation.amount.maxMint": "Mint maksimal {amount} USDX",
   "validation.amount.minRedeem": "Redeem minimal {amount} USDX",
   "validation.amount.maxRedeem": "Redeem maksimal {amount} USDX",
+  // transfer custodial (USDX-567)
+  "validation.amount.decimals": "Maksimal 6 angka di belakang koma",
+  "validation.amount.insufficient": "Jumlah melebihi saldo USDX Anda",
   "validation.address.required": "Masukkan alamat tujuan",
   "validation.address.evmLength": "Alamat EVM terdiri dari 42 karakter — panjang yang ini berbeda",
   "validation.address.evmFormat": "Alamat EVM ini memuat karakter yang tidak diperbolehkan",
   "validation.address.solanaLength": "Alamat Solana terdiri dari 32–44 karakter — panjang yang ini berbeda",
   "validation.address.solanaFormat": "Alamat Solana ini memuat karakter yang tidak diperbolehkan",
+  "validation.address.evmOnly": "Masukkan alamat Polygon (EVM) yang diawali 0x",
+  "validation.address.own": "Itu wallet custodial Anda sendiri — pilih tujuan lain",
   "validation.fullName.required": "Nama lengkap wajib diisi",
   "validation.fullName.minLength": "Nama minimal 2 karakter",
   "validation.phone.required": "Nomor HP wajib diisi",

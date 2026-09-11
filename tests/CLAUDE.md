@@ -29,6 +29,8 @@ tests/
     mint-flow.spec.ts   # Login -> mint -> review -> cross-origin checkout handoff
     redeem-flow.spec.ts # Login -> redeem -> connect wallet prompt
     custodial-wallet-flow.spec.ts # Register -> verify -> "dikasih wallet" -> ACTIVE -> receive -> balance (USDX-566)
+    transfer-flow.spec.ts         # Custodial transfer: form -> Ringkasan -> PIN -> tx hash (USDX-567)
+    redeem-custodial-flow.spec.ts # Custodial redeem: PIN, no wallet dialog, tracker to payout (USDX-567)
   audit-ui/             # node + Playwright — measurement, NOT assertions
     sweep-auth.js       # Every authed page x 4 viewports: overflow, out-of-bounds
     state-audit.js      # Empty, 500, 401, 429, offline, slow loading
@@ -88,6 +90,11 @@ beforeEach(() => {
   no `load` event, so use `goBack({ waitUntil: "commit" })`. Any spec asserting a
   restore must also assert `pageshow.persisted`, otherwise a silent fresh load
   makes it pass while testing nothing
+- **Custodial paths** (USDX-567): arm `seedCustodialWallet(page, { status: "ACTIVE", balance, …seams })` AND pass
+  `custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY` to `loginViaStorage` — the first render
+  reads the persisted profile, the mock `/me` reads the seam; both must agree. Mock PIN is
+  `MOCK_PIN` ("123456"). Never arm `seedWallet` (the external-wallet seam) in a custodial
+  spec: proving "no wallet dialog" needs the external wallet to be absent
 - Unit tests mock all data — no network, no DOM rendering for store tests
 - Playwright tests use `{ timeout: 15000 }` on key assertions for SSR hydration
 - `type="email"` inputs have native browser validation — test with valid-format emails

@@ -315,6 +315,17 @@ const en: Dict = {
   "sum.accountName": "Account holder",
   "btn.connectWallet": "Connect Wallet",
   "btn.confirmBurn": "Confirm & Burn",
+  // PIN confirmation (pin.yaml, USDX-567) — the single approval step for the
+  // custodial transfer and the custodial redeem: after it there is no wallet
+  // signature screen, so this dialog is where the user says yes to moving money.
+  "pin.title": "Confirm with PIN",
+  "pin.label": "6-digit PIN",
+  "pin.hint": "Enter your account PIN to approve this transaction.",
+  "pin.confirm": "Confirm",
+  "pin.errFormat": "Enter the 6 digits of your PIN",
+  "pin.errInvalid": "Wrong PIN. Please try again.",
+  "pin.errNotSet": "Your account has no PIN yet. Set a PIN before using your custodial wallet.",
+  "pin.errLocked": "Too many wrong attempts. Try again in {time}.",
   // auth — branding panel
   "auth.brand.headline": "The Transparent & Regulated USD Stablecoin",
   "auth.brand.tagline": "Mint, redeem, bridge, and send USDX across 8 networks — fast, secure, and fully backed.",
@@ -1172,6 +1183,17 @@ const id: Dict = {
   "sum.accountName": "Atas nama",
   "btn.connectWallet": "Hubungkan Wallet",
   "btn.confirmBurn": "Konfirmasi & Burn",
+  // Konfirmasi PIN (pin.yaml, USDX-567) — satu-satunya langkah persetujuan untuk
+  // transfer custodial dan redeem custodial: setelahnya tidak ada layar tanda
+  // tangan wallet, jadi dialog inilah tempat user mengiyakan uangnya bergerak.
+  "pin.title": "Konfirmasi dengan PIN",
+  "pin.label": "PIN 6 digit",
+  "pin.hint": "Masukkan PIN akun Anda untuk menyetujui transaksi ini.",
+  "pin.confirm": "Konfirmasi",
+  "pin.errFormat": "Masukkan 6 digit PIN Anda",
+  "pin.errInvalid": "PIN salah. Coba lagi.",
+  "pin.errNotSet": "Akun Anda belum punya PIN. Buat PIN dulu sebelum memakai wallet custodial.",
+  "pin.errLocked": "Terlalu banyak percobaan salah. Coba lagi dalam {time}.",
   // auth — branding panel
   "auth.brand.headline": "Stablecoin USD yang Transparan & Teregulasi",
   "auth.brand.tagline": "Mint, redeem, bridge, dan kirim USDX di 8 jaringan — cepat, aman, dan sepenuhnya dijamin.",

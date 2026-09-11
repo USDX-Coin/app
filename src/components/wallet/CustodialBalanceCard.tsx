@@ -29,11 +29,9 @@ export function CustodialBalanceCard({ onNavigate }: { onNavigate?: () => void }
   if (wallet.status === "none") return null;
 
   const active = wallet.status === "ACTIVE";
-  const reason = !active
-    ? t(`wallet.status.${wallet.status}`)
-    : wallet.isLoading
-      ? t("balance.loading")
-      : t("balance.unavailable");
+  // Why there is no number. For a non-ACTIVE wallet the status pill already
+  // says it, so the line is only for an ACTIVE wallet whose balance is unknown.
+  const reason = !active ? null : wallet.isLoading ? t("balance.loading") : t("balance.unavailable");
 
   return (
     <div
@@ -59,7 +57,7 @@ export function CustodialBalanceCard({ onNavigate }: { onNavigate?: () => void }
         ) : (
           <>
             <p className="text-base font-medium tracking-tight text-sidebar-foreground">— USDX</p>
-            <p className="text-xs text-sidebar-muted">{reason}</p>
+            {reason && <p className="text-xs text-sidebar-muted">{reason}</p>}
           </>
         )}
       </div>

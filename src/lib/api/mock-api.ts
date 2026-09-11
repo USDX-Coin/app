@@ -39,6 +39,8 @@ import type {
   RedeemOrderCreated,
   RedeemOrderDetail,
   RedeemStatus,
+  CustodialWallet,
+  CustodialWalletSummary,
 } from "@/types";
 import { ApiError, type Paginated } from "./client";
 import { validatePassword, validateAddress } from "@/lib/validations";
@@ -169,7 +171,7 @@ export async function mockLogin(req: LoginRequest): Promise<AuthResponse> {
     throw new ApiError(403, "ACCOUNT_SUSPENDED", "Your account is suspended");
   }
   currentEmail = account.user.email;
-  return { user: account.user, token: tokenFor(account.user) };
+  return { user: withCustodialWallet(account.user), token: tokenFor(account.user) };
 }
 
 // Backend normalizes 08xxx → +62xxx before the phone_hash uniqueness check
@@ -222,7 +224,7 @@ export async function mockVerifyEmail(req: VerifyEmailRequest): Promise<AuthResp
     accounts.get("demo@usdx.com")!;
   account.user.emailVerifiedAt = new Date().toISOString();
   currentEmail = account.user.email;
-  return { user: account.user, token: tokenFor(account.user) };
+  return { user: withCustodialWallet(account.user), token: tokenFor(account.user) };
 }
 
 export async function mockResendVerification(): Promise<void> {
@@ -242,7 +244,7 @@ export async function mockResetPassword(req: ResetPasswordRequest): Promise<Auth
   const account = currentAccount() ?? accounts.get("demo@usdx.com")!;
   account.user.emailVerifiedAt = account.user.emailVerifiedAt ?? new Date().toISOString();
   currentEmail = account.user.email;
-  return { user: account.user, token: tokenFor(account.user) };
+  return { user: withCustodialWallet(account.user), token: tokenFor(account.user) };
 }
 
 // Mock change-password (auth.yaml § changePasswordV2, USDX-172). Verifies the
@@ -283,12 +285,12 @@ export async function mockMintCheckoutCode(): Promise<string> {
 export async function mockGetMe(): Promise<User> {
   await delay(200);
   const account = currentAccount();
-  if (account) return account.user;
+  if (account) return withCustodialWallet(account.user);
   // Storage-seeded session (Playwright loginViaStorage): the in-memory mock has
   // no logged-in account, so mirror the persisted user instead of falling back
   // to DEMO_USER — otherwise the /v2/auth/me refresh (useSession) would
   // overwrite seeded state like `name: null` (USDX-153 header fallback tests).
-  return persistedUser() ?? DEMO_USER;
+  return withCustodialWallet(persistedUser() ?? DEMO_USER);
 }
 
 function persistedUser(): User | null {
@@ -1327,4 +1329,163 @@ function seededRedeemTransactions(): ConsumerTransaction[] {
       updatedAt: new Date(base - i * 5 * 3_600_000).toISOString(),
     };
   });
+}
+
+// ── Mock wallet custodial (wallet.yaml, USDX-566) ────────────────────────────
+// Stand-in untuk `POST/GET /api/v2/wallet`. Satu wallet per browser (bukan per
+// akun — cukup untuk mock), disimpan di localStorage ("usdx-mock-custodial")
+// supaya bertahan melintasi `page.goto` Playwright: alur register → verifikasi →
+// dikasih wallet → poll → ACTIVE → sidebar menempuh beberapa muatan halaman, dan
+// state modul hilang pada tiap muatan. Di luar browser (SSR) jatuh ke variabel
+// modul.
+//
+// State machine mengikuti kontrak: `POST` → PROVISIONING (address null);
+// PROVISIONING berpindah ke ACTIVE sendiri MOCK_PROVISIONING_MS setelah dibuat
+// (dibaca saat GET berikutnya, meniru forward status USDX-579). Tidak ada
+// keadaan gagal — persis SOT §5.5 — jadi seam `stuck` yang memerankan
+// "provisioning macet": GET tidak pernah berpindah, dan `POST` ulang
+// (tombol coba lagi) yang menyembuhkannya (§5.5: respons POST menyegarkan
+// salinan kerja). Seam `failNextCreate` memerankan 503 satu kali.
+//
+// Seam Playwright (JSON di key yang sama): `seedCustodialWallet` di
+// tests/helpers/playwright-utils.ts. Mock-only — backend sungguhan memegang
+// state ini.
+const CUSTODIAL_SEAM_KEY = "usdx-mock-custodial";
+export const MOCK_CUSTODIAL_ADDRESS = "0x000000C528aE908fB929a0898B65e913623c9aFf";
+export const MOCK_PROVISIONING_MS = 1_500;
+
+export interface MockCustodialState {
+  status: CustodialWallet["status"];
+  address: string | null;
+  createdAt: string;
+  // Epoch ms saat PROVISIONING boleh berpindah ke ACTIVE (dibaca saat GET).
+  activateAt: number | null;
+  // Saldo USDX desimal setelah ACTIVE. `null` = RPC "tak terjangkau" — kontrak
+  // menuntut UI merender "—", bukan 0.
+  balance: string | null;
+  // Seam: PROVISIONING tidak pernah berpindah sampai POST ulang.
+  stuck?: boolean;
+  // Seam: POST berikutnya → 503 WALLET_SERVICE_UNAVAILABLE, lalu seam-nya gugur.
+  failNextCreate?: boolean;
+}
+
+let custodialMemory: MockCustodialState | null = null;
+
+function readCustodialState(): MockCustodialState | null {
+  if (typeof localStorage === "undefined") return custodialMemory;
+  try {
+    const raw = localStorage.getItem(CUSTODIAL_SEAM_KEY);
+    return raw ? (JSON.parse(raw) as MockCustodialState) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCustodialState(state: MockCustodialState | null) {
+  custodialMemory = state;
+  if (typeof localStorage === "undefined") return;
+  if (state === null) localStorage.removeItem(CUSTODIAL_SEAM_KEY);
+  else localStorage.setItem(CUSTODIAL_SEAM_KEY, JSON.stringify(state));
+}
+
+// Dipakai unit test untuk mengembalikan mock ke "user tanpa wallet".
+export function resetMockCustodialWallet() {
+  writeCustodialState(null);
+}
+
+// PROVISIONING → ACTIVE berjalan "di latar" (wallet-service), terlihat saat GET.
+function settleCustodialState(state: MockCustodialState): MockCustodialState {
+  if (
+    state.status === "PROVISIONING" &&
+    !state.stuck &&
+    state.activateAt !== null &&
+    Date.now() >= state.activateAt
+  ) {
+    const next: MockCustodialState = {
+      ...state,
+      status: "ACTIVE",
+      address: MOCK_CUSTODIAL_ADDRESS,
+      activateAt: null,
+      balance: state.balance ?? "0.00",
+    };
+    writeCustodialState(next);
+    return next;
+  }
+  return state;
+}
+
+function custodialSummary(): CustodialWalletSummary | null {
+  const state = readCustodialState();
+  if (!state) return null;
+  const settled = settleCustodialState(state);
+  return { address: settled.address, status: settled.status };
+}
+
+// `users.yaml § User.custodialWallet` — ikut terbawa di /auth/me + respons
+// login/verify/reset (pola `pinSet`), null untuk user tanpa wallet.
+function withCustodialWallet(user: User): User {
+  return { ...user, custodialWallet: custodialSummary() };
+}
+
+function toCustodialWallet(state: MockCustodialState): CustodialWallet {
+  const readable = state.status !== "PROVISIONING" && state.balance !== null;
+  return {
+    address: state.address,
+    status: state.status,
+    chain: "polygon",
+    contractAddress: MOCK_CONTRACT_ADDRESS,
+    balance: readable ? state.balance : null,
+    balanceWei: readable ? String(Math.round(Number(state.balance) * 10 ** USDX_DECIMALS)) : null,
+    balanceAt: readable ? new Date().toISOString() : null,
+    createdAt: state.createdAt,
+  };
+}
+
+export async function mockGetCustodialWallet(): Promise<CustodialWallet> {
+  await delay(150);
+  const state = readCustodialState();
+  if (!state) {
+    throw new ApiError(404, "WALLET_NOT_FOUND", "Kamu belum punya wallet custodial");
+  }
+  return toCustodialWallet(settleCustodialState(state));
+}
+
+export async function mockCreateCustodialWallet(): Promise<CustodialWallet> {
+  await delay(300);
+  const state = readCustodialState();
+  if (state?.failNextCreate) {
+    writeCustodialState({ ...state, failNextCreate: false });
+    throw new ApiError(
+      503,
+      "WALLET_SERVICE_UNAVAILABLE",
+      "Layanan wallet sedang tidak tersedia, coba lagi sebentar",
+    );
+  }
+  if (state) {
+    const settled = settleCustodialState(state);
+    if (settled.status === "ACTIVE") {
+      throw new ApiError(409, "WALLET_ALREADY_EXISTS", "Kamu sudah punya wallet custodial");
+    }
+    if (settled.status === "SUSPENDED") {
+      throw new ApiError(409, "WALLET_SUSPENDED", "Wallet custodial kamu ditangguhkan");
+    }
+    // Masih PROVISIONING → 202 yang sama, BUKAN 409 — dan POST-lah yang
+    // menyegarkan salinan kerja (§5.5): yang macet dilepas di sini.
+    const healed: MockCustodialState = {
+      ...settled,
+      stuck: false,
+      activateAt: Date.now() + MOCK_PROVISIONING_MS,
+    };
+    writeCustodialState(healed);
+    return toCustodialWallet(healed);
+  }
+  const created: MockCustodialState = {
+    status: "PROVISIONING",
+    address: null,
+    createdAt: new Date().toISOString(),
+    activateAt: Date.now() + MOCK_PROVISIONING_MS,
+    balance: null,
+  };
+  writeCustodialState(created);
+  return toCustodialWallet(created);
 }

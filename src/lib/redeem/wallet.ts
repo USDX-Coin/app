@@ -21,6 +21,13 @@
 // week3.md § Pre-check saat create), so the chain is authoritative for both sides.
 // `balanceUsdx` is `number | null` and NEVER falls back to a number — an unknown
 // balance must stay unknown all the way to the screen.
+//
+// USDX-640: which token that read points at is now a caller's choice.
+// `useUsdxBalance()` with no argument keeps reading the build-time production
+// address, which is what redeem relies on; the balance panel passes the address
+// resolved from GET /api/v2/config, and passes a second one for the test-mint
+// strip. Passing `null` means "there is nothing to read" — the query is off and
+// the balance stays unknown, which is not the same as a wallet holding zero.
 
 import { useCallback } from "react";
 import { create } from "zustand";
@@ -53,11 +60,16 @@ import {
 //                            to exercise the switch-network prompt.
 //   usdx-mock-wallet-balance USDX balance (default plentiful) — arm below the
 //                            amount to exercise the insufficient-balance gate.
+//   usdx-mock-wallet-balance-test  balance handed back to a read whose caller
+//                            asked for the test-mint strip (USDX-640). Defaults
+//                            to 0 — a wallet nothing has been test-minted into
+//                            yet, which is where the recorded demo starts.
 //   usdx-mock-wallet-gas     native POL balance (default sufficient) — arm at 0 to
 //                            exercise the low-gas warning.
 const MOCK_WALLET_SEAM_KEY = "usdx-mock-wallet";
 const MOCK_WALLET_CHAIN_KEY = "usdx-mock-wallet-chain";
 const MOCK_WALLET_BALANCE_KEY = "usdx-mock-wallet-balance";
+const MOCK_WALLET_TEST_BALANCE_KEY = "usdx-mock-wallet-balance-test";
 const MOCK_WALLET_GAS_KEY = "usdx-mock-wallet-gas";
 const MOCK_WALLET_ADDRESS_DEFAULT = "0xC0FFEE0000000000000000000000000000C0FFEE";
 // Seam-only defaults. These are the ONLY balance numbers left in the app, and they
@@ -65,6 +77,7 @@ const MOCK_WALLET_ADDRESS_DEFAULT = "0xC0FFEE0000000000000000000000000000C0FFEE"
 // (`seamArmed()`), i.e. reachable only from the offline Playwright harness. They
 // are NOT a UI fallback — outside the seam an unknown balance stays null (USDX-396).
 const MOCK_WALLET_BALANCE_DEFAULT_USDX = 1_000_000;
+const MOCK_WALLET_TEST_BALANCE_DEFAULT_USDX = 0;
 const MOCK_WALLET_GAS_DEFAULT_POL = 1;
 
 function seamArmed(): boolean {
@@ -85,12 +98,17 @@ function readSeams() {
     balRaw != null && Number.isFinite(Number(balRaw))
       ? Number(balRaw)
       : MOCK_WALLET_BALANCE_DEFAULT_USDX;
+  const testRaw = localStorage.getItem(MOCK_WALLET_TEST_BALANCE_KEY);
+  const balanceTestUsdx =
+    testRaw != null && Number.isFinite(Number(testRaw))
+      ? Number(testRaw)
+      : MOCK_WALLET_TEST_BALANCE_DEFAULT_USDX;
   const gasRaw = localStorage.getItem(MOCK_WALLET_GAS_KEY);
   const gasPol =
     gasRaw != null && Number.isFinite(Number(gasRaw))
       ? Number(gasRaw)
       : MOCK_WALLET_GAS_DEFAULT_POL;
-  return { connected: true, address, chainId, balanceUsdx, gasPol };
+  return { connected: true, address, chainId, balanceUsdx, balanceTestUsdx, gasPol };
 }
 
 // Shared across hook instances (form, Ringkasan modal, tracker) so they all see
@@ -101,6 +119,7 @@ interface MockWalletState {
   address: string;
   chainId: number;
   balanceUsdx: number;
+  balanceTestUsdx: number;
   gasPol: number;
   connect: () => void;
   switchChain: () => void;
@@ -110,6 +129,7 @@ const useMockWalletStore = create<MockWalletState>((set) => ({
   address: MOCK_WALLET_ADDRESS_DEFAULT,
   chainId: REDEEM_CHAIN_NUM_ID,
   balanceUsdx: MOCK_WALLET_BALANCE_DEFAULT_USDX,
+  balanceTestUsdx: MOCK_WALLET_TEST_BALANCE_DEFAULT_USDX,
   gasPol: MOCK_WALLET_GAS_DEFAULT_POL,
   connect: () => set(readSeams()),
   switchChain: () => set({ chainId: REDEEM_CHAIN_NUM_ID }),
@@ -140,6 +160,10 @@ export function useRedeemWallet(): RedeemWallet {
   return { isConnected: account.isConnected, address: account.address, connect };
 }
 
+// Callers pass a token address, or `null` to read nothing at all. `undefined`
+// (no argument) means the production token from the build-time env.
+export type UsdxTokenTarget = `0x${string}` | null | undefined;
+
 export interface UsdxBalanceRead {
   isConnected: boolean;
   address: string | undefined;
@@ -155,22 +179,32 @@ export interface UsdxBalanceRead {
   isBalanceUnavailable: boolean;
 }
 
-// Single on-chain USDX balance read, shared by every balance surface in the app
+// Single on-chain balance read, shared by every balance surface in the app
 // (USDX-396). All wagmi hooks are called unconditionally (rules of hooks); the
 // mock seam overrides the result offline.
-export function useUsdxBalance(): UsdxBalanceRead {
+export function useUsdxBalance(
+  tokenAddress?: UsdxTokenTarget,
+  // Offline only. There is no chain behind the seam, so it cannot tell two token
+  // addresses apart the way an RPC node would — it has to be told which of the
+  // seeded balances this read stands for. The real wagmi path ignores this.
+  seamRole: "main" | "test" = "main",
+): UsdxBalanceRead {
   const account = useAccount();
   const { openConnectModal } = useConnectModal();
   const mock = useMockWalletStore();
 
+  // No argument → the production token baked in at build time. That is the
+  // redeem path, and it must keep behaving exactly as before (USDX-640).
+  const token = tokenAddress === undefined ? USDX_CONTRACT_ADDRESS : tokenAddress;
+
   const realAddress = account.address;
   const balanceRead = useReadContract({
-    address: USDX_CONTRACT_ADDRESS,
+    address: token ?? undefined,
     abi: erc20Abi,
     functionName: "balanceOf",
     args: realAddress ? [realAddress] : undefined,
     chainId: REDEEM_CHAIN_NUM_ID,
-    query: { enabled: !env.useMock && !!realAddress },
+    query: { enabled: !env.useMock && !!realAddress && !!token },
   });
 
   const connect = useCallback(() => {
@@ -180,11 +214,17 @@ export function useUsdxBalance(): UsdxBalanceRead {
 
   // ── Mock seam path (E2E offline) ──────────────────────────────────────────
   if (seamArmed()) {
+    // The test strip gets its own seeded balance — otherwise it would echo the
+    // main one offline and a spec could not tell the two apart (USDX-640).
     return {
       isConnected: mock.connected,
       address: mock.connected ? mock.address : undefined,
       connect,
-      balanceUsdx: mock.connected ? mock.balanceUsdx : null,
+      balanceUsdx: !mock.connected || !token
+        ? null
+        : seamRole === "test"
+          ? mock.balanceTestUsdx
+          : mock.balanceUsdx,
       isBalanceLoading: false,
       isBalanceUnavailable: false,
     };
@@ -193,10 +233,12 @@ export function useUsdxBalance(): UsdxBalanceRead {
   // ── Real wagmi path ───────────────────────────────────────────────────────
   const isConnected = account.isConnected;
   const balanceUsdx =
-    balanceRead.data != null ? Number(formatUnits(balanceRead.data, USDX_DECIMALS)) : null;
+    token != null && balanceRead.data != null
+      ? Number(formatUnits(balanceRead.data, USDX_DECIMALS))
+      : null;
   // `isLoading` (not `isPending`) so a query that is disabled — mock mode, no
   // address — reads as "unavailable", not as an eternal spinner.
-  const isBalanceLoading = isConnected && balanceRead.isLoading;
+  const isBalanceLoading = isConnected && !!token && balanceRead.isLoading;
   return {
     isConnected,
     address: realAddress,

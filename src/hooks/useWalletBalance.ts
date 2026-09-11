@@ -11,11 +11,27 @@
 //
 // `balanceUsdx`/`balanceUsd` are non-null ONLY in the `ready` state. Zero is a
 // legitimate `ready` value and is shown as 0 — "unknown" is never rendered as 0.
+//
+// USDX-640: the token address comes from GET /api/v2/config instead of the build
+// (the address baked into a bundle has been shipped stale before). The config
+// carries the two tokens in two separate fields, so nothing has to be inferred:
+// `contractAddress` is always the production token, and `testContractAddress` is
+// non-null only while the test-mint bundle is switched on. The MAIN balance
+// reads the production one in every mode — swapping it globally would show a
+// real USDX holder a balance of 0 — and the test token gets its own strip.
 
 import { useUsdxBalance } from "@/lib/redeem/wallet";
-import { EXCHANGE_RATE } from "@/lib/constants";
+import { useAppConfig } from "@/hooks/useAppConfig";
+import { EXCHANGE_RATE, USDX_CONTRACT_ADDRESS } from "@/lib/constants";
 
 export type WalletBalanceState = "disconnected" | "loading" | "unavailable" | "ready";
+
+/** The test-mint strip: a second balance, clearly not the user's USDX. */
+export interface TestTokenBalance {
+  state: WalletBalanceState;
+  balanceUsdx: number | null;
+  address: `0x${string}`;
+}
 
 export interface WalletBalance {
   state: WalletBalanceState;
@@ -27,20 +43,83 @@ export interface WalletBalance {
   address: string | undefined;
   /** Opens the wallet connect flow (RainbowKit). */
   connect: () => void;
+  /**
+   * Test-mint balance, or null when there is nothing extra to show — which is
+   * every PROD-mode session, i.e. the normal case.
+   */
+  testBalance: TestTokenBalance | null;
+}
+
+const EVM_ADDRESS = /^0x[0-9a-fA-F]{40}$/;
+
+export interface BalanceTokens {
+  /** Token the main balance reads. Always the production one. */
+  main: `0x${string}`;
+  /** Token for the test-mint strip, or null when no strip should appear. */
+  test: `0x${string}` | null;
+}
+
+/**
+ * Which token each balance surface reads, given what the config returned.
+ *
+ * Exported and pure because this is the whole safety rule of USDX-640, and it is
+ * worth being able to state it without a wallet:
+ *
+ *   main — `contractAddress`, in EVERY mode. It always denotes the production
+ *     token; the backend never swaps it for the test one. The build-time env
+ *     address is only a fallback for "the config has not arrived yet", which is
+ *     the point of the ticket: stop trusting an address baked into a bundle.
+ *   test — `testContractAddress`, and only while the mode says TEST. A holder of
+ *     real USDX must never be shown 0 because ops flipped a switch, so this
+ *     address is never allowed near the main balance.
+ *
+ * Both conditions are required for the strip on purpose. The field is documented
+ * as non-null only in TEST, but a strip appearing on a production session would
+ * be the exact failure this hook exists to prevent, so the mode is checked too
+ * rather than trusted implicitly.
+ */
+export function resolveBalanceTokens(
+  configAddress: string | null,
+  testConfigAddress: string | null | undefined,
+  mintMode: "PROD" | "TEST",
+  envAddress: `0x${string}` = USDX_CONTRACT_ADDRESS,
+): BalanceTokens {
+  const asAddress = (value: string | null | undefined) =>
+    value && EVM_ADDRESS.test(value) ? (value as `0x${string}`) : null;
+
+  return {
+    main: asAddress(configAddress) ?? envAddress,
+    test: mintMode === "TEST" ? asAddress(testConfigAddress) : null,
+  };
+}
+
+function stateOf(read: {
+  isConnected: boolean;
+  isBalanceLoading: boolean;
+  balanceUsdx: number | null;
+}): WalletBalanceState {
+  if (!read.isConnected) return "disconnected";
+  if (read.isBalanceLoading) return "loading";
+  return read.balanceUsdx == null ? "unavailable" : "ready";
 }
 
 export function useWalletBalance(): WalletBalance {
-  const read = useUsdxBalance();
+  const config = useAppConfig();
+  const tokens = resolveBalanceTokens(
+    config.contractAddress,
+    config.testContractAddress,
+    config.mintMode,
+  );
 
-  const state: WalletBalanceState = !read.isConnected
-    ? "disconnected"
-    : read.isBalanceLoading
-      ? "loading"
-      : read.balanceUsdx == null
-        ? "unavailable"
-        : "ready";
+  const read = useUsdxBalance(tokens.main);
+  // Called unconditionally (rules of hooks). `null` means the read is off, so a
+  // PROD-mode session does not pay for a second RPC call.
+  const testRead = useUsdxBalance(tokens.test, "test");
 
+  const state = stateOf(read);
   const balanceUsdx = state === "ready" ? read.balanceUsdx : null;
+
+  const testState = stateOf(testRead);
 
   return {
     state,
@@ -49,5 +128,13 @@ export function useWalletBalance(): WalletBalance {
     isConnected: read.isConnected,
     address: read.address,
     connect: read.connect,
+    testBalance:
+      tokens.test == null
+        ? null
+        : {
+            state: testState,
+            balanceUsdx: testState === "ready" ? testRead.balanceUsdx : null,
+            address: tokens.test,
+          },
   };
 }

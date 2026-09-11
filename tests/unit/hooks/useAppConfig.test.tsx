@@ -39,12 +39,24 @@ describe("useAppConfig", () => {
       );
     });
 
-    test("reports TEST when the backend says the test bundle is in force", async () => {
-      getAppConfigMock.mockResolvedValue(config({ mintMode: "TEST" }));
+    test("reports TEST and the test token when the test bundle is in force", async () => {
+      getAppConfigMock.mockResolvedValue(
+        config({
+          mintMode: "TEST",
+          testContractAddress: "0x2702000000000000000000000000000000000000",
+        }),
+      );
       const { result } = renderHook(() => useAppConfig(), { wrapper: createWrapper() });
 
       await waitFor(() => expect(result.current.isReady).toBe(true));
       expect(result.current.mintMode).toBe("TEST");
+      expect(result.current.testContractAddress).toBe(
+        "0x2702000000000000000000000000000000000000",
+      );
+      // The production address is untouched by the mode.
+      expect(result.current.contractAddress).toBe(
+        "0x1FF2000000000000000000000000000000000000",
+      );
     });
   });
 
@@ -70,6 +82,44 @@ describe("useAppConfig", () => {
       await waitFor(() => expect(result.current.isReady).toBe(true));
       expect(result.current.config?.mintMode).toBeUndefined();
       expect(result.current.mintMode).toBe("PROD");
+    });
+
+    test("an absent mintAvailable means the user may mint", async () => {
+      // The gate arrives with USDX-636. A missing gate must never read as a
+      // closed one, or shipping the FE first would take mint away from everyone.
+      const { result } = renderHook(() => useAppConfig(), { wrapper: createWrapper() });
+
+      await waitFor(() => expect(result.current.isReady).toBe(true));
+      expect(result.current.config?.mintAvailable).toBeUndefined();
+      expect(result.current.mintAvailable).toBe(true);
+    });
+
+    test("mintAvailable false is the only thing that closes the gate", async () => {
+      getAppConfigMock.mockResolvedValue(config({ mintAvailable: false }));
+      const { result } = renderHook(() => useAppConfig(), { wrapper: createWrapper() });
+
+      await waitFor(() => expect(result.current.isReady).toBe(true));
+      expect(result.current.mintAvailable).toBe(false);
+    });
+
+    test("a failed config load does NOT close the mint gate on its own", async () => {
+      // A network blip is not a maintenance window. `isReady` already stops the
+      // form; conflating the two would show the wrong explanation.
+      getAppConfigMock.mockRejectedValue(new Error("500"));
+      const { result } = renderHook(() => useAppConfig(), { wrapper: createWrapper() });
+
+      await waitFor(() => expect(result.current.isError).toBe(true), { timeout: 5000 });
+      expect(result.current.mintAvailable).toBe(true);
+    });
+
+    test("an absent testContractAddress reads exactly like null", async () => {
+      // The field does not exist until USDX-636 ships; "absent" and "null" must
+      // not take different code paths.
+      const { result } = renderHook(() => useAppConfig(), { wrapper: createWrapper() });
+
+      await waitFor(() => expect(result.current.isReady).toBe(true));
+      expect(result.current.config?.testContractAddress).toBeUndefined();
+      expect(result.current.testContractAddress).toBeNull();
     });
 
     test("an unparseable number stays null instead of collapsing to 0", async () => {

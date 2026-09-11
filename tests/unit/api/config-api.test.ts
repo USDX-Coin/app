@@ -50,11 +50,23 @@ describe("getAppConfig", () => {
       expect((init.headers as Headers).get("Authorization")).toBe("Bearer session-token");
     });
 
-    test("passes mintMode through once the backend sends it (USDX-636)", async () => {
+    test("passes mintMode + testContractAddress through once the backend sends them (USDX-636)", async () => {
       fetchMock.mockResolvedValueOnce(
-        jsonResponse(200, { status: "success", data: { ...config, mintMode: "TEST" } }),
+        jsonResponse(200, {
+          status: "success",
+          data: {
+            ...config,
+            mintMode: "TEST",
+            testContractAddress: "0x2702000000000000000000000000000000000000",
+          },
+        }),
       );
-      await expect(getAppConfig()).resolves.toMatchObject({ mintMode: "TEST" });
+      await expect(getAppConfig()).resolves.toMatchObject({
+        mintMode: "TEST",
+        // `contractAddress` still means the production token — never swapped.
+        contractAddress: config.contractAddress,
+        testContractAddress: "0x2702000000000000000000000000000000000000",
+      });
     });
   });
 

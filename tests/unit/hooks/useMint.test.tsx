@@ -6,7 +6,9 @@ import { useMintStore } from "@/stores/mintStore";
 import { useAuthStore } from "@/stores/authStore";
 import { mintCheckoutCode } from "@/lib/api/auth-api";
 import { getAppConfig } from "@/lib/api/config-api";
-import type { AppConfig } from "@/types";
+import { createMintOrder } from "@/lib/api/mint-api";
+import { ApiError } from "@/lib/api/client";
+import type { AppConfig, MintOrderCreated } from "@/types";
 
 const { pushMock } = vi.hoisted(() => ({ pushMock: vi.fn() }));
 
@@ -29,6 +31,13 @@ vi.mock("@/lib/api/config-api", () => ({
   getAppConfig: vi.fn(),
 }));
 const getAppConfigMock = vi.mocked(getAppConfig);
+
+// Create is stubbed so a test can play the gate closing mid-session (503
+// MINT_UNDER_MAINTENANCE, USDX-640). Only the order id matters to this hook —
+// everything it does with the response is build the checkout URL.
+vi.mock("@/lib/api/mint-api", () => ({ createMintOrder: vi.fn() }));
+const createMintOrderMock = vi.mocked(createMintOrder);
+const CREATED_ORDER = { id: "mint_test_1" } as MintOrderCreated;
 
 const VALID_ADDRESS = "0x1234567890abcdef1234567890abcdef12345678";
 // mock rate: baseRate 16000 × (1 + 2.5%) = 16400
@@ -56,6 +65,8 @@ beforeEach(() => {
   mintCheckoutCodeMock.mockResolvedValue("handoff-xyz");
   getAppConfigMock.mockReset();
   getAppConfigMock.mockResolvedValue(config());
+  createMintOrderMock.mockReset();
+  createMintOrderMock.mockResolvedValue(CREATED_ORDER);
 });
 
 describe("useMint", () => {
@@ -389,6 +400,105 @@ describe("useMint", () => {
 
         expect(href).toContain("/checkout/mint_");
         expect(href).not.toContain("#code=");
+      });
+    });
+  });
+
+  // Minting is open only to a list of testers while the test bundle runs
+  // (USDX-636). Someone outside that list has to be told BEFORE they type a
+  // figure — and told it is maintenance, never that there is a test mode. That
+  // word is ours; an ordinary user reading it would reasonably wonder whether
+  // their money is going somewhere experimental.
+  describe("mint unavailable", () => {
+    describe("positive", () => {
+      test("mintAvailable true → nothing changes, the form is mintable", async () => {
+        getAppConfigMock.mockResolvedValue(config({ mintAvailable: true }));
+        useMintStore.getState().setAmount("100");
+        useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
+
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+
+        await waitFor(() => expect(result.current.isFormValid).toBe(true));
+        expect(result.current.isMintUnavailable).toBe(false);
+      });
+
+      test("the field being absent is the same as true (USDX-636 not shipped yet)", async () => {
+        useMintStore.getState().setAmount("100");
+        useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
+
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+
+        await waitFor(() => expect(result.current.isFormValid).toBe(true));
+        expect(result.current.isMintUnavailable).toBe(false);
+      });
+    });
+
+    describe("negative", () => {
+      test("mintAvailable false closes the form even when everything else is valid", async () => {
+        getAppConfigMock.mockResolvedValue(config({ mintAvailable: false }));
+        useMintStore.getState().setAmount("100");
+        useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
+
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+
+        await waitFor(() => expect(result.current.isMintUnavailable).toBe(true));
+        expect(result.current.isFormValid).toBe(false);
+        // The amount itself is fine — the gate is the only reason.
+        expect(result.current.amountError).toBeNull();
+      });
+
+      test("a 503 mid-session surfaces the maintenance notice, not a raw error", async () => {
+        createMintOrderMock.mockRejectedValueOnce(
+          new ApiError(503, "MINT_UNDER_MAINTENANCE", "gate closed"),
+        );
+        useMintStore.getState().setAmount("100");
+        useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
+
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+        await waitFor(() => expect(result.current.isFormValid).toBe(true));
+        await act(async () => {
+          await result.current.submitMint().catch(() => {});
+        });
+
+        await waitFor(() =>
+          expect(result.current.createErrorKey).toBe("mint.maintenanceNotice"),
+        );
+        // …and the page closes behind it: the gate moved, so the form must not
+        // invite an immediate retry.
+        expect(result.current.isMintUnavailable).toBe(true);
+        expect(result.current.isFormValid).toBe(false);
+      });
+    });
+
+    describe("edge cases", () => {
+      test("a different 503 is NOT read as maintenance", async () => {
+        // MINT_DISABLED is the whole environment being off, and keeps its own
+        // sentence. Collapsing the two would tell a user to come back later from
+        // an environment that is never coming back.
+        createMintOrderMock.mockRejectedValueOnce(
+          new ApiError(503, "MINT_DISABLED", "env gate"),
+        );
+        useMintStore.getState().setAmount("100");
+        useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
+
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+        await waitFor(() => expect(result.current.isFormValid).toBe(true));
+        await act(async () => {
+          await result.current.submitMint().catch(() => {});
+        });
+
+        await waitFor(() => expect(result.current.createErrorKey).toBe("mint.errDisabled"));
+        expect(result.current.isMintUnavailable).toBe(false);
+      });
+
+      test("a config that failed to load does not read as maintenance", async () => {
+        // A network blip and a closed gate need different explanations.
+        getAppConfigMock.mockRejectedValue(new Error("500"));
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+
+        await waitFor(() => expect(result.current.isConfigError).toBe(true), { timeout: 5000 });
+        expect(result.current.isMintUnavailable).toBe(false);
+        expect(result.current.isFormValid).toBe(false); // still blocked, different reason
       });
     });
   });

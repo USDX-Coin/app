@@ -39,6 +39,12 @@ export interface AppConfigRead {
   /** Test-mint token address — non-null only in TEST mode, absent before USDX-636. */
   testContractAddress: string | null;
   /**
+   * Whether this user may mint right now. Absent from the response → `true`:
+   * the field only exists from USDX-636 onwards, and a missing gate must never
+   * read as a closed one.
+   */
+  mintAvailable: boolean;
+  /**
    * Which mint bundle is in force. Absent in the response → "PROD": the field
    * only exists from USDX-636 onwards, and an unknown mode must never read as
    * a test one.
@@ -72,6 +78,7 @@ export function useAppConfig(): AppConfigRead {
     pgFeeVaFlat,
     contractAddress: config?.contractAddress ?? null,
     testContractAddress: config?.testContractAddress ?? null,
+    mintAvailable: config?.mintAvailable !== false,
     mintMode: config?.mintMode === "TEST" ? "TEST" : "PROD",
     isReady: minMintIdr != null && mintFeePct != null && pgFeeVaFlat != null,
     isLoading: query.isLoading,

@@ -46,6 +46,7 @@ function AmountBox({
   onChange,
   computed,
   ariaLabel,
+  disabled,
 }: {
   label: string;
   chip: React.ReactNode;
@@ -54,6 +55,7 @@ function AmountBox({
   onChange: (value: string) => void;
   computed: string;
   ariaLabel: string;
+  disabled?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-4 rounded-xl bg-muted p-4 transition-control has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-focus-ring has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-card">
@@ -68,6 +70,7 @@ function AmountBox({
             onChange={(e) => onChange(e.target.value)}
             className={AMOUNT_INPUT_CLASS}
             aria-label={ariaLabel}
+            disabled={disabled}
           />
         ) : (
           <p className="truncate text-2xl font-semibold tracking-tight text-foreground">
@@ -99,6 +102,7 @@ export function MintForm() {
     amountErrorVars,
     addressError,
     isFormValid,
+    isMintUnavailable,
     isConfigReady,
     isConfigLoading,
     isConfigFetching,
@@ -171,6 +175,7 @@ export function MintForm() {
       onChange={onAmountChange}
       computed={usdxDisplay}
       ariaLabel={isUsd ? t("form.youWillMint") : t("form.youWillReceive")}
+      disabled={isMintUnavailable}
     />
   );
 
@@ -184,11 +189,28 @@ export function MintForm() {
       onChange={onAmountChange}
       computed={idrDisplay}
       ariaLabel={t("form.youWillPay")}
+      disabled={isMintUnavailable}
     />
   );
 
   return (
     <div className="flex w-full max-w-lg flex-col gap-6 rounded-2xl border border-border bg-card p-5">
+      {/* Minting is closed for this user (USDX-640). The notice is the FIRST
+          thing in the card on purpose: the point is that nobody types a figure,
+          reads the fees and reaches the summary before finding out. The fields
+          below are disabled for the same reason — a form that still takes input
+          reads as "keep going".
+
+          It says maintenance and nothing more. The real reason is that minting
+          is open to a list of testers while the test bundle runs, and that is
+          our business, not a distinction an ordinary user should have to make
+          about where their money is going. */}
+      {isMintUnavailable && (
+        <Alert tone="warning" title={t("mint.maintenanceTitle")}>
+          {t("mint.maintenanceNotice")}
+        </Alert>
+      )}
+
       <div className="flex flex-col gap-4">
         {/* Amount boxes with center currency swap. Toggling the denomination
             swaps the whole boxes (label + logo + value) top/bottom — the
@@ -214,6 +236,7 @@ export function MintForm() {
                 variant="outline"
                 size="icon"
                 onClick={toggleCurrency}
+                disabled={isMintUnavailable}
                 aria-label={t("form.swapCurrency")}
                 className="absolute left-1/2 top-1/2 size-11 -translate-x-1/2 -translate-y-1/2 rounded-full"
               >
@@ -268,6 +291,7 @@ export function MintForm() {
               variant="link"
               size="sm"
               className="-mr-3"
+              disabled={isMintUnavailable}
               onClick={() => setPickerOpen(true)}
             >
               {t("form.addAddressBook")}
@@ -279,6 +303,7 @@ export function MintForm() {
               placeholder={t("form.addressPh")}
               value={destinationAddress}
               onChange={(e) => setDestinationAddress(e.target.value)}
+              disabled={isMintUnavailable}
               aria-invalid={!!addressErrorText}
               aria-describedby="mint-address-error"
             />
@@ -287,6 +312,7 @@ export function MintForm() {
                 <TooltipTrigger asChild>
                   <InputGroupButton
                     size="icon"
+                    disabled={isMintUnavailable}
                     onClick={() => setPickerOpen(true)}
                     aria-label={t("addrbook.pickTitle")}
                   >
@@ -299,6 +325,7 @@ export function MintForm() {
                 <TooltipTrigger asChild>
                   <InputGroupButton
                     size="icon"
+                    disabled={isMintUnavailable}
                     onClick={() => setScanOpen(true)}
                     aria-label={t("scan.open")}
                   >
@@ -317,7 +344,7 @@ export function MintForm() {
           land there is no honest amount to validate against and no fee to show,
           so Mint is off and says why — rather than falling back to a guessed
           bound that would silently reject a perfectly valid Rp 20.000. */}
-      {!isConfigReady && (
+      {!isConfigReady && !isMintUnavailable && (
         <Alert
           tone={isConfigLoading ? "info" : "danger"}
           shape="strip"
@@ -345,7 +372,10 @@ export function MintForm() {
         type="button"
         variant="brand"
         size="lg"
-        disabled={gate.verified && !isFormValid}
+        // Closed for everyone while minting is unavailable — including the
+        // non-VERIFIED path, which otherwise opens the KYC dialog and invites
+        // someone to finish KYC for an action they still could not take.
+        disabled={isMintUnavailable || (gate.verified && !isFormValid)}
         onClick={() => gate.guard(() => setReviewOpen(true))}
       >
         {t("btn.mint")}

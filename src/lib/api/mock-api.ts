@@ -531,10 +531,38 @@ const MOCK_TEST_CONTRACT_ADDRESS = "0x2702000000000000000000000000000000000000";
 // mint bundle, the way the back-office switch will (USDX-636). Nothing else in
 // the app can reach that state offline.
 const MINT_MODE_OVERRIDE_KEY = "usdx-mock-mint-mode";
+// E2E seam (mock-only): arm to "false" to play a user who is NOT on the list
+// allowed to mint while the test bundle runs (USDX-636/640) — the mint page then
+// shows the maintenance notice.
+const MINT_AVAILABLE_OVERRIDE_KEY = "usdx-mock-mint-available";
+// E2E seam (mock-only), one-shot: the NEXT create replies 503
+// MINT_UNDER_MAINTENANCE, i.e. the gate closed after the config was read. Mirrors
+// BURN_REJECT_KEY — it disarms itself so a retry can go through.
+const MINT_MAINTENANCE_KEY = "usdx-mock-mint-maintenance";
 
 function mockMintMode(): "PROD" | "TEST" {
   if (typeof localStorage === "undefined") return "PROD";
   return localStorage.getItem(MINT_MODE_OVERRIDE_KEY) === "TEST" ? "TEST" : "PROD";
+}
+
+function mockMintAvailable(): boolean {
+  if (typeof localStorage === "undefined") return true;
+  return localStorage.getItem(MINT_AVAILABLE_OVERRIDE_KEY) !== "false";
+}
+
+function maybeThrowUnderMaintenance(): void {
+  if (typeof localStorage === "undefined") return;
+  if (localStorage.getItem(MINT_MAINTENANCE_KEY) == null) return;
+  localStorage.removeItem(MINT_MAINTENANCE_KEY); // one-shot → a retry can succeed
+  // A real backend that refuses the create is also refusing the gate, so the next
+  // `GET /api/v2/config` must agree. Without this the mock would tell the app two
+  // different things and the page would re-open behind the notice.
+  localStorage.setItem(MINT_AVAILABLE_OVERRIDE_KEY, "false");
+  throw new ApiError(
+    503,
+    "MINT_UNDER_MAINTENANCE",
+    "Mint sementara tidak tersedia karena sedang ada pemeliharaan",
+  );
 }
 
 export async function mockGetAppConfig(): Promise<AppConfig> {
@@ -550,6 +578,9 @@ export async function mockGetAppConfig(): Promise<AppConfig> {
     pgFeeVaFlat: idr(MOCK_PG_FEE_VA),
     contractAddress: MOCK_CONTRACT_ADDRESS,
     chain: "polygon",
+    // Absent unless deliberately armed: before USDX-636 the backend does not send
+    // this field at all, and the app has to behave exactly as it did then.
+    ...(mockMintAvailable() ? {} : { mintAvailable: false }),
     ...(mode === "TEST"
       ? { mintMode: "TEST" as const, testContractAddress: MOCK_TEST_CONTRACT_ADDRESS }
       : {}),
@@ -725,6 +756,7 @@ const mintOrders = new Map<string, MockMintRecord>();
 export async function mockCreateMintOrder(req: CreateMintOrderRequest): Promise<MintOrderCreated> {
   await delay(600);
   maybeThrowRateLimited(); // 429 RATE_LIMITED seam (USDX-252)
+  maybeThrowUnderMaintenance(); // 503 MINT_UNDER_MAINTENANCE seam (USDX-640)
   const rate = mockEffectiveBuyRate();
   const amountUsdx = req.amountCurrency === "USD" ? Number(req.amount) : Number(req.amount) / rate;
   const subtotalIdr = req.amountCurrency === "IDR" ? Number(req.amount) : amountUsdx * rate;

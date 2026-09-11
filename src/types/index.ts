@@ -211,6 +211,13 @@ export interface AppConfig {
    * absence must read exactly like `null` — no test-mint strip.
    */
   testContractAddress?: string | null;
+  /**
+   * Whether THIS user may mint right now. While the test bundle runs, minting is
+   * open only to a list of testers (USDX-636), so everyone else gets `false`.
+   * OPTIONAL: absent means yes — an app that cannot see the field must behave
+   * exactly as it did before the field existed.
+   */
+  mintAvailable?: boolean;
   /** Chain the address belongs to — "polygon" in Phase 2. */
   chain: string;
   /**

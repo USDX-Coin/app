@@ -20,7 +20,12 @@ import { env } from "@/lib/env";
 import { validateAmount, validateAddress } from "@/lib/validations";
 import { parseAmount, formatIDR } from "@/lib/utils";
 import { getChainById } from "@/lib/chains";
-import { isApiError, isValidationError, isRateLimited } from "@/lib/api/errors";
+import {
+  isApiError,
+  isValidationError,
+  isRateLimited,
+  isMintUnderMaintenance,
+} from "@/lib/api/errors";
 
 // Maps a create-order failure to an i18n key the review modal renders inline
 // (week2.md § Endpoints Mint error codes).
@@ -33,6 +38,10 @@ function mintErrorKey(error: unknown): string | null {
   if (isApiError(error)) {
     if (error.code === "RECIPIENT_BLACKLISTED") return "mint.errBlacklisted";
     if (isValidationError(error)) return "mint.errValidation";
+    // The gate closed between reading the config and submitting. Same words the
+    // page already uses — a raw 503 would tell the user nothing, and the real
+    // reason (a tester-only test bundle) is not theirs to decode.
+    if (isMintUnderMaintenance(error)) return "mint.maintenanceNotice";
     if (error.code === "MINT_DISABLED") return "mint.errDisabled";
     if (error.status === 403) return "mint.errGate"; // EMAIL/KYC/SUSPENDED gating
   }
@@ -124,17 +133,6 @@ export function useMint() {
 
   const selectedChain = useMemo(() => getChainById(store.chainId), [store.chainId]);
 
-  const isFormValid =
-    store.amount !== "" &&
-    store.destinationAddress !== "" &&
-    !amountError &&
-    !addressError &&
-    effectiveBuyRate != null &&
-    // No config, no mint: the amount would be unvalidated and the review screen
-    // would have to invent a fee. Better a disabled button with a reason.
-    config.isReady &&
-    amountUsdx > 0;
-
   const createMutation = useMutation({
     mutationFn: () =>
       createMintOrder({
@@ -145,6 +143,15 @@ export function useMint() {
         amountCurrency: store.amountCurrency,
         chain: store.chainId,
       }),
+    onError: (error) => {
+      // The gate closed while the user was filling the form. `useMutation` state
+      // is per hook instance — MintForm and MintReview each call useMint() — so a
+      // flag derived from this error would only ever close the modal, leaving the
+      // form behind it live. Re-read the config instead: it is one shared query,
+      // the backend is the authority on the gate, and every surface converges on
+      // the same answer.
+      if (isMintUnderMaintenance(error)) config.refetch();
+    },
     onSuccess: async (order) => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       // Latch the handoff BEFORE leaving. Two jobs:
@@ -177,6 +184,27 @@ export function useMint() {
     },
   });
 
+  // Minting is gated to a list of testers while the test bundle runs (USDX-636).
+  // The config says so up front; a 503 says so if the gate closes mid-session,
+  // and both must land the user in the same place — told before they type, not
+  // after. Deliberately NOT phrased as the test mode anywhere the user can see:
+  // "mode uji" is our internal word, and someone who is not part of the test has
+  // no reason to learn it.
+  const isMintUnavailable =
+    !config.mintAvailable || isMintUnderMaintenance(createMutation.error);
+
+  const isFormValid =
+    store.amount !== "" &&
+    store.destinationAddress !== "" &&
+    !amountError &&
+    !addressError &&
+    effectiveBuyRate != null &&
+    // No config, no mint: the amount would be unvalidated and the review screen
+    // would have to invent a fee. Better a disabled button with a reason.
+    config.isReady &&
+    !isMintUnavailable &&
+    amountUsdx > 0;
+
   function toggleCurrency() {
     store.setAmountCurrency(store.amountCurrency === "USD" ? "IDR" : "USD");
   }
@@ -208,6 +236,8 @@ export function useMint() {
     // runtime config (GET /api/v2/config)
     minMintIdr: config.minMintIdr,
     isConfigReady: config.isReady,
+    // Mint is closed for this user (config gate, or a 503 mid-session).
+    isMintUnavailable,
     isConfigLoading: config.isLoading,
     isConfigError: config.isError,
     isConfigFetching: config.isFetching,

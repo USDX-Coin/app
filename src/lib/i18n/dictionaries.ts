@@ -105,6 +105,12 @@ const en: Dict = {
   // has no honest number to show, so it says so instead of guessing (USDX-638).
   "mint.configLoading": "Loading the mint limit and fees…",
   "mint.configError": "Couldn't load the mint limit and fees, so minting is off for now.",
+  // Minting is closed for this user (USDX-636 opens it to a list of testers while
+  // the test bundle runs). The copy says MAINTENANCE and nothing else: "test mode"
+  // is our internal word, and someone who isn't part of the test has no reason to
+  // learn it — or to wonder whether their money went somewhere experimental.
+  "mint.maintenanceTitle": "Minting is under maintenance",
+  "mint.maintenanceNotice": "Minting is temporarily unavailable while we carry out maintenance. Please try again later.",
   "mint.errBlacklisted": "This destination address can't receive USDX.",
   "mint.errValidation": "Please check the amount and address, then try again.",
   "mint.errDisabled": "Minting isn't available yet. Please try again later.",
@@ -963,6 +969,12 @@ const id: Dict = {
   // angka yang jujur untuk ditampilkan — jadi dikatakan, bukan ditebak (USDX-638).
   "mint.configLoading": "Memuat batas minimum dan biaya…",
   "mint.configError": "Gagal memuat batas minimum dan biaya, jadi mint dimatikan dulu.",
+  // Mint sedang ditutup untuk user ini (USDX-636 membukanya hanya untuk daftar
+  // penguji selama bundle uji jalan). Teksnya bilang PEMELIHARAAN dan tidak
+  // lebih: "mode uji" itu istilah internal kita — user yang tidak ikut pengujian
+  // tidak perlu tahu, apalagi sampai mengira uangnya masuk ke sesuatu yang coba-coba.
+  "mint.maintenanceTitle": "Mint sedang dalam pemeliharaan",
+  "mint.maintenanceNotice": "Mint sementara tidak tersedia karena sedang ada pemeliharaan. Silakan coba lagi nanti.",
   "mint.errBlacklisted": "Alamat tujuan tidak bisa menerima USDX.",
   "mint.errValidation": "Periksa kembali jumlah dan alamat, lalu coba lagi.",
   "mint.errDisabled": "Mint belum tersedia. Coba lagi nanti.",

@@ -87,6 +87,16 @@ export function isMintDisabled(error: unknown): boolean {
   return isApiError(error) && error.status === 503 && error.code === "MINT_DISABLED";
 }
 
+// 503 MINT_UNDER_MAINTENANCE — this user is not on the list that may mint right
+// now (USDX-636 gates minting to testers while the test bundle runs). Distinct
+// from MINT_DISABLED, which is the whole environment being off. Reached when the
+// gate changes mid-session, after `mintAvailable` was already read as true.
+// Surface the maintenance notice — never the test mode, which is our word, not
+// something an ordinary user should have to learn.
+export function isMintUnderMaintenance(error: unknown): boolean {
+  return isApiError(error) && error.status === 503 && error.code === "MINT_UNDER_MAINTENANCE";
+}
+
 // 422 VALIDATION_ERROR — body/input validation failure on any /api/v2/* endpoint
 // (conventions.md § Validation Error (v2); USDX-213 BE / USDX-214 FE). The v2
 // global pipe emits 422 (not 400) with code VALIDATION_ERROR. We match on the SoT

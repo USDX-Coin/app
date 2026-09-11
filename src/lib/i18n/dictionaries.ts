@@ -386,6 +386,29 @@ const en: Dict = {
   "pin.errInvalid": "Wrong PIN. Please try again.",
   "pin.errNotSet": "Your account has no PIN yet. Set a PIN before using your custodial wallet.",
   "pin.errLocked": "Too many wrong attempts. Try again in {time}.",
+  // Create / change PIN (pin.yaml § set / change, USDX-651). Copy stays in plain
+  // words: "transfers and withdrawals from your USDX wallet", never "custodial".
+  "pin.setup.title": "Create a PIN",
+  "pin.setup.description": "A 6-digit PIN approves transfers and withdrawals from your USDX wallet. Only you should know it.",
+  "pin.setup.new": "New PIN",
+  "pin.setup.confirm": "Repeat PIN",
+  "pin.setup.submit": "Create PIN",
+  "pin.setup.submitting": "Saving...",
+  "pin.setup.success": "PIN created. You can use it right away.",
+  "pin.change.title": "Change PIN",
+  "pin.change.description": "Enter your current PIN, then choose a new one.",
+  "pin.change.current": "Current PIN",
+  "pin.change.new": "New PIN",
+  "pin.change.confirm": "Repeat new PIN",
+  "pin.change.submit": "Change PIN",
+  "pin.change.submitting": "Saving...",
+  "pin.change.success": "PIN changed.",
+  "pin.errMismatch": "The PINs do not match.",
+  "pin.errUnchanged": "Choose a PIN that is different from your current one.",
+  "pin.errAlreadySet": "Your account already has a PIN. Use Change PIN instead.",
+  "pin.errFailed": "Could not save the PIN. Please try again.",
+  // The PIN_NOT_SET notice on the transfer/redeem path carries this button.
+  "pin.createAction": "Create PIN",
   // Fallback status word for 409 WALLET_NOT_ACTIVE messages (transfer/redeem)
   // when the backend says not-active but the profile copy still reads ACTIVE
   // (stale, refetched in the background). The real statuses use `wallet.status.*`.
@@ -1395,6 +1418,27 @@ const id: Dict = {
   "pin.errInvalid": "PIN salah. Coba lagi.",
   "pin.errNotSet": "Akun Anda belum punya PIN. Buat PIN dulu sebelum memakai wallet custodial.",
   "pin.errLocked": "Terlalu banyak percobaan salah. Coba lagi dalam {time}.",
+  // Buat / ubah PIN (pin.yaml § set / change, USDX-651).
+  "pin.setup.title": "Buat PIN",
+  "pin.setup.description": "PIN 6 digit dipakai untuk menyetujui transfer dan pencairan dari wallet USDX Anda. Jangan bagikan ke siapa pun.",
+  "pin.setup.new": "PIN baru",
+  "pin.setup.confirm": "Ulangi PIN",
+  "pin.setup.submit": "Buat PIN",
+  "pin.setup.submitting": "Menyimpan...",
+  "pin.setup.success": "PIN dibuat. Bisa langsung dipakai.",
+  "pin.change.title": "Ubah PIN",
+  "pin.change.description": "Masukkan PIN saat ini, lalu pilih PIN baru.",
+  "pin.change.current": "PIN saat ini",
+  "pin.change.new": "PIN baru",
+  "pin.change.confirm": "Ulangi PIN baru",
+  "pin.change.submit": "Ubah PIN",
+  "pin.change.submitting": "Menyimpan...",
+  "pin.change.success": "PIN diubah.",
+  "pin.errMismatch": "PIN tidak sama.",
+  "pin.errUnchanged": "Pilih PIN yang berbeda dari PIN saat ini.",
+  "pin.errAlreadySet": "Akun Anda sudah punya PIN. Gunakan Ubah PIN.",
+  "pin.errFailed": "PIN tidak tersimpan. Coba lagi.",
+  "pin.createAction": "Buat PIN",
   // Kata status cadangan untuk pesan 409 WALLET_NOT_ACTIVE (transfer/redeem)
   // saat backend bilang tidak aktif tapi salinan profil masih ACTIVE (basi,
   // di-refetch di latar). Status sebenarnya memakai `wallet.status.*` (USDX-566).

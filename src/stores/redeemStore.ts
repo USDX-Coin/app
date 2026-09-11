@@ -1,6 +1,13 @@
 import { create } from "zustand";
 import type { RedeemStep, AmountCurrency, RedeemBurnState, SelectedBankAccount } from "@/types";
 
+// Which wallet burns (USDX-567, custodial-wallet.md §5.3): `custodial` = the
+// user's custodial wallet — the backend signs after a PIN, no wallet signature;
+// `external` = the connected wallet, self-sign, the existing path untouched.
+// Default `custodial`: for a user WITHOUT a custodial wallet the hook ignores it
+// and behaves exactly as before.
+export type RedeemSource = "custodial" | "external";
+
 // Redeem form state (USDX-243, hardened USDX-259). The bank destination is two-path
 // (redeem.yaml CreateRedeemOrder, USDX-267): either a saved Bank Account Book entry
 // (`savedAccount` → sent as `bankAccountId`, number/name resolved server-side) or
@@ -15,6 +22,10 @@ import type { RedeemStep, AmountCurrency, RedeemBurnState, SelectedBankAccount }
 // tx flips to `error` so the user can retry (the order stays AWAITING_BURN).
 interface RedeemState {
   step: RedeemStep;
+  source: RedeemSource;
+  // PIN dialog over the Ringkasan — custodial path only. Store-owned (like
+  // `step`) so the create success can close it from the hook.
+  pinOpen: boolean;
   amount: string;
   amountCurrency: AmountCurrency; // currency the user typed the amount in
   // Saved path: a picked Bank Account Book entry (null = manual path). The manual
@@ -27,6 +38,8 @@ interface RedeemState {
   burnState: RedeemBurnState;
   burnErrorKey: string | null; // i18n key for a failed burn (null when none)
   setStep: (step: RedeemStep) => void;
+  setSource: (source: RedeemSource) => void;
+  setPinOpen: (open: boolean) => void;
   setAmount: (amount: string) => void;
   setAmountCurrency: (currency: AmountCurrency) => void;
   setBankCode: (code: string) => void;
@@ -48,6 +61,8 @@ interface RedeemState {
 
 const initialState = {
   step: "form" as RedeemStep,
+  source: "custodial" as RedeemSource,
+  pinOpen: false,
   amount: "",
   amountCurrency: "USD" as AmountCurrency,
   savedAccount: null as SelectedBankAccount | null,
@@ -62,6 +77,8 @@ const initialState = {
 export const useRedeemStore = create<RedeemState>()((set) => ({
   ...initialState,
   setStep: (step) => set({ step }),
+  setSource: (source) => set({ source }),
+  setPinOpen: (pinOpen) => set({ pinOpen }),
   setAmount: (amount) => set({ amount }),
   setAmountCurrency: (amountCurrency) => set({ amountCurrency }),
   setBankCode: (bankCode) => set({ bankCode }),
@@ -74,6 +91,6 @@ export const useRedeemStore = create<RedeemState>()((set) => ({
   setBurnState: (burnState) => set({ burnState }),
   setBurnError: (burnErrorKey) => set({ burnErrorKey }),
   resumeOrder: (orderId) =>
-    set({ orderId, step: "tracker", burnState: "idle", burnErrorKey: null }),
+    set({ orderId, step: "tracker", pinOpen: false, burnState: "idle", burnErrorKey: null }),
   reset: () => set(initialState),
 }));

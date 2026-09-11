@@ -18,6 +18,7 @@
 // ganti PIN, persis scope bersama di backend.
 
 import { ApiError } from "./client";
+import type { ChangePinRequest, SetPinRequest } from "./types";
 
 const PIN_KEY = "usdx-mock-pin";
 // PIN akun bawaan di mock (argon2id di backend — di sini plaintext).
@@ -33,6 +34,10 @@ interface MockPinRecord {
 
 let pinMemory: MockPinRecord | null = null;
 let pinFailures = 0;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function readRecord(): MockPinRecord | null {
   if (typeof localStorage === "undefined") return pinMemory;
@@ -103,4 +108,43 @@ export function requireAndVerifyMockPin(pin: string | undefined): void {
     throw new ApiError(422, "VALIDATION_ERROR", "PIN harus 6 digit");
   }
   verifyMockPin(pin);
+}
+
+// ── POST /api/v2/auth/pin/set (pin.yaml § set, USDX-651) ─────────────────────
+// First-time set: cukup sesi valid, `currentPin` diabaikan. Menimpa PIN yang
+// SUDAH ada butuh re-auth (USDX-328): sesi password-auth segar (< 5 menit) ATAU
+// `currentPin` benar. Mock tidak punya jam sesi, jadi hanya jalur `currentPin`
+// yang diperankan: tanpa currentPin → 401 REAUTH_REQUIRED; salah → 401 INVALID_PIN
+// (attempt dihitung, lockout-gated); benar → PIN diganti. Sukses selalu mereset
+// lockout `pin`. Bentuk dicek dulu → 422 tanpa membakar attempt.
+export async function mockSetPin(req: SetPinRequest): Promise<void> {
+  await delay(300);
+  if (!PIN_REGEX.test(req.pin) || (req.currentPin !== undefined && !PIN_REGEX.test(req.currentPin))) {
+    throw new ApiError(422, "VALIDATION_ERROR", "PIN harus 6 digit");
+  }
+  if (currentMockPin() !== null) {
+    if (req.currentPin === undefined) {
+      throw new ApiError(401, "REAUTH_REQUIRED", "Menimpa PIN butuh PIN lama atau login ulang");
+    }
+    verifyMockPin(req.currentPin);
+  }
+  writeRecord({ pin: req.pin });
+  pinFailures = 0;
+}
+
+// ── POST /api/v2/auth/pin/change (pin.yaml § change) ─────────────────────────
+// Rotasi PIN, gated PIN lama; PIN lama salah dihitung ke counter lockout yang
+// SAMA dengan transfer/redeem. Urutan: bentuk (422 VALIDATION_ERROR) → newPin ==
+// currentPin (422 PIN_UNCHANGED, murni cek body) → verifikasi PIN lama
+// (401 PIN_NOT_SET / 429 / 401 INVALID_PIN).
+export async function mockChangePin(req: ChangePinRequest): Promise<void> {
+  await delay(300);
+  if (!PIN_REGEX.test(req.currentPin) || !PIN_REGEX.test(req.newPin)) {
+    throw new ApiError(422, "VALIDATION_ERROR", "PIN harus 6 digit");
+  }
+  if (req.newPin === req.currentPin) {
+    throw new ApiError(422, "PIN_UNCHANGED", "PIN baru harus berbeda dari PIN lama");
+  }
+  verifyMockPin(req.currentPin);
+  writeRecord({ pin: req.newPin });
 }

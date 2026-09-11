@@ -326,6 +326,23 @@ const en: Dict = {
   "pin.errInvalid": "Wrong PIN. Please try again.",
   "pin.errNotSet": "Your account has no PIN yet. Set a PIN before using your custodial wallet.",
   "pin.errLocked": "Too many wrong attempts. Try again in {time}.",
+  // transfer custodial — errors (wallet.yaml, USDX-567). One sentence per code:
+  // the contract promises specific answers (limit, rate limit, blacklist,
+  // wallet status) and a generic failure would hide the one thing the user can
+  // act on.
+  "transfer.errValidation": "Please check the destination and the amount, then try again.",
+  "transfer.errInsufficient": "Your custodial wallet balance is not enough for this transfer.",
+  "transfer.errBlacklisted": "This destination address can't receive USDX.",
+  "transfer.errLimitPerTx": "This transfer exceeds the per-transaction limit of {limit} USDX.",
+  "transfer.errLimitDaily": "This transfer exceeds today's limit of {limit} USDX — {remaining} USDX left until {resetAt}.",
+  "transfer.errWalletNotActive": "Your custodial wallet can't send right now ({status}). No transfer was made.",
+  "transfer.errWalletProvisioning": "still being set up",
+  "transfer.errWalletSuspended": "suspended",
+  "transfer.errNoWallet": "You don't have a custodial wallet yet.",
+  "transfer.errServiceUnavailable": "The wallet service is temporarily unavailable. Nothing was sent — try again in a moment.",
+  "transfer.errInProgress": "This transfer is still being processed. Wait a moment, then press Send again — it won't be sent twice.",
+  "transfer.errGate": "Your account isn't eligible to send yet.",
+  "transfer.errGeneric": "Couldn't send the transfer. Please try again.",
   // auth — branding panel
   "auth.brand.headline": "The Transparent & Regulated USD Stablecoin",
   "auth.brand.tagline": "Mint, redeem, bridge, and send USDX across 8 networks — fast, secure, and fully backed.",
@@ -1199,6 +1216,23 @@ const id: Dict = {
   "pin.errInvalid": "PIN salah. Coba lagi.",
   "pin.errNotSet": "Akun Anda belum punya PIN. Buat PIN dulu sebelum memakai wallet custodial.",
   "pin.errLocked": "Terlalu banyak percobaan salah. Coba lagi dalam {time}.",
+  // transfer custodial — error (wallet.yaml, USDX-567). Satu kalimat per kode:
+  // kontraknya menjanjikan jawaban spesifik (plafon, rate limit, blacklist,
+  // status wallet) dan pesan generik menyembunyikan satu-satunya hal yang bisa
+  // user lakukan.
+  "transfer.errValidation": "Periksa tujuan dan jumlahnya, lalu coba lagi.",
+  "transfer.errInsufficient": "Saldo wallet custodial Anda tidak cukup untuk transfer ini.",
+  "transfer.errBlacklisted": "Alamat tujuan ini tidak dapat menerima USDX.",
+  "transfer.errLimitPerTx": "Transfer ini melebihi batas per transaksi {limit} USDX.",
+  "transfer.errLimitDaily": "Transfer ini melebihi batas harian {limit} USDX — sisa {remaining} USDX sampai {resetAt}.",
+  "transfer.errWalletNotActive": "Wallet custodial Anda belum bisa mengirim saat ini ({status}). Tidak ada transfer yang dibuat.",
+  "transfer.errWalletProvisioning": "masih disiapkan",
+  "transfer.errWalletSuspended": "ditangguhkan",
+  "transfer.errNoWallet": "Anda belum punya wallet custodial.",
+  "transfer.errServiceUnavailable": "Layanan wallet sedang tidak tersedia. Tidak ada yang terkirim — coba lagi sebentar.",
+  "transfer.errInProgress": "Transfer ini masih diproses. Tunggu sebentar, lalu tekan Kirim lagi — tidak akan terkirim dua kali.",
+  "transfer.errGate": "Akun Anda belum bisa mengirim USDX.",
+  "transfer.errGeneric": "Gagal mengirim transfer. Coba lagi.",
   // auth — branding panel
   "auth.brand.headline": "Stablecoin USD yang Transparan & Teregulasi",
   "auth.brand.tagline": "Mint, redeem, bridge, dan kirim USDX di 8 jaringan — cepat, aman, dan sepenuhnya dijamin.",

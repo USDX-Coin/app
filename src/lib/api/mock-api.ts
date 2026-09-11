@@ -15,6 +15,7 @@ import type {
   CreateAddressBookRequest,
   CreateBankAccountRequest,
   ListTransactionsParams,
+  CreateTransferRequest,
 } from "./types";
 import type {
   AuthResponse,
@@ -39,6 +40,9 @@ import type {
   RedeemOrderCreated,
   RedeemOrderDetail,
   RedeemStatus,
+  CustodialWallet,
+  CustodialWalletSummary,
+  TransferAccepted,
 } from "@/types";
 import { ApiError, type Paginated } from "./client";
 import { validatePassword, validateAddress } from "@/lib/validations";
@@ -169,7 +173,7 @@ export async function mockLogin(req: LoginRequest): Promise<AuthResponse> {
     throw new ApiError(403, "ACCOUNT_SUSPENDED", "Your account is suspended");
   }
   currentEmail = account.user.email;
-  return { user: account.user, token: tokenFor(account.user) };
+  return { user: withCustodialWallet(account.user), token: tokenFor(account.user) };
 }
 
 // Backend normalizes 08xxx → +62xxx before the phone_hash uniqueness check
@@ -222,7 +226,7 @@ export async function mockVerifyEmail(req: VerifyEmailRequest): Promise<AuthResp
     accounts.get("demo@usdx.com")!;
   account.user.emailVerifiedAt = new Date().toISOString();
   currentEmail = account.user.email;
-  return { user: account.user, token: tokenFor(account.user) };
+  return { user: withCustodialWallet(account.user), token: tokenFor(account.user) };
 }
 
 export async function mockResendVerification(): Promise<void> {
@@ -242,7 +246,7 @@ export async function mockResetPassword(req: ResetPasswordRequest): Promise<Auth
   const account = currentAccount() ?? accounts.get("demo@usdx.com")!;
   account.user.emailVerifiedAt = account.user.emailVerifiedAt ?? new Date().toISOString();
   currentEmail = account.user.email;
-  return { user: account.user, token: tokenFor(account.user) };
+  return { user: withCustodialWallet(account.user), token: tokenFor(account.user) };
 }
 
 // Mock change-password (auth.yaml § changePasswordV2, USDX-172). Verifies the
@@ -283,12 +287,12 @@ export async function mockMintCheckoutCode(): Promise<string> {
 export async function mockGetMe(): Promise<User> {
   await delay(200);
   const account = currentAccount();
-  if (account) return account.user;
+  if (account) return withCustodialWallet(account.user);
   // Storage-seeded session (Playwright loginViaStorage): the in-memory mock has
   // no logged-in account, so mirror the persisted user instead of falling back
   // to DEMO_USER — otherwise the /v2/auth/me refresh (useSession) would
   // overwrite seeded state like `name: null` (USDX-153 header fallback tests).
-  return persistedUser() ?? DEMO_USER;
+  return withCustodialWallet(persistedUser() ?? DEMO_USER);
 }
 
 function persistedUser(): User | null {
@@ -1327,4 +1331,318 @@ function seededRedeemTransactions(): ConsumerTransaction[] {
       updatedAt: new Date(base - i * 5 * 3_600_000).toISOString(),
     };
   });
+}
+
+// ── Mock wallet custodial (wallet.yaml, USDX-566/567) ────────────────────────
+// Stand-in untuk `GET /api/v2/wallet` + `POST /api/v2/wallet/transfer`. Satu
+// wallet per browser (bukan per akun — cukup untuk mock), disimpan di localStorage
+// ("usdx-mock-custodial") supaya bertahan melintasi `page.goto` Playwright; di
+// luar browser (SSR / unit test tanpa DOM) jatuh ke variabel modul.
+//
+// Bentuk seam-nya JSON `MockCustodialState` — diseed Playwright lewat
+// `seedCustodialWallet` (tests/helpers/playwright-utils.ts). Onboarding
+// (`POST /api/v2/wallet`, PROVISIONING → ACTIVE) adalah USDX-566 dan tidak ada di
+// sini; yang dibutuhkan 567 hanya membaca wallet yang SUDAH ada + transfer.
+// Mock-only — backend sungguhan memegang state ini.
+const CUSTODIAL_SEAM_KEY = "usdx-mock-custodial";
+export const MOCK_CUSTODIAL_ADDRESS = "0x000000C528aE908fB929a0898B65e913623c9aFf";
+// PIN akun di mock (pin.yaml: 6 digit, argon2id di backend — di sini plaintext).
+export const MOCK_PIN = "123456";
+// Lockout scope `pin`: 5 salah / 15 menit, dibagi verify/change/transfer/redeem.
+const MOCK_PIN_MAX_ATTEMPTS = 5;
+const MOCK_PIN_LOCKOUT_SECONDS = 15 * 60;
+// Seam `slowFirstTransfer`: transfer pertama sebuah key "masih berjalan" selama ini
+// (409 IDEMPOTENCY_KEY_IN_PROGRESS), lalu selesai — retry dengan key yang SAMA
+// mendapat hasilnya. Meniru dua request identik yang berangkat bersamaan.
+const MOCK_TRANSFER_INFLIGHT_MS = 1_500;
+
+export interface MockCustodialState {
+  status: CustodialWallet["status"];
+  address: string | null;
+  createdAt: string;
+  // Saldo USDX desimal. `null` = RPC "tak terjangkau" — kontrak menuntut UI
+  // merender "—", bukan 0.
+  balance: string | null;
+  // Seam: akun belum punya PIN → transfer/redeem custodial → 401 PIN_NOT_SET.
+  pinSet?: boolean;
+  // Seam: zona kunci mati → transfer → 503 WALLET_SERVICE_UNAVAILABLE.
+  serviceDown?: boolean;
+  // Seam: plafon §6 (kosong = tanpa batas, seperti env backend).
+  transferLimit?: { perTx?: string; daily?: string };
+  // Seam: transfer pertama tiap key menggantung dulu (409 IN_PROGRESS).
+  slowFirstTransfer?: boolean;
+}
+
+let custodialMemory: MockCustodialState | null = null;
+
+function readCustodialState(): MockCustodialState | null {
+  if (typeof localStorage === "undefined") return custodialMemory;
+  try {
+    const raw = localStorage.getItem(CUSTODIAL_SEAM_KEY);
+    return raw ? (JSON.parse(raw) as MockCustodialState) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCustodialState(state: MockCustodialState | null) {
+  custodialMemory = state;
+  if (typeof localStorage === "undefined") return;
+  if (state === null) localStorage.removeItem(CUSTODIAL_SEAM_KEY);
+  else localStorage.setItem(CUSTODIAL_SEAM_KEY, JSON.stringify(state));
+}
+
+// Unit test: pasang / lepas wallet custodial mock. `seedMockCustodialWallet()`
+// tanpa argumen = wallet ACTIVE dengan saldo 1.000 USDX dan PIN sudah diset.
+export function seedMockCustodialWallet(
+  overrides: Partial<MockCustodialState> = {},
+): MockCustodialState {
+  const state: MockCustodialState = {
+    status: "ACTIVE",
+    address: MOCK_CUSTODIAL_ADDRESS,
+    createdAt: "2026-08-28T04:10:00.000Z",
+    balance: "1000.00",
+    pinSet: true,
+    ...overrides,
+  };
+  writeCustodialState(state);
+  return state;
+}
+
+export function resetMockCustodialWallet() {
+  writeCustodialState(null);
+  transferRequests.clear();
+  pinFailures = 0;
+  dailyTransferredUsdx = 0;
+}
+
+function custodialSummary(): CustodialWalletSummary | null {
+  const state = readCustodialState();
+  if (!state) return null;
+  return { address: state.address, status: state.status };
+}
+
+// `users.yaml § User.custodialWallet` + `pinSet` — ikut terbawa di /auth/me dan
+// respons login/verify/reset, null untuk user tanpa wallet.
+function withCustodialWallet(user: User): User {
+  const state = readCustodialState();
+  return {
+    ...user,
+    custodialWallet: custodialSummary(),
+    pinSet: state?.pinSet ?? user.pinSet ?? true,
+  };
+}
+
+function toCustodialWallet(state: MockCustodialState): CustodialWallet {
+  const readable = state.status !== "PROVISIONING" && state.balance !== null;
+  return {
+    address: state.address,
+    status: state.status,
+    chain: "polygon",
+    contractAddress: MOCK_CONTRACT_ADDRESS,
+    balance: readable ? state.balance : null,
+    balanceWei: readable ? toUsdxWei(Number(state.balance)) : null,
+    balanceAt: readable ? new Date().toISOString() : null,
+    createdAt: state.createdAt,
+  };
+}
+
+export async function mockGetCustodialWallet(): Promise<CustodialWallet> {
+  await delay(150);
+  const state = readCustodialState();
+  if (!state) {
+    throw new ApiError(404, "WALLET_NOT_FOUND", "Kamu belum punya wallet custodial");
+  }
+  return toCustodialWallet(state);
+}
+
+// ── PIN (pin.yaml, mekanisme existing apa adanya) ────────────────────────────
+// Lockout dihitung per page load (modul), seperti `failedLogins`. Dipakai transfer
+// dan redeem custodial — satu counter, seperti scope `pin` di backend.
+let pinFailures = 0;
+
+function verifyMockPin(pin: string): void {
+  const state = readCustodialState();
+  if (state?.pinSet === false) {
+    throw new ApiError(401, "PIN_NOT_SET", "Akun belum punya PIN");
+  }
+  if (pinFailures >= MOCK_PIN_MAX_ATTEMPTS) {
+    throw new ApiError(
+      429,
+      "TOO_MANY_ATTEMPTS",
+      "Terlalu banyak percobaan PIN",
+      { retryAfterSeconds: MOCK_PIN_LOCKOUT_SECONDS },
+      MOCK_PIN_LOCKOUT_SECONDS,
+    );
+  }
+  if (pin !== MOCK_PIN) {
+    pinFailures += 1;
+    throw new ApiError(401, "INVALID_PIN", "PIN salah");
+  }
+  pinFailures = 0;
+}
+
+// Dipakai jalur redeem custodial (mockCreateRedeemOrder) — bentuk 6 digit dicek
+// DULU (422 tanpa membakar attempt), baru diverifikasi.
+function requireAndVerifyMockPin(pin: string | undefined): void {
+  if (!pin || !/^[0-9]{6}$/.test(pin)) {
+    throw new ApiError(422, "VALIDATION_ERROR", "PIN harus 6 digit");
+  }
+  verifyMockPin(pin);
+}
+
+// Wallet custodial user yang ACTIVE, atau lempar 409 WALLET_NOT_ACTIVE. Null kalau
+// user tidak punya wallet — pemanggil memutuskan (transfer → 404; redeem → jalur
+// SELF_SIGN biasa).
+function requireActiveCustodialWallet(): MockCustodialState | null {
+  const state = readCustodialState();
+  if (!state) return null;
+  if (state.status !== "ACTIVE" || !state.address) {
+    throw new ApiError(409, "WALLET_NOT_ACTIVE", "Wallet custodial belum aktif");
+  }
+  return state;
+}
+
+function isMockCustodialAddress(address: string | undefined | null): boolean {
+  const state = readCustodialState();
+  return (
+    !!address && !!state?.address && address.toLowerCase() === state.address.toLowerCase()
+  );
+}
+
+// ── Transfer custodial (wallet.yaml § POST /api/v2/wallet/transfer) ──────────
+// Idempotensi ditegakkan seperti kontrak: key disimpan, baris "in-flight" ditulis
+// SEBELUM "tanda tangan". Per page load (modul) — cukup untuk retry dalam satu
+// sesi form, yang memang satu-satunya tempat FE memakai ulang key.
+interface MockTransferRequest {
+  userId: string;
+  bodyKey: string; // `to` (lowercase) + `amount` — `pin` bukan identitas niat
+  settleAt: number; // epoch ms saat "broadcast" selesai
+  result: TransferAccepted | null; // null selama masih berjalan
+}
+const transferRequests = new Map<string, MockTransferRequest>();
+let dailyTransferredUsdx = 0;
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const USDX_AMOUNT_REGEX = /^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,6})?$/;
+
+export async function mockTransferCustodial(
+  req: CreateTransferRequest,
+  idempotencyKey: string,
+): Promise<TransferAccepted> {
+  await delay(400);
+  maybeThrowRateLimited(); // 429 RATE_LIMITED — grup `wallet` (seam USDX-252)
+
+  // 1. Validasi bentuk (header + body) — sebelum PIN, jadi tidak membakar attempt.
+  if (!UUID_REGEX.test(idempotencyKey)) {
+    throw new ApiError(422, "VALIDATION_ERROR", "Idempotency-Key harus UUID");
+  }
+  if (!/^0x[0-9a-fA-F]{40}$/.test(req.to)) {
+    throw new ApiError(422, "VALIDATION_ERROR", "Address tujuan tidak valid");
+  }
+  if (!USDX_AMOUNT_REGEX.test(req.amount) || Number(req.amount) <= 0) {
+    throw new ApiError(422, "VALIDATION_ERROR", "Jumlah tidak valid");
+  }
+  if (!/^[0-9]{6}$/.test(req.pin)) {
+    throw new ApiError(422, "VALIDATION_ERROR", "PIN harus 6 digit");
+  }
+  const state = readCustodialState();
+  if (!state) {
+    // FE menawarkan transfer pada user tanpa wallet = bug alur, bukan keadaan user.
+    throw new ApiError(404, "WALLET_NOT_FOUND", "Kamu belum punya wallet custodial");
+  }
+  if (isMockCustodialAddress(req.to)) {
+    throw new ApiError(422, "VALIDATION_ERROR", "Tidak bisa transfer ke wallet sendiri");
+  }
+
+  // 2. PIN (lockout scope `pin`).
+  verifyMockPin(req.pin);
+
+  // 3. Replay / kunci idempotensi — SEBELUM pre-check yang bergantung keadaan
+  //    dunia (saldo sudah turun karena transfer pertamanya berhasil).
+  const userId = currentAccount()?.user.id ?? persistedUser()?.id ?? DEMO_USER.id;
+  const bodyKey = `${req.to.toLowerCase()}|${req.amount}`;
+  const held = transferRequests.get(idempotencyKey);
+  if (held) {
+    if (held.userId !== userId || held.bodyKey !== bodyKey) {
+      throw new ApiError(
+        409,
+        "IDEMPOTENCY_KEY_REUSED",
+        "Idempotency-Key sudah dipakai untuk transfer lain",
+      );
+    }
+    if (held.result === null && Date.now() < held.settleAt) {
+      throw new ApiError(
+        409,
+        "IDEMPOTENCY_KEY_IN_PROGRESS",
+        "Transfer dengan Idempotency-Key ini masih berjalan",
+      );
+    }
+    if (held.result) return held.result; // replay → hasil identik (200)
+  }
+
+  // 4. Status salinan kerja → plafon → blacklist → saldo.
+  const active = requireActiveCustodialWallet()!;
+  const amount = Number(req.amount);
+  const limit = active.transferLimit;
+  if (limit?.perTx != null && amount > Number(limit.perTx)) {
+    throw new ApiError(422, "TRANSFER_LIMIT_EXCEEDED", "Melebihi batas transfer per transaksi", {
+      limitType: "PER_TX",
+      limit: limit.perTx,
+      remaining: limit.perTx,
+      resetAt: null,
+    });
+  }
+  if (limit?.daily != null && dailyTransferredUsdx + amount > Number(limit.daily)) {
+    const midnight = new Date();
+    midnight.setUTCHours(17, 0, 0, 0); // tengah malam WIB berikutnya (UTC+7)
+    if (midnight.getTime() <= Date.now()) midnight.setUTCDate(midnight.getUTCDate() + 1);
+    throw new ApiError(422, "TRANSFER_LIMIT_EXCEEDED", "Melebihi batas transfer harian", {
+      limitType: "DAILY",
+      limit: limit.daily,
+      remaining: idr(Math.max(0, Number(limit.daily) - dailyTransferredUsdx)),
+      resetAt: midnight.toISOString(),
+    });
+  }
+  if (req.to.toLowerCase() === MOCK_BLACKLISTED_ADDRESS) {
+    throw new ApiError(422, "RECIPIENT_BLACKLISTED", "Address tujuan tidak dapat menerima USDX");
+  }
+  const balance = active.balance === null ? null : Number(active.balance);
+  if (balance !== null && balance < amount) {
+    throw new ApiError(422, "INSUFFICIENT_BALANCE", "Saldo USDX tidak cukup");
+  }
+  if (active.serviceDown) {
+    throw new ApiError(
+      503,
+      "WALLET_SERVICE_UNAVAILABLE",
+      "Layanan wallet sedang tidak tersedia, coba lagi sebentar",
+    );
+  }
+
+  // 5. Tulis baris in-flight (menang di "unique index"), lalu "sign & broadcast".
+  const settleAt = Date.now() + (active.slowFirstTransfer && !held ? MOCK_TRANSFER_INFLIGHT_MS : 0);
+  const row: MockTransferRequest = { userId, bodyKey, settleAt, result: null };
+  transferRequests.set(idempotencyKey, row);
+  if (Date.now() < settleAt) {
+    throw new ApiError(
+      409,
+      "IDEMPOTENCY_KEY_IN_PROGRESS",
+      "Transfer dengan Idempotency-Key ini masih berjalan",
+    );
+  }
+  const result: TransferAccepted = {
+    txHash: "0x" + randomHex(32),
+    from: active.address!,
+    to: req.to,
+    amount: idr(amount),
+    amountWei: toUsdxWei(amount),
+    chain: "polygon",
+    submittedAt: new Date().toISOString(),
+  };
+  row.result = result;
+  dailyTransferredUsdx += amount;
+  if (balance !== null) {
+    writeCustodialState({ ...active, balance: idr(balance - amount) });
+  }
+  return result;
 }

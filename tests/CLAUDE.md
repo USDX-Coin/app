@@ -24,6 +24,7 @@ tests/
     mint.spec.ts        # Mint form, chain selector, review panel
     transactions.spec.ts # Transaction table rendering
     profile.spec.ts     # User info display
+    settings-pin.spec.ts # Settings → Account → transaction PIN: create, use at once on /send, change, lockout (USDX-651)
   e2e/                  # Playwright — full user flows
     auth-flow.spec.ts   # Register -> logout -> login
     mint-flow.spec.ts   # Login -> mint -> review -> cross-origin checkout handoff
@@ -31,6 +32,7 @@ tests/
     custodial-wallet-flow.spec.ts # Register -> verify -> /mint (no wallet step); offer = "Segera hadir"; existing wallet receives USDX -> balance (USDX-566, amandemen 14 Sep)
     transfer-flow.spec.ts         # Custodial transfer: form -> Ringkasan -> PIN -> tx hash (USDX-567)
     redeem-custodial-flow.spec.ts # Custodial redeem: PIN, no wallet dialog, tracker to payout (USDX-567)
+    pin-flow.spec.ts              # PIN created from the transfer/redeem notice, stale-copy PIN_NOT_SET (USDX-651)
   audit-ui/             # node + Playwright — measurement, NOT assertions
     sweep-auth.js       # Every authed page x 4 viewports: overflow, out-of-bounds
     state-audit.js      # Empty, 500, 401, 429, offline, slow loading
@@ -93,7 +95,10 @@ beforeEach(() => {
 - **Custodial paths** (USDX-567): arm `seedCustodialWallet(page, { status: "ACTIVE", balance, …seams })` AND pass
   `custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY` to `loginViaStorage` — the first render
   reads the persisted profile, the mock `/me` reads the seam; both must agree. Mock PIN is
-  `MOCK_PIN` ("123456"). Never arm `seedWallet` (the external-wallet seam) in a custodial
+  `MOCK_PIN` ("123456"); the account PIN is its own seam — `seedAccountPin(page, pin | null)`
+  (null = no PIN yet → `401 PIN_NOT_SET`, pair it with `pinSet: false` on `loginViaStorage`),
+  applied once per tab because the flow under test creates/changes it (USDX-651). Never arm
+  `seedWallet` (the external-wallet seam) in a custodial
   spec: proving "no wallet dialog" needs the external wallet to be absent
 - Unit tests mock all data — no network, no DOM rendering for store tests
 - Playwright tests use `{ timeout: 15000 }` on key assertions for SSR hydration

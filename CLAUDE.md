@@ -68,17 +68,17 @@ src/
     (dashboard)/    # Mint, redeem, transactions, profile (SC pages + Client wrappers)
   components/
     auth/           # LoginForm, RegisterForm, ForgotPasswordForm (Client)
-    shared/         # ChainSelector (cross-feature, memo-wrapped)
+    shared/         # Cross-feature: PageHeader, PinConfirmDialog + PinField + PinSetupDialog/PinChangeDialog/PinNotSetNotice (PIN, USDX-567/651)
     layout/         # AuthLayout, Header, Sidebar, Logo
     mint/           # MintForm, MintReview, MintPageContent, skeletons
     redeem/         # RedeemForm, RedeemReview, RedeemPageContent, skeletons
     wallet/         # Custodial wallet (USDX-566): offer, status panel, receive address + QR, sidebar card, onboarding step
-    settings/       # SettingsPageContent (Pengaturan — home of the custodial wallet)
+    settings/       # SettingsPageContent (Pengaturan — home of the custodial wallet) + PinSection (transaction PIN, USDX-651)
     transfer/       # Custodial transfer: TransferForm, TransferReview, TransferResult, TransferPageContent (USDX-567)
     transactions/   # TransactionList, skeletons
     profile/        # ProfileCard, skeleton
     ui/             # shadcn/ui base components (auto-generated)
-  hooks/            # Custom hooks (useAuth, useMint, useRedeem, useCustodialWallet, useTransfer, etc.)
+  hooks/            # Custom hooks (useAuth, useMint, useRedeem, useCustodialWallet, useTransfer, usePin, etc.)
   stores/           # Zustand stores (authStore, mintStore, redeemStore, transferStore)
   lib/              # Utilities, validations, constants, chains (7 EVM), mock API
   providers/
@@ -218,7 +218,7 @@ describe('functionOrPage') →
 
 - **Unit tests**: hooks, stores, API, validations, utils, chains
 - **Integration tests**: page interactions + responsive (mobile/tablet/desktop)
-- **E2E tests**: auth flow, mint flow, redeem flows, address book, QR scan, rate limit
+- **E2E tests**: auth flow, mint flow, redeem flows, address book, QR scan, rate limit, custodial transfer/redeem, PIN created from the money paths
 
 Test helpers in `tests/helpers/`:
 - `test-utils.tsx`: QueryClient wrapper for renderHook
@@ -235,7 +235,7 @@ Test helpers in `tests/helpers/`:
 | `/redeem` | Yes | SC | Redeem USDX to bank |
 | `/history` | Yes | SC | Transaction history (mint + redeem, W3) |
 | `/profile` | Yes | SC | User info + verification badge |
-| `/settings` | Yes | SC | Pengaturan: custodial "USDX wallet" (offer with a "Segera hadir" pill instead of a create button / address + QR + balance / status) + link to Profile (USDX-566; pill: `custodial-wallet.md` §1 amandemen 14 Sep 2026) |
+| `/settings` | Yes | SC | Pengaturan: custodial "USDX wallet" (offer with a "Segera hadir" pill instead of a create button / address + QR + balance / status) + Account card with the transaction PIN (create / change, USDX-651) + link to Profile (USDX-566; pill: `custodial-wallet.md` §1 amandemen 14 Sep 2026) |
 | `/onboarding/wallet` | Yes | SC | "Dikasih wallet" step (USDX-566). **No longer reached from verify-email** — that redirect is off in every environment (verify-email lands on `/mint`, `custodial-wallet.md` §1 amandemen 14 Sep 2026); only a direct URL opens it. "Not now" → `/mint` |
 | `/bridge` | Yes | SC | ComingSoon (gated — no bridge backend yet; sidebar teaser) |
 | `/send` | Yes | SC | Custodial transfer (`TransferPageContent`) for users with `user.custodialWallet`; ComingSoon for everyone else (no external-wallet send backend) |
@@ -265,10 +265,17 @@ Test helpers in `tests/helpers/`:
 - **Custodial money paths (USDX-567)** — transfer (`/send`), mint destination
   "wallet custodial saya", redeem source custodial. All three read the wallet through
   `useCustodialWallet` (566) — `isActive`, `address`, `balanceState`, `pinSet`. The PIN
-  is the backend's existing mechanism (`pin.yaml`); the app has **no set-PIN UI yet** —
-  `PIN_NOT_SET` / `user.pinSet === false` shows a "buat PIN dulu" notice and disables the
-  step. Mock: `seedMockCustodialWallet` (unit, `mock-custodial-wallet.ts`) /
-  `seedCustodialWallet(page, { status, balance, …seams })` (Playwright), mock PIN `123456`
+  is the backend's existing mechanism (`pin.yaml`). **Create / change PIN (USDX-651)**:
+  `PinSetupDialog` (`POST /auth/pin/set`) and `PinChangeDialog` (`POST /auth/pin/change`)
+  via `hooks/usePin`, at home in Settings → Account (`PinSection`); `PIN_NOT_SET` /
+  `user.pinSet === false` shows the `PinNotSetNotice` ("buat PIN dulu" + a Create PIN
+  button that opens the set dialog in place) and disables the step. `user.pinSet` in the
+  auth store is the single source the money screens read: `/set` success flips it to
+  `true` at once (`authStore.setPinSet`, no /auth/me wait), `401 PIN_NOT_SET` flips it to
+  `false`. Mock: `seedMockCustodialWallet` (unit, `mock-custodial-wallet.ts`) /
+  `seedCustodialWallet(page, { status, balance, …seams })` (Playwright); the account PIN
+  is its own seam — `mock-pin.ts`, `seedMockPin(pin | null)` (unit) /
+  `seedAccountPin(page, pin | null)` (Playwright), default PIN `123456`
 - The `/payment` mock gateway route was deleted (it faked "Payment Successful" with a
   `setTimeout`); the real mint flow uses the cross-origin checkout handoff
 - RainbowKit wallet connection works; the USDX balance is read **on-chain for real**

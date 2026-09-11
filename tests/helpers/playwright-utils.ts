@@ -13,6 +13,13 @@ const AUTH_STATE = {
       emailVerifiedAt: "2026-01-01T00:00:00Z",
       createdAt: "2026-01-01T00:00:00Z",
       updatedAt: "2026-01-01T00:00:00Z",
+      // users.yaml § User.custodialWallet (USDX-566): null = non-custodial, the
+      // common case. Specs for a custodial user override it together with
+      // `seedCustodialWallet`, so the persisted copy and the mock agree.
+      custodialWallet: null as null | {
+        address: string | null;
+        status: "PROVISIONING" | "ACTIVE" | "SUSPENDED";
+      },
     },
     token: "mock-token",
     isAuthenticated: true,
@@ -255,4 +262,77 @@ export async function seedBurnReject(page: import("@playwright/test").Page) {
  */
 export async function seedRateLimit(page: import("@playwright/test").Page, seconds = 3) {
   await page.addInitScript((s) => localStorage.setItem("usdx-mock-ratelimit", s), String(seconds));
+}
+
+/** Address the mock hands every custodial wallet (mock-api MOCK_CUSTODIAL_ADDRESS). */
+export const MOCK_CUSTODIAL_ADDRESS = "0x000000C528aE908fB929a0898B65e913623c9aFf";
+
+/**
+ * Arm the mock's custodial-wallet seam (mock-api CUSTODIAL_SEAM_KEY, USDX-566).
+ * The mock keeps one wallet per browser in localStorage ("usdx-mock-custodial")
+ * so the wallet survives `page.goto`. Pass:
+ *   - `null` → the user has no wallet (POST creates one; GET → 404 WALLET_NOT_FOUND)
+ *   - a status, plus optional `balance` ("125.50", or `null` = RPC unreadable →
+ *     the UI must print "—"), `stuck` (PROVISIONING never flips to ACTIVE until
+ *     a repeat POST — the "coba lagi" path of custodial-wallet.md §5.5).
+ * Applied ONCE per tab (sessionStorage marker), unlike the constant seams:
+ * this state is mutated by the flow under test, and an init script re-runs on
+ * every navigation — re-seeding on a later `page.goto` would wipe the wallet
+ * the test just created. Call before the first page.goto().
+ */
+export async function seedCustodialWallet(
+  page: Page,
+  state:
+    | null
+    | {
+        status: "PROVISIONING" | "ACTIVE" | "SUSPENDED";
+        balance?: string | null;
+        stuck?: boolean;
+      },
+) {
+  await page.addInitScript(
+    (s) => {
+      if (sessionStorage.getItem("usdx-mock-custodial-seeded")) return;
+      sessionStorage.setItem("usdx-mock-custodial-seeded", "1");
+      if (s === null) {
+        localStorage.removeItem("usdx-mock-custodial");
+        return;
+      }
+      localStorage.setItem(
+        "usdx-mock-custodial",
+        JSON.stringify({
+          status: s.status,
+          address: s.status === "PROVISIONING" ? null : s.address,
+          createdAt: "2026-09-11T00:00:00.000Z",
+          activateAt: null,
+          balance: s.status === "PROVISIONING" ? null : (s.balance === undefined ? "0.00" : s.balance),
+          stuck: s.stuck ?? false,
+        }),
+      );
+    },
+    state === null ? null : { ...state, address: MOCK_CUSTODIAL_ADDRESS },
+  );
+}
+
+/**
+ * Shorten the custodial poll window (useCustodialWallet seam
+ * "usdx-mock-custodial-poll-budget", read only in mock mode) so the "still
+ * being set up" + retry state is reachable without waiting a full minute.
+ * Call before the first page.goto().
+ */
+export async function seedCustodialPollBudget(page: Page, ms: number) {
+  await page.addInitScript(
+    (v) => localStorage.setItem("usdx-mock-custodial-poll-budget", v),
+    String(ms),
+  );
+}
+
+/**
+ * Arm the one-shot create-failure seam (mock-api CUSTODIAL_FAIL_CREATE_KEY):
+ * the next POST /api/v2/wallet answers 503 WALLET_SERVICE_UNAVAILABLE and
+ * creates nothing, then the seam disarms so a retry goes through. Call before
+ * the first page.goto().
+ */
+export async function seedCustodialCreateFailure(page: Page) {
+  await page.addInitScript(() => localStorage.setItem("usdx-mock-custodial-fail-create", "1"));
 }

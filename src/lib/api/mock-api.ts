@@ -1345,12 +1345,16 @@ function seededRedeemTransactions(): ConsumerTransaction[] {
 // keadaan gagal — persis SOT §5.5 — jadi seam `stuck` yang memerankan
 // "provisioning macet": GET tidak pernah berpindah, dan `POST` ulang
 // (tombol coba lagi) yang menyembuhkannya (§5.5: respons POST menyegarkan
-// salinan kerja). Seam `failNextCreate` memerankan 503 satu kali.
+// salinan kerja). Seam terpisah "usdx-mock-custodial-fail-create" memerankan
+// 503 WALLET_SERVICE_UNAVAILABLE satu kali pada POST berikutnya — terpisah dari
+// state wallet karena kasus yang penting justru "belum punya wallet, POST
+// pertama gagal, tawaran tetap di layar, POST kedua berhasil".
 //
-// Seam Playwright (JSON di key yang sama): `seedCustodialWallet` di
+// Seam Playwright: `seedCustodialWallet` / `seedCustodialCreateFailure` di
 // tests/helpers/playwright-utils.ts. Mock-only — backend sungguhan memegang
 // state ini.
 const CUSTODIAL_SEAM_KEY = "usdx-mock-custodial";
+const CUSTODIAL_FAIL_CREATE_KEY = "usdx-mock-custodial-fail-create";
 export const MOCK_CUSTODIAL_ADDRESS = "0x000000C528aE908fB929a0898B65e913623c9aFf";
 export const MOCK_PROVISIONING_MS = 1_500;
 
@@ -1365,8 +1369,6 @@ export interface MockCustodialState {
   balance: string | null;
   // Seam: PROVISIONING tidak pernah berpindah sampai POST ulang.
   stuck?: boolean;
-  // Seam: POST berikutnya → 503 WALLET_SERVICE_UNAVAILABLE, lalu seam-nya gugur.
-  failNextCreate?: boolean;
 }
 
 let custodialMemory: MockCustodialState | null = null;
@@ -1450,17 +1452,24 @@ export async function mockGetCustodialWallet(): Promise<CustodialWallet> {
   return toCustodialWallet(settleCustodialState(state));
 }
 
+// Satu kali: seam gugur begitu dipakai, jadi klik "coba lagi" berikutnya lolos.
+function consumeCreateFailure(): boolean {
+  if (typeof localStorage === "undefined") return false;
+  if (localStorage.getItem(CUSTODIAL_FAIL_CREATE_KEY) === null) return false;
+  localStorage.removeItem(CUSTODIAL_FAIL_CREATE_KEY);
+  return true;
+}
+
 export async function mockCreateCustodialWallet(): Promise<CustodialWallet> {
   await delay(300);
-  const state = readCustodialState();
-  if (state?.failNextCreate) {
-    writeCustodialState({ ...state, failNextCreate: false });
+  if (consumeCreateFailure()) {
     throw new ApiError(
       503,
       "WALLET_SERVICE_UNAVAILABLE",
       "Layanan wallet sedang tidak tersedia, coba lagi sebentar",
     );
   }
+  const state = readCustodialState();
   if (state) {
     const settled = settleCustodialState(state);
     if (settled.status === "ACTIVE") {

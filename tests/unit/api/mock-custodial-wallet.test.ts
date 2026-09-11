@@ -100,13 +100,15 @@ describe("mock custodial wallet", () => {
       });
     });
 
-    test("failNextCreate seam → one 503, then the next create goes through", async () => {
-      seed({ status: "PROVISIONING", failNextCreate: true, stuck: true });
+    test("fail-create seam → one 503 with NO wallet created, then the next create goes through", async () => {
+      localStorage.setItem("usdx-mock-custodial-fail-create", "1");
 
       await expect(mockCreateCustodialWallet()).rejects.toMatchObject({
         status: 503,
         code: "WALLET_SERVICE_UNAVAILABLE",
       });
+      // "Aman di-retry — tidak ada state yang terlanjur berubah" (common.yaml).
+      await expect(mockGetCustodialWallet()).rejects.toMatchObject({ code: "WALLET_NOT_FOUND" });
       await expect(mockCreateCustodialWallet()).resolves.toMatchObject({ status: "PROVISIONING" });
     });
   });

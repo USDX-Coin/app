@@ -12,7 +12,9 @@ components/
   kyc/         # KYC form: identity + CDD blocks, document dropzones
   mint/        # Mint flow: MintForm, MintReview, ChainSelector
   redeem/      # Redeem flow: RedeemForm, RedeemReview, RedeemStatus (tracker), BankSelect, BankAccountPicker + AddBankAccountModal (bank book, USDX-261)
-  transactions/ profile/ bridge/ send/ system/
+  wallet/      # Custodial wallet (USDX-566): CustodialWalletOffer, CustodialWalletPanel, ReceiveAddress (QR + copy), CustodialWalletSection (offer-or-panel), CustodialBalanceCard (sidebar), WalletOnboardingContent
+  settings/    # SettingsPageContent — Pengaturan is a real page since USDX-566
+  transactions/ profile/ system/
 ```
 
 ## Conventions

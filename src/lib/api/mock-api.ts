@@ -40,6 +40,7 @@ import type {
   RedeemOrderDetail,
   RedeemStatus,
 } from "@/types";
+import { MOCK_CONTRACT_ADDRESS, withCustodialWallet } from "./mock-custodial-wallet";
 import { ApiError, type Paginated } from "./client";
 import { validatePassword, validateAddress } from "@/lib/validations";
 import { getBankName } from "@/lib/banks";
@@ -169,7 +170,7 @@ export async function mockLogin(req: LoginRequest): Promise<AuthResponse> {
     throw new ApiError(403, "ACCOUNT_SUSPENDED", "Your account is suspended");
   }
   currentEmail = account.user.email;
-  return { user: account.user, token: tokenFor(account.user) };
+  return { user: withCustodialWallet(account.user), token: tokenFor(account.user) };
 }
 
 // Backend normalizes 08xxx → +62xxx before the phone_hash uniqueness check
@@ -222,7 +223,7 @@ export async function mockVerifyEmail(req: VerifyEmailRequest): Promise<AuthResp
     accounts.get("demo@usdx.com")!;
   account.user.emailVerifiedAt = new Date().toISOString();
   currentEmail = account.user.email;
-  return { user: account.user, token: tokenFor(account.user) };
+  return { user: withCustodialWallet(account.user), token: tokenFor(account.user) };
 }
 
 export async function mockResendVerification(): Promise<void> {
@@ -242,7 +243,7 @@ export async function mockResetPassword(req: ResetPasswordRequest): Promise<Auth
   const account = currentAccount() ?? accounts.get("demo@usdx.com")!;
   account.user.emailVerifiedAt = account.user.emailVerifiedAt ?? new Date().toISOString();
   currentEmail = account.user.email;
-  return { user: account.user, token: tokenFor(account.user) };
+  return { user: withCustodialWallet(account.user), token: tokenFor(account.user) };
 }
 
 // Mock change-password (auth.yaml § changePasswordV2, USDX-172). Verifies the
@@ -283,12 +284,12 @@ export async function mockMintCheckoutCode(): Promise<string> {
 export async function mockGetMe(): Promise<User> {
   await delay(200);
   const account = currentAccount();
-  if (account) return account.user;
+  if (account) return withCustodialWallet(account.user);
   // Storage-seeded session (Playwright loginViaStorage): the in-memory mock has
   // no logged-in account, so mirror the persisted user instead of falling back
   // to DEMO_USER — otherwise the /v2/auth/me refresh (useSession) would
   // overwrite seeded state like `name: null` (USDX-153 header fallback tests).
-  return persistedUser() ?? DEMO_USER;
+  return withCustodialWallet(persistedUser() ?? DEMO_USER);
 }
 
 function persistedUser(): User | null {
@@ -520,10 +521,9 @@ export async function mockGetConsumerRate(): Promise<ConsumerRate> {
   };
 }
 
-// GET /api/v2/config (USDX-635). The address mirrors what a deployed backend
-// would return for Polygon; offline it only has to be a well-formed address, and
-// it deliberately matches nothing real so a mock balance read stays empty.
-const MOCK_CONTRACT_ADDRESS = "0x1FF2000000000000000000000000000000000000";
+// GET /api/v2/config (USDX-635). `MOCK_CONTRACT_ADDRESS` (the production token)
+// lives in mock-custodial-wallet.ts, which the custodial wallet reports as its
+// `contractAddress` too — one address for both, as on the real backend.
 // The test-bundle token (USDX-636 ships the real one), returned as
 // `testContractAddress` alongside the unchanged production `contractAddress`.
 const MOCK_TEST_CONTRACT_ADDRESS = "0x2702000000000000000000000000000000000000";

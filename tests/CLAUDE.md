@@ -28,6 +28,7 @@ tests/
     auth-flow.spec.ts   # Register -> logout -> login
     mint-flow.spec.ts   # Login -> mint -> review -> cross-origin checkout handoff
     redeem-flow.spec.ts # Login -> redeem -> connect wallet prompt
+    custodial-wallet-flow.spec.ts # Register -> verify -> "dikasih wallet" -> ACTIVE -> receive -> balance (USDX-566)
   audit-ui/             # node + Playwright — measurement, NOT assertions
     sweep-auth.js       # Every authed page x 4 viewports: overflow, out-of-bounds
     state-audit.js      # Empty, 500, 401, 429, offline, slow loading

@@ -15,6 +15,47 @@ export interface User {
   emailVerifiedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  // Wallet custodial user (users.yaml § User → `custodialWallet`, USDX-607/566).
+  // `null` = user tidak punya (mayoritas non-custodial). Ini yang menentukan
+  // routing: tawarkan "dikasih wallet" atau tampilkan saldo — TANPA memanggil
+  // `GET /api/v2/wallet` lalu menelan 404 di setiap cold start.
+  //
+  // Opsional karena `user` di-persist ke localStorage: sesi yang disimpan sebelum
+  // field ini ada tidak membawanya sama sekali. `undefined` dibaca seperti `null`
+  // (tidak ada penawaran yang salah), dan refresh `/auth/me` (useSession) yang
+  // mengisinya.
+  custodialWallet?: CustodialWalletSummary | null;
+}
+
+// ── Wallet custodial (wallet.yaml, Gelombang 1 USDX-551 · FE USDX-566) ────────
+// Kunci dipegang sistem (wallet-service → Web3Signer → Vault); yang dibaca app
+// hanya salinan kerja backend. Status = `common.yaml § CustodialWalletStatus`.
+// TIDAK ada nilai gagal: provisioning yang gagal tetap PROVISIONING dan di-retry
+// wallet-service — karena itu FE membatasi poll + menyediakan "coba lagi"
+// (`custodial-wallet.md` §5.5).
+export type CustodialWalletStatus = "PROVISIONING" | "ACTIVE" | "SUSPENDED";
+
+// Bentuk ringkas yang menempel di profil (`User.custodialWallet`). Sengaja tanpa
+// saldo: profil tidak boleh menahan responsnya menunggu pembacaan RPC.
+export interface CustodialWalletSummary {
+  // Null selama PROVISIONING — address baru ada setelah kunci masuk Vault dan
+  // terverifikasi di `eth_accounts`.
+  address: string | null;
+  status: CustodialWalletStatus;
+}
+
+// GET/POST /api/v2/wallet (wallet.yaml § CustodialWallet). Satu tipe untuk
+// keduanya; field yang belum berlaku bernilai null.
+export interface CustodialWallet extends CustodialWalletSummary {
+  chain: string; // "polygon" — gelombang 1 Polygon-only
+  contractAddress: string; // kontrak USDX proxy di chain ini — asal angka `balance`
+  // Saldo USDX desimal, dibaca LIVE dari chain. **Null = tidak terbaca** (RPC tak
+  // terjangkau / masih PROVISIONING), BUKAN nol — UI merender "—", jangan 0:
+  // saldo nol palsu terbaca user sebagai dana hilang.
+  balance: string | null;
+  balanceWei: string | null; // uint256 string; null bersama `balance`
+  balanceAt: string | null; // waktu pembacaan; null bersama `balance`
+  createdAt: string; // permintaan diterima, bukan waktu ACTIVE
 }
 
 // Own KYC status (consumer) — openapi KycMyStatus (kyc.yaml). No PII payload.

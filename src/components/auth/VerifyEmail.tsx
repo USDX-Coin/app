@@ -16,7 +16,7 @@ import {
 import { Field, FieldHelp, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { LinkInline } from "@/components/ui/link-inline";
-import { useAuth } from "@/hooks/useAuth";
+import { afterVerifyEmailPath, useAuth } from "@/hooks/useAuth";
 import { useLang } from "@/providers/LanguageProvider";
 import { getFailureKey, getFailureText, isApiError } from "@/lib/api/errors";
 import { translateValidation, validateEmail } from "@/lib/validations";
@@ -46,7 +46,7 @@ export function VerifyEmail() {
   const router = useRouter();
   const token = params.get("token");
   const { t } = useLang();
-  const { verifyEmail, resendVerification, resendVerificationLoading } = useAuth();
+  const { user, verifyEmail, resendVerification, resendVerificationLoading } = useAuth();
   // An i18n key, never the backend's own sentence: "boom" from a 500 used to be
   // printed here word for word (finding B3).
   const [failure, setFailure] = useState<{ state: State; key?: string } | null>(null);
@@ -119,7 +119,7 @@ export function VerifyEmail() {
           {/* A fallback, not the main path: the hook already navigates. It is
               here for the tab that was in the background when it fired. */}
           <Button variant="brand" size="lg" asChild>
-            <Link href="/mint">{t("auth.verify.continue")}</Link>
+            <Link href={afterVerifyEmailPath(user)}>{t("auth.verify.continue")}</Link>
           </Button>
         </EmptyContent>
       </Empty>

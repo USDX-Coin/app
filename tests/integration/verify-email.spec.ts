@@ -2,7 +2,9 @@ import { test, expect } from "@playwright/test";
 import { clearAuth, forceEnglish } from "../helpers/playwright-utils";
 
 // /verify-email (USDX-151): auto-calls POST verify-email with ?token=... on mount.
-// Success issues a session (auto-login) and redirects to the dashboard (/mint).
+// Success issues a session (auto-login) and lands on the optional "dikasih
+// wallet" step (/onboarding/wallet, USDX-566) — the first screen of a new
+// account. Skipping it goes to the dashboard (/mint); see onboarding-wallet.spec.
 //
 // The failure half used to be one screen for two different situations. Figma 34
 // splits them, because the way out differs: a token the SERVER rejected can be
@@ -12,12 +14,15 @@ import { clearAuth, forceEnglish } from "../helpers/playwright-utils";
 
 test.describe("Verify Email Page", () => {
   test.describe("positive", () => {
-    test("valid token auto-verifies and redirects to mint", async ({ page }) => {
+    test("valid token auto-verifies and lands on the wallet onboarding step", async ({ page }) => {
       await forceEnglish(page);
       await page.goto("/verify-email");
       await clearAuth(page);
       await page.goto("/verify-email?token=valid-token");
-      await page.waitForURL(/\/mint/, { timeout: 30000 });
+      await page.waitForURL(/\/onboarding\/wallet/, { timeout: 30000 });
+      await expect(
+        page.getByRole("heading", { name: "No wallet yet? We'll make you one." })
+      ).toBeVisible({ timeout: 15000 });
     });
   });
 

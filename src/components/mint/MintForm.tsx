@@ -131,7 +131,13 @@ export function MintForm() {
 
   const onAmountChange = (value: string) => setAmount(value.replace(/[^0-9.]/g, ""));
   const usdxDisplay = isRateLoading && amount ? "…" : amountUsdx > 0 ? formatAmount(amountUsdx) : "0";
-  const idrDisplay = isRateLoading && amount ? "…" : subtotalIdr > 0 ? formatAmount(subtotalIdr) : "0";
+  // Whole rupiah, like every other rupiah figure in this flow (`formatIDR` in the
+  // Ringkasan). Without it a swapped amount reads "19,000.01": the USDX side is
+  // held to six decimals, so multiplying back leaves a fraction of a rupiah that
+  // is not a real part of the price — and on this screen it would read as the
+  // amount having moved.
+  const idrDisplay =
+    isRateLoading && amount ? "…" : subtotalIdr > 0 ? formatAmount(Math.round(subtotalIdr)) : "0";
 
   // The hooks hand back i18n keys (validations.ts returns keys, not sentences —
   // finding D1); the sentence is made here, where the language is known.

@@ -20,6 +20,7 @@ import { mintCheckoutCode } from "@/lib/api/auth-api";
 import { env } from "@/lib/env";
 import { validateAmount, validateAddress } from "@/lib/validations";
 import { parseAmount, formatIDR } from "@/lib/utils";
+import { USDX_DECIMALS } from "@/lib/constants";
 import { getChainById } from "@/lib/chains";
 import {
   isApiError,
@@ -47,6 +48,21 @@ function mintErrorKey(error: unknown): string | null {
     if (error.status === 403) return "mint.errGate"; // EMAIL/KYC/SUSPENDED gating
   }
   return "mint.errGeneric";
+}
+
+/**
+ * A converted USDX figure, as the text the amount field will hold.
+ *
+ * Six decimals because that is USDX's on-chain precision — not a display taste.
+ * The number matters: round the USDX side to two decimals instead and a
+ * Rp 19.000 round trip comes back as Rp 19.024, so the amount climbs every time
+ * the button is pressed. At six, `IDR → USDX → IDR` lands back on the same whole
+ * rupiah, and repeated swaps settle on a fixed point instead of drifting.
+ *
+ * Trailing zeros go, so the ordinary case still reads "1.17" and not "1.170000".
+ */
+function toUsdxInput(value: number): string {
+  return value.toFixed(USDX_DECIMALS).replace(/\.?0+$/, "");
 }
 
 export function useMint() {
@@ -219,8 +235,32 @@ export function useMint() {
     !isMintUnavailable &&
     amountUsdx > 0;
 
+  // Swapping changes which side you type in — not how much you are buying. So it
+  // converts the figure, keeping the two boxes two views of one purchase.
+  //
+  // It used to carry the digits across untouched, which read them back in the
+  // other unit: Rp 19.000 became 19.000 USDX, an order roughly 16.000× the one
+  // on screen (USDX-650).
   function toggleCurrency() {
-    store.setAmountCurrency(store.amountCurrency === "USD" ? "IDR" : "USD");
+    const next = store.amountCurrency === "USD" ? "IDR" : "USD";
+
+    // Nothing to convert — an empty box, a "0", a lone ".". Flip the sides and
+    // leave the text as typed; writing a converted "0" would put a number in a
+    // field nobody filled.
+    if (enteredAmount > 0) {
+      // No rate, no swap. Relabelling a figure whose meaning would change by four
+      // orders of magnitude is precisely the bug, so hold until the rate lands.
+      if (!effectiveBuyRate) return;
+      store.setAmount(
+        next === "USD"
+          ? toUsdxInput(enteredAmount / effectiveBuyRate)
+          : // Rupiah has no subunit anywhere else in this flow; whole rupiah is
+            // also what keeps the round trip from accumulating a fraction.
+            String(Math.round(enteredAmount * effectiveBuyRate)),
+      );
+    }
+
+    store.setAmountCurrency(next);
   }
 
   return {

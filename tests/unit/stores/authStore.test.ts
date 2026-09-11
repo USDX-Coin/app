@@ -44,6 +44,28 @@ describe("authStore", () => {
     });
   });
 
+  describe("setPinSet (USDX-651)", () => {
+    test("flips only user.pinSet, keeping the rest of the profile and the token", () => {
+      useAuthStore.getState().setAuth({ ...mockUser, pinSet: false }, "test-token");
+      useAuthStore.getState().setPinSet(true);
+      const state = useAuthStore.getState();
+      expect(state.user).toEqual({ ...mockUser, pinSet: true });
+      expect(state.token).toBe("test-token");
+      expect(state.isAuthenticated).toBe(true);
+    });
+
+    test("false corrects a stale true (backend said PIN_NOT_SET)", () => {
+      useAuthStore.getState().setAuth({ ...mockUser, pinSet: true }, "test-token");
+      useAuthStore.getState().setPinSet(false);
+      expect(useAuthStore.getState().user?.pinSet).toBe(false);
+    });
+
+    test("is a no-op without a user", () => {
+      useAuthStore.getState().setPinSet(true);
+      expect(useAuthStore.getState().user).toBeNull();
+    });
+  });
+
   describe("negative", () => {
     test("initial state is not authenticated", () => {
       const state = useAuthStore.getState();

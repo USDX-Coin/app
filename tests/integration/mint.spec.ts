@@ -132,5 +132,39 @@ test.describe("Mint Page", () => {
       await expect(page.getByText("16,400,000")).toBeVisible();
       await expect(page.getByText("You will pay")).toBeVisible();
     });
+
+    // Swapping moves which side you type in, not how much you are buying. It used
+    // to carry the digits across unchanged, so Rp 19.000 came back as 19.000 USDX
+    // — a purchase ~16,000x bigger than the one on screen (USDX-650).
+    test("swapping converts the amount instead of relabelling it", async ({ page }) => {
+      const amount = page.getByPlaceholder("0", { exact: true });
+      const swap = page.getByRole("button", { name: "Swap currency" });
+
+      await swap.click(); // denominate in IDR
+      await amount.fill("19000");
+      await expect(page.getByText("1.16")).toBeVisible(); // 19,000 / 16,400
+
+      await swap.click(); // now type in USDX
+
+      // The field holds the equivalent, not the rupiah digits.
+      await expect(amount).toHaveValue("1.158537");
+      await expect(page.getByText("19,000", { exact: true })).toBeVisible();
+      await expect(page.getByText("308,750,000")).toHaveCount(0);
+    });
+
+    test("swapping back and forth does not move the amount", async ({ page }) => {
+      const amount = page.getByPlaceholder("0", { exact: true });
+      const swap = page.getByRole("button", { name: "Swap currency" });
+
+      await swap.click();
+      await amount.fill("19000");
+
+      for (let i = 0; i < 5; i++) {
+        await swap.click();
+        await swap.click();
+      }
+
+      await expect(amount).toHaveValue("19000");
+    });
   });
 });

@@ -335,12 +335,154 @@ describe("useMint", () => {
     });
   });
 
+  // Swapping moves which side you type in. It must not change how much you are
+  // buying — the digits used to be carried across untouched, so Rp 19.000 was
+  // read back as 19.000 USDX: an order ~16.000x larger than the one on screen
+  // (USDX-650).
   describe("currency toggle", () => {
-    test("toggleCurrency switches USD <-> IDR", () => {
+    // Renders with the rate settled, so a toggle has something to convert with.
+    async function ready(amount: string, currency: "USD" | "IDR") {
+      useMintStore.getState().setAmountCurrency(currency);
+      useMintStore.getState().setAmount(amount);
       const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
-      expect(result.current.amountCurrency).toBe("USD");
-      act(() => result.current.toggleCurrency());
-      expect(useMintStore.getState().amountCurrency).toBe("IDR");
+      await waitFor(() => expect(result.current.effectiveBuyRate).toBe(EFFECTIVE_RATE));
+      return result;
+    }
+
+    describe("positive", () => {
+      test("toggleCurrency switches USD <-> IDR", () => {
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+        expect(result.current.amountCurrency).toBe("USD");
+        act(() => result.current.toggleCurrency());
+        expect(useMintStore.getState().amountCurrency).toBe("IDR");
+      });
+
+      test("IDR → USDX converts instead of relabelling", async () => {
+        const result = await ready("19000", "IDR");
+
+        act(() => result.current.toggleCurrency());
+
+        // 19,000 / 16,400 = 1.158537 USDX — not 19,000 USDX.
+        expect(useMintStore.getState().amountCurrency).toBe("USD");
+        expect(Number(useMintStore.getState().amount)).toBeCloseTo(19_000 / EFFECTIVE_RATE, 6);
+        // The purchase is unchanged: the rupiah side still reads ~Rp 19.000.
+        await waitFor(() => expect(result.current.subtotalIdr).toBeCloseTo(19_000, 1));
+      });
+
+      test("USDX → IDR converts and lands on whole rupiah", async () => {
+        const result = await ready("2", "USD");
+
+        act(() => result.current.toggleCurrency());
+
+        expect(useMintStore.getState().amountCurrency).toBe("IDR");
+        expect(useMintStore.getState().amount).toBe(String(2 * EFFECTIVE_RATE));
+        await waitFor(() => expect(result.current.amountUsdx).toBeCloseTo(2, 6));
+      });
+
+      test("a whole USDX figure keeps its plain spelling, no trailing zeros", async () => {
+        // 32,800 / 16,400 = exactly 2 — the field should read "2", not "2.000000".
+        const result = await ready(String(2 * EFFECTIVE_RATE), "IDR");
+
+        act(() => result.current.toggleCurrency());
+
+        expect(useMintStore.getState().amount).toBe("2");
+      });
+    });
+
+    describe("negative", () => {
+      test("an empty box stays empty — a swap must not invent a 0", async () => {
+        const result = await ready("", "IDR");
+
+        act(() => result.current.toggleCurrency());
+
+        expect(useMintStore.getState().amount).toBe("");
+        expect(useMintStore.getState().amountCurrency).toBe("USD");
+      });
+
+      test("no rate yet → the swap is held, nothing is relabelled", () => {
+        useMintStore.getState().setAmountCurrency("IDR");
+        useMintStore.getState().setAmount("19000");
+        // Rendered without waiting: the rate query has not resolved.
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+        expect(result.current.effectiveBuyRate).toBeNull();
+
+        act(() => result.current.toggleCurrency());
+
+        // Both untouched — a flipped label over these digits is the bug itself.
+        expect(useMintStore.getState().amount).toBe("19000");
+        expect(useMintStore.getState().amountCurrency).toBe("IDR");
+      });
+    });
+
+    describe("edge cases", () => {
+      // The ticket asks for this to be measured, not assumed: rounding on each
+      // leg could make the figure climb a little every press.
+      test("ten round trips do not move the amount", async () => {
+        const result = await ready("19000", "IDR");
+
+        act(() => result.current.toggleCurrency()); // settle onto the 6-dp grid
+        const afterFirst = useMintStore.getState().amount;
+
+        for (let i = 0; i < 10; i++) {
+          act(() => result.current.toggleCurrency());
+          act(() => result.current.toggleCurrency());
+        }
+
+        expect(useMintStore.getState().amountCurrency).toBe("USD");
+        expect(useMintStore.getState().amount).toBe(afterFirst);
+      });
+
+      test("the rupiah figure returns to itself after a round trip", async () => {
+        const result = await ready("19000", "IDR");
+
+        act(() => result.current.toggleCurrency());
+        act(() => result.current.toggleCurrency());
+
+        expect(useMintStore.getState().amountCurrency).toBe("IDR");
+        expect(useMintStore.getState().amount).toBe("19000");
+      });
+
+      test("no drift from either side, across a spread of amounts", async () => {
+        for (const [amount, currency] of [
+          ["19000", "IDR"],
+          ["20000", "IDR"],
+          ["123457", "IDR"],
+          ["2", "USD"],
+          ["0.37", "USD"],
+          ["1000", "USD"],
+        ] as const) {
+          useMintStore.getState().reset();
+          const result = await ready(amount, currency);
+
+          act(() => result.current.toggleCurrency());
+          act(() => result.current.toggleCurrency());
+          const afterOne = useMintStore.getState().amount;
+
+          for (let i = 0; i < 5; i++) {
+            act(() => result.current.toggleCurrency());
+            act(() => result.current.toggleCurrency());
+          }
+
+          expect({ amount, settled: useMintStore.getState().amount }).toEqual({
+            amount,
+            settled: afterOne,
+          });
+        }
+      });
+
+      test("the minimum still reads correctly after a swap", async () => {
+        // Rp 19.000 is under the Rp 20.000 floor. Swapping to the USDX side must
+        // not talk the amount past the gate (USDX-638).
+        useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
+        const result = await ready("19000", "IDR");
+        await waitFor(() => expect(result.current.amountError).toBe("validation.amount.minMint"));
+
+        act(() => result.current.toggleCurrency());
+
+        await waitFor(() => expect(result.current.amountCurrency).toBe("USD"));
+        expect(result.current.amountError).toBe("validation.amount.minMint");
+        expect(result.current.isFormValid).toBe(false);
+      });
     });
   });
 

@@ -5,8 +5,8 @@ import {
   seedMockCustodialWallet,
   resetMockCustodialWallet,
   MOCK_CUSTODIAL_ADDRESS,
-  MOCK_PIN,
 } from "@/lib/api/mock-custodial-wallet";
+import { MOCK_PIN } from "@/lib/api/mock-pin";
 
 // Redeem, custodial burn path (redeem.yaml § burnMode, custodial-wallet.md §5.3,
 // USDX-565/567). `burnMode` is decided by the backend from `userAddress`; the

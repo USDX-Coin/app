@@ -46,11 +46,11 @@ import {
   MOCK_BLACKLISTED_ADDRESS,
   withCustodialWallet,
   isMockCustodialAddress,
-  requireAndVerifyMockPin,
   requireActiveCustodialWallet,
   mockCustodialBalanceUsdx,
   debitMockCustodialBalance,
 } from "./mock-custodial-wallet";
+import { requireAndVerifyMockPin } from "./mock-pin";
 import { ApiError, type Paginated } from "./client";
 import { validatePassword, validateAddress } from "@/lib/validations";
 import { getBankName } from "@/lib/banks";

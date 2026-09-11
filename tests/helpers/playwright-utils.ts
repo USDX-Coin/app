@@ -336,10 +336,10 @@ export async function seedCustodialWallet(
         status: "PROVISIONING" | "ACTIVE" | "SUSPENDED";
         balance?: string | null;
         stuck?: boolean;
-        // USDX-567 seams (mock-custodial-wallet): PIN missing → 401 PIN_NOT_SET;
-        // key zone down → 503; transfer limits → 422 TRANSFER_LIMIT_EXCEEDED;
-        // first transfer per key hangs → 409 IDEMPOTENCY_KEY_IN_PROGRESS then settles.
-        pinSet?: boolean;
+        // USDX-567 seams (mock-custodial-wallet): key zone down → 503; transfer
+        // limits → 422 TRANSFER_LIMIT_EXCEEDED; first transfer per key hangs →
+        // 409 IDEMPOTENCY_KEY_IN_PROGRESS then settles. The account PIN is a
+        // separate seam (`seedAccountPin`): it belongs to the account, not the wallet.
         serviceDown?: boolean;
         transferLimit?: { perTx?: string; daily?: string };
         slowFirstTransfer?: boolean;
@@ -362,7 +362,6 @@ export async function seedCustodialWallet(
           activateAt: null,
           balance: s.status === "PROVISIONING" ? null : (s.balance === undefined ? "0.00" : s.balance),
           stuck: s.stuck ?? false,
-          pinSet: s.pinSet ?? true,
           serviceDown: s.serviceDown ?? false,
           transferLimit: s.transferLimit,
           slowFirstTransfer: s.slowFirstTransfer ?? false,
@@ -371,6 +370,23 @@ export async function seedCustodialWallet(
     },
     state === null ? null : { ...state, address: MOCK_CUSTODIAL_ADDRESS },
   );
+}
+
+/**
+ * Arm the mock's account-PIN seam (mock-pin "usdx-mock-pin", USDX-651). The
+ * account PIN is separate from the wallet: `null` plays a user who has no PIN
+ * yet (custodial transfer/redeem → 401 PIN_NOT_SET, Settings offers "Create
+ * PIN"); a 6-digit string plays an existing PIN other than the default
+ * `MOCK_PIN`. Unarmed = the demo account with PIN `MOCK_PIN`. Applied ONCE per
+ * tab like `seedCustodialWallet`: the flow under test creates/changes the PIN,
+ * and an init script re-runs on every navigation. Call before the first page.goto().
+ */
+export async function seedAccountPin(page: Page, pin: string | null) {
+  await page.addInitScript((p) => {
+    if (sessionStorage.getItem("usdx-mock-pin-seeded")) return;
+    sessionStorage.setItem("usdx-mock-pin-seeded", "1");
+    localStorage.setItem("usdx-mock-pin", JSON.stringify({ pin: p }));
+  }, pin);
 }
 
 /**

@@ -29,6 +29,7 @@
 import type { CustodialWallet, CustodialWalletSummary, TransferAccepted, User } from "@/types";
 import type { CreateTransferRequest } from "./types";
 import { ApiError } from "./client";
+import { isMockPinSet, resetMockPin, verifyMockPin } from "./mock-pin";
 import { USDX_DECIMALS } from "@/lib/constants";
 
 function delay(ms: number): Promise<void> {
@@ -59,8 +60,7 @@ export interface MockCustodialState {
   // Seam: PROVISIONING tidak pernah berpindah sampai POST ulang.
   stuck?: boolean;
   // ── Seam USDX-567 (transfer / redeem custodial) ──
-  // Akun belum punya PIN → transfer/redeem custodial → 401 PIN_NOT_SET.
-  pinSet?: boolean;
+  // (PIN akun tidak di sini — lihat `mock-pin.ts`: PIN milik akun, bukan wallet.)
   // Zona kunci mati → transfer → 503 WALLET_SERVICE_UNAVAILABLE.
   serviceDown?: boolean;
   // Plafon §6 (kosong = tanpa batas, seperti env backend).
@@ -89,17 +89,17 @@ function writeCustodialState(state: MockCustodialState | null) {
 }
 
 // Dipakai unit test untuk mengembalikan mock ke "user tanpa wallet" (dan
-// membersihkan kunci idempotensi + lockout PIN dari test sebelumnya).
+// membersihkan kunci idempotensi + PIN akun/lockout dari test sebelumnya).
 export function resetMockCustodialWallet() {
   writeCustodialState(null);
   transferRequests.clear();
-  pinFailures = 0;
+  resetMockPin();
   dailyTransferredUsdx = 0;
 }
 
 // Unit test USDX-567: pasang wallet yang SUDAH ada. Tanpa argumen = ACTIVE,
-// saldo 1.000 USDX, PIN sudah diset (onboarding-nya sendiri diuji lewat
-// `mockCreateCustodialWallet`).
+// saldo 1.000 USDX (onboarding-nya sendiri diuji lewat `mockCreateCustodialWallet`;
+// PIN akun diatur terpisah lewat `seedMockPin` di mock-pin.ts).
 export function seedMockCustodialWallet(
   overrides: Partial<MockCustodialState> = {},
 ): MockCustodialState {
@@ -109,7 +109,6 @@ export function seedMockCustodialWallet(
     createdAt: "2026-08-28T04:10:00.000Z",
     activateAt: null,
     balance: "1000.00",
-    pinSet: true,
     ...overrides,
   };
   writeCustodialState(state);
@@ -147,11 +146,10 @@ function custodialSummary(): CustodialWalletSummary | null {
 // `users.yaml § User.custodialWallet` + `pinSet` — ikut terbawa di /auth/me +
 // respons login/verify/reset, null untuk user tanpa wallet.
 export function withCustodialWallet(user: User): User {
-  const state = readCustodialState();
   return {
     ...user,
     custodialWallet: custodialSummary(),
-    pinSet: state?.pinSet ?? user.pinSet ?? true,
+    pinSet: isMockPinSet(),
   };
 }
 
@@ -234,11 +232,6 @@ export async function mockCreateCustodialWallet(): Promise<CustodialWallet> {
 // (422 RECIPIENT_BLACKLISTED), redeem (422 WALLET_BLACKLISTED) dan transfer.
 // Dihosting di sini supaya transfer bisa memakainya tanpa mengimpor mock-api.
 export const MOCK_BLACKLISTED_ADDRESS = "0x000000000000000000000000000000000000dead";
-// PIN akun di mock (pin.yaml: 6 digit, argon2id di backend — di sini plaintext).
-export const MOCK_PIN = "123456";
-// Lockout scope `pin`: 5 salah / 15 menit, dibagi verify/change/transfer/redeem.
-const MOCK_PIN_MAX_ATTEMPTS = 5;
-const MOCK_PIN_LOCKOUT_SECONDS = 15 * 60;
 // Seam `slowFirstTransfer`: transfer pertama sebuah key "masih berjalan" selama ini
 // (409 IDEMPOTENCY_KEY_IN_PROGRESS), lalu selesai — retry dengan key yang SAMA
 // mendapat hasilnya. Meniru dua request identik yang berangkat bersamaan.
@@ -280,41 +273,6 @@ function currentMockUserId(): string {
   } catch {
     return "usr_1";
   }
-}
-
-// ── PIN (pin.yaml, mekanisme existing apa adanya) ────────────────────────────
-// Lockout dihitung per page load (modul), seperti `failedLogins` di mock-api.
-// Dipakai transfer dan redeem custodial — satu counter, seperti scope `pin`.
-let pinFailures = 0;
-
-function verifyMockPin(pin: string): void {
-  const state = readCustodialState();
-  if (state?.pinSet === false) {
-    throw new ApiError(401, "PIN_NOT_SET", "Akun belum punya PIN");
-  }
-  if (pinFailures >= MOCK_PIN_MAX_ATTEMPTS) {
-    throw new ApiError(
-      429,
-      "TOO_MANY_ATTEMPTS",
-      "Terlalu banyak percobaan PIN",
-      { retryAfterSeconds: MOCK_PIN_LOCKOUT_SECONDS },
-      MOCK_PIN_LOCKOUT_SECONDS,
-    );
-  }
-  if (pin !== MOCK_PIN) {
-    pinFailures += 1;
-    throw new ApiError(401, "INVALID_PIN", "PIN salah");
-  }
-  pinFailures = 0;
-}
-
-// Jalur redeem custodial (mock-api): bentuk 6 digit dicek DULU (422 tanpa
-// membakar attempt), baru diverifikasi.
-export function requireAndVerifyMockPin(pin: string | undefined): void {
-  if (!pin || !/^[0-9]{6}$/.test(pin)) {
-    throw new ApiError(422, "VALIDATION_ERROR", "PIN harus 6 digit");
-  }
-  verifyMockPin(pin);
 }
 
 // Wallet custodial user yang ACTIVE, atau lempar 409 WALLET_NOT_ACTIVE. Null kalau

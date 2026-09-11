@@ -1017,6 +1017,13 @@ const en: Dict = {
   "settings.wallet.section": "USDX wallet",
   "settings.account.title": "Account",
   "settings.account.desc": "Password, language and theme are managed on the Profile page.",
+  // Transaction PIN row in the Account card (pin.yaml, USDX-651).
+  "settings.pin.title": "Transaction PIN",
+  "settings.pin.desc": "A 6-digit PIN that approves transfers and withdrawals from your USDX wallet.",
+  "settings.pin.set": "PIN set",
+  "settings.pin.notSet": "No PIN yet",
+  "settings.pin.create": "Create PIN",
+  "settings.pin.change": "Change PIN",
   // Custodial wallet — "dikasih wallet" (USDX-566, wallet.yaml). Written for
   // someone who has never heard the words private key, gas or hex address:
   // the address is a "receiving address", the wallet is "managed by USDX".
@@ -2042,6 +2049,12 @@ const id: Dict = {
   "settings.wallet.section": "Wallet USDX",
   "settings.account.title": "Akun",
   "settings.account.desc": "Password, bahasa, dan tema diatur di halaman Profil.",
+  "settings.pin.title": "PIN transaksi",
+  "settings.pin.desc": "PIN 6 digit untuk menyetujui transfer dan pencairan dari wallet USDX.",
+  "settings.pin.set": "PIN sudah dibuat",
+  "settings.pin.notSet": "Belum punya PIN",
+  "settings.pin.create": "Buat PIN",
+  "settings.pin.change": "Ubah PIN",
   // Wallet custodial — "dikasih wallet" (USDX-566, wallet.yaml). Ditulis untuk
   // orang yang belum pernah mendengar kata private key, gas, atau hex address:
   // alamat disebut "alamat penerimaan", wallet-nya "dikelola USDX".

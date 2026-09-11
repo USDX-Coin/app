@@ -1,17 +1,22 @@
 import { describe, test, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { LanguageProvider } from "@/providers/LanguageProvider";
+import { createWrapper } from "../../helpers/test-utils";
 import { PinConfirmDialog } from "@/components/shared/PinConfirmDialog";
 
 // PIN dialog (USDX-567) — the one approval step on the custodial money paths.
 // The dialog owns only the shape check; the caller maps the API answer into
-// `errorKey` / `cooldownSeconds`.
+// `errorKey` / `cooldownSeconds`. The QueryClient is for the "no PIN yet" state,
+// whose notice hosts the create-PIN dialog (USDX-651).
 function renderDialog(props: Partial<React.ComponentProps<typeof PinConfirmDialog>> = {}) {
+  const Wrapper = createWrapper();
   const onSubmit = vi.fn();
   const utils = render(
-    <LanguageProvider>
-      <PinConfirmDialog open onOpenChange={() => {}} onSubmit={onSubmit} {...props} />
-    </LanguageProvider>,
+    <Wrapper>
+      <LanguageProvider>
+        <PinConfirmDialog open onOpenChange={() => {}} onSubmit={onSubmit} {...props} />
+      </LanguageProvider>
+    </Wrapper>,
   );
   return { ...utils, onSubmit };
 }
@@ -49,11 +54,15 @@ describe("PinConfirmDialog", () => {
       expect(screen.getByRole("alert")).toHaveTextContent("PIN salah. Coba lagi.");
     });
 
-    test("PIN not set → warning instead of an input", () => {
-      renderDialog({ pinNotSet: true });
+    test("PIN not set → warning with a Create PIN button instead of an input", () => {
+      const { onSubmit } = renderDialog({ pinNotSet: true });
       expect(screen.queryByLabelText("PIN 6 digit")).toBeNull();
       expect(screen.getByRole("alert")).toHaveTextContent(/belum punya PIN/);
       expect(screen.getByRole("button", { name: "Konfirmasi" })).toBeDisabled();
+      // The way out is right there (USDX-651): the notice opens the create-PIN dialog.
+      fireEvent.click(screen.getByRole("button", { name: "Buat PIN" }));
+      expect(screen.getByRole("heading", { name: "Buat PIN" })).toBeInTheDocument();
+      expect(onSubmit).not.toHaveBeenCalled();
     });
   });
 

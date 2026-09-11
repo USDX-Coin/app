@@ -12,6 +12,7 @@
 import { useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useRedeemStore } from "@/stores/redeemStore";
+import { useAuthStore } from "@/stores/authStore";
 import { useConsumerRate } from "@/hooks/useConsumerRate";
 import { useAppConfig } from "@/hooks/useAppConfig";
 import { useCustodialWallet } from "@/hooks/useCustodialWallet";
@@ -95,7 +96,7 @@ export function useRedeem() {
   const source = custodialAvailable ? store.source : "external";
   const isCustodialSource = source === "custodial";
   const pinCooldown = useCooldown();
-  const [pinNotSet, setPinNotSet] = useState(false);
+  const setPinSet = useAuthStore((s) => s.setPinSet);
 
   const effectiveSellRate = rateQuery.data ? Number(rateQuery.data.effectiveSellRate) : null;
   const enteredAmount = parseAmount(store.amount);
@@ -233,7 +234,9 @@ export function useRedeem() {
             }),
       }),
     onError: (error) => {
-      if (isPinNotSet(error)) setPinNotSet(true);
+      // Fakta akun, bukan state mutasi (USDX-651): salinan profil `user.pinSet`
+      // yang dikoreksi; PinSetupDialog dari notice mengembalikannya ke true.
+      if (isPinNotSet(error)) setPinSet(false);
       if (isTooManyAttempts(error)) {
         pinCooldown.start(getRateLimitSeconds(error) || DEFAULT_COOLDOWN_SECONDS);
       }
@@ -285,7 +288,6 @@ export function useRedeem() {
   // shows "memproses burn" until the scanner confirms.
   async function submitRedeem(pin?: string) {
     const order = await createMutation.mutateAsync(pin);
-    setPinNotSet(false);
     store.setOrderId(order.id);
     store.setStep("tracker");
     if (order.burnMode === "CUSTODIAL") {
@@ -359,12 +361,10 @@ export function useRedeem() {
       createMutation.reset();
       store.setPinOpen(true);
     },
-    pinErrorKey: isInvalidPin(createMutation.error)
-      ? "pin.errInvalid"
-      : isPinNotSet(createMutation.error)
-        ? "pin.errNotSet"
-        : null,
-    pinNotSet: pinNotSet || custodial.pinSet === false,
+    // PIN_NOT_SET is shown through `pinNotSet` (notice + Create PIN), not as an
+    // error sentence under the field.
+    pinErrorKey: isInvalidPin(createMutation.error) ? "pin.errInvalid" : null,
+    pinNotSet: custodial.pinSet === false,
     pinCooldownSeconds: pinCooldown.remaining,
     // submit (create order → tracker → guarded burn / system-dispatched burn)
     submitRedeem,

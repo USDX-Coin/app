@@ -65,6 +65,9 @@ export function PinSetupDialog({ open, onOpenChange, onCreated }: PinSetupDialog
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // Dialog ini bisa hidup di dalam <form> PinConfirmDialog (lewat
+    // PinNotSetNotice); event submit sebuah portal tetap merambat di pohon React.
+    e.stopPropagation();
     setTouched(true);
     if (!isPinShape(pin) || confirm !== pin || isSettingPin || locked) return;
     try {

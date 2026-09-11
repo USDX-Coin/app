@@ -28,9 +28,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { PinField, isPinShape } from "@/components/shared/PinField";
+import { PinNotSetNotice } from "@/components/shared/PinNotSetNotice";
 import { formatDuration } from "@/lib/utils";
 import { useLang } from "@/providers/LanguageProvider";
 
@@ -46,7 +46,7 @@ export interface PinConfirmDialogProps {
   errorKey?: string | null;
   /** Sisa detik lockout `pin` (429 TOO_MANY_ATTEMPTS). > 0 → tombol terkunci. */
   cooldownSeconds?: number;
-  /** Akun belum punya PIN (401 PIN_NOT_SET / `user.pinSet === false`). */
+  /** Akun belum punya PIN (401 PIN_NOT_SET / `user.pinSet === false`) → notice + tombol Buat PIN (USDX-651). */
   pinNotSet?: boolean;
   confirmLabel?: React.ReactNode;
 }
@@ -106,7 +106,7 @@ export function PinConfirmDialog({
 
           <DialogBody>
             {pinNotSet ? (
-              <Alert tone="warning">{t("pin.errNotSet")}</Alert>
+              <PinNotSetNotice data-testid="pin-confirm-not-set" />
             ) : (
               <PinField
                 id="pin-confirm"

@@ -55,7 +55,7 @@ describe("transferStore", () => {
     });
   });
 
-  describe("edge cases", () => {
+  describe("edge case", () => {
     test("re-setting the SAME value keeps the key (a retry is not a new intent)", () => {
       const s = useTransferStore.getState();
       s.setTo("0xA");

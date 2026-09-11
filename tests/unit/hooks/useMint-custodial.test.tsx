@@ -15,7 +15,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/api/auth-api", () => ({ mintCheckoutCode: vi.fn().mockResolvedValue("code") }));
 vi.mock("@/lib/api/config-api", () => ({ getAppConfig: vi.fn() }));
 vi.mock("@/lib/api/mint-api", () => ({ createMintOrder: vi.fn() }));
-vi.mock("@/lib/api/wallet-api", () => ({ getCustodialWallet: vi.fn() }));
+vi.mock("@/lib/api/wallet-api", () => ({ getCustodialWallet: vi.fn(), createCustodialWallet: vi.fn() }));
 
 const getAppConfigMock = vi.mocked(getAppConfig);
 const createMintOrderMock = vi.mocked(createMintOrder);
@@ -157,7 +157,7 @@ describe("useMint — custodial destination", () => {
     });
   });
 
-  describe("edge cases", () => {
+  describe("edge case", () => {
     test("a manually typed address equal to the custodial one is still marked custodial (byte match)", async () => {
       setCustodialUser();
       const s = useMintStore.getState();

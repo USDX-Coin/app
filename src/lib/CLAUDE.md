@@ -11,7 +11,6 @@ Shared utilities, validation rules, constants, chain config, and mock API layer.
 | `constants.ts` | Exchange rate (1:1), redeem min/max, mint ceiling, brand color. The mint MINIMUM is not here — it comes from `GET /api/v2/config` (USDX-638) |
 | `chains.ts` | 8 supported chains with id, name, icon, contract address |
 | `api/config-api.ts` | `getAppConfig()` → `GET /api/v2/config` — mint minimum (IDR), fee rates, token address, mint mode |
-| `api/wallet-api.ts` | `getCustodialWallet()` → `GET /api/v2/wallet` (404 `WALLET_NOT_FOUND` → `null`); `transferCustodial(req, idempotencyKey)` → `POST /api/v2/wallet/transfer` with the `Idempotency-Key` header, `skipUnauthorizedHandler` (401 here is `INVALID_PIN`, not a dead session) (USDX-567) |
 | `uuid.ts` | `uuidv7()` — the `Idempotency-Key` (RFC 9562 v7, time-ordered) |
 | `api/mock-api.ts` | Mock backend — login, register, transactions, mint/redeem orders |
 | `api/types.ts` | Request DTOs: `LoginRequest`, `RegisterRequest`, `CreateMintRequest`, `CreateRedeemRequest` |
@@ -58,7 +57,9 @@ Auth + KYC now route through real-or-mock dispatchers; mint/redeem/transactions 
 | `api/errors.ts` | `ApiError` helpers (`isEmailNotVerified`, `getRateLimitSeconds`, …) |
 | `api/auth-api.ts` | `login/register/verifyEmail/resend/forgot/reset/getMe` → `/api/v2/auth/*` or mock |
 | `api/kyc-api.ts` | `getMyKycStatus/submitKyc/requestPresignedUpload` → `/api/v2/kyc`, `/api/v2/storage` or mock |
+| `api/wallet-api.ts` | `getCustodialWallet` (404 `WALLET_NOT_FOUND` → `null`, a normal state) / `createCustodialWallet` (always 202 PROVISIONING) → `/api/v2/wallet` or mock (USDX-566); `transferCustodial(req, idempotencyKey)` → `POST /api/v2/wallet/transfer` with the `Idempotency-Key` header + `skipUnauthorizedHandler` (401 here is `INVALID_PIN`, not a dead session) (USDX-567) |
 | `api/mock-api.ts` | In-memory mock backend used when `env.useMock` is true. Demo user: `demo@usdx.com` / `Demo1234` |
+| `api/mock-custodial-wallet.ts` | Mock `POST/GET /api/v2/wallet` (USDX-566): PROVISIONING → ACTIVE state machine in localStorage (`usdx-mock-custodial`), `withCustodialWallet` for the profile copy, Playwright seams. Own file — mock-api.ts is already past the 500-line guideline |
 
 To wire a new real endpoint: add a function to the relevant `*-api.ts` that branches on `env.useMock`, calling `apiFetch` for the real path and a `mock*` fn otherwise.
 
@@ -68,12 +69,14 @@ Wallet-custodial error helpers in `api/errors.ts` (USDX-567): `isWalletNotFound`
 `isRecipientBlacklisted`, `isTransferLimitExceeded` + `getTransferLimitDetails`. They
 branch on `code` AND status because three 409s overlap (wallet.yaml § PETA KODE 409).
 
-Mock custodial wallet (`api/mock-api.ts`): one wallet per browser in localStorage
-`usdx-mock-custodial` (`MockCustodialState`), mock PIN `123456`, lockout after 5 wrong,
-transfer idempotency enforced like the contract (replay before the balance pre-check).
-Seams: `pinSet: false`, `serviceDown`, `transferLimit`, `slowFirstTransfer`. Redeem:
-`burnMode` is derived from `userAddress`, the custodial burn is dispatched 1.5 s after
-create (hash only; the scanner owns the status), `burn-tx` on a CUSTODIAL order → 409.
+Mock custodial money paths (`api/mock-custodial-wallet.ts`, USDX-567 on top of the
+566 state machine): mock PIN `123456` with lockout after 5 wrong, transfer idempotency
+enforced like the contract (replay resolved before the balance pre-check), seams
+`pinSet: false`, `serviceDown`, `transferLimit`, `slowFirstTransfer`. Redeem (in
+`mock-api.ts`, via helpers imported from the custodial file): `burnMode` is derived from
+`userAddress`, the custodial burn is dispatched 1.5 s after create (hash only; the
+scanner owns the status), `burn-tx` on a CUSTODIAL order → 409. `MOCK_BLACKLISTED_ADDRESS`
+is hosted in the custodial file and re-exported by `mock-api.ts`.
 
 ## Constants
 

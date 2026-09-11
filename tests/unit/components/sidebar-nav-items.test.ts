@@ -19,7 +19,7 @@ describe("navItemsFor", () => {
     });
   });
 
-  describe("edge cases", () => {
+  describe("edge case", () => {
     test("never mutates the shared list", () => {
       navItemsFor(transactionItems, true);
       expect(transactionItems.find((i) => i.href === "/send")?.comingSoon).toBe(true);

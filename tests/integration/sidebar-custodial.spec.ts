@@ -13,7 +13,7 @@ test.describe("Sidebar — custodial owner", () => {
   test.describe("positive", () => {
     test("Send loses the Coming Soon pill; Bridge keeps it", async ({ page }) => {
       await forceEnglish(page);
-      await seedCustodialWallet(page);
+      await seedCustodialWallet(page, { status: "ACTIVE", balance: "1000.00" });
       await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
       await page.setViewportSize({ width: 1280, height: 720 });
       await page.goto("/mint");
@@ -36,12 +36,12 @@ test.describe("Sidebar — custodial owner", () => {
     });
   });
 
-  test.describe("edge cases", () => {
+  test.describe("edge case", () => {
     test("the Send link of a custodial owner lands on the transfer form, not ComingSoon", async ({
       page,
     }) => {
       await forceEnglish(page);
-      await seedCustodialWallet(page);
+      await seedCustodialWallet(page, { status: "ACTIVE", balance: "1000.00" });
       await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
       await page.setViewportSize({ width: 1280, height: 720 });
       await page.goto("/mint");

@@ -89,7 +89,7 @@ describe("errors helpers — wallet custodial", () => {
     });
   });
 
-  describe("edge cases", () => {
+  describe("edge case", () => {
     test("getTransferLimitDetails is null when details are malformed", () => {
       expect(getTransferLimitDetails(new ApiError(422, "TRANSFER_LIMIT_EXCEEDED", "x"))).toBeNull();
       expect(

@@ -33,7 +33,7 @@ describe("validateTransferAddress", () => {
     });
   });
 
-  describe("edge cases", () => {
+  describe("edge case", () => {
     test("uppercase hex is a valid EVM address", () => {
       expect(validateTransferAddress("0x" + "AB".repeat(20), OWN)).toBeNull();
     });
@@ -70,7 +70,7 @@ describe("validateTransferAmount", () => {
     });
   });
 
-  describe("edge cases", () => {
+  describe("edge case", () => {
     test("an unknown balance (null) never blocks — it is not zero", () => {
       expect(validateTransferAmount("25", null)).toBeNull();
       expect(validateTransferAmount("25", undefined)).toBeNull();
@@ -102,7 +102,7 @@ describe("normalizeTransferAmount", () => {
     });
   });
 
-  describe("edge cases", () => {
+  describe("edge case", () => {
     test("does not round or switch to exponent notation", () => {
       expect(normalizeTransferAmount("0.000001")).toBe("0.000001");
       expect(normalizeTransferAmount("123456789.123456")).toBe("123456789.123456");

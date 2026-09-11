@@ -20,6 +20,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn, formatAmount } from "@/lib/utils";
 import { useWalletBalance } from "@/hooks/useWalletBalance";
 import { useCustodialWallet } from "@/hooks/useCustodialWallet";
+import { CustodialBalanceCard } from "@/components/wallet/CustodialBalanceCard";
 import { useAuthStore } from "@/stores/authStore";
 import { logout as revokeSession } from "@/lib/api/auth-api";
 import { useLang } from "@/providers/LanguageProvider";
@@ -62,11 +63,11 @@ const transactionItems: NavItem[] = [
 //
 // Bantuan and Dukungan left the nav in PR 2 (F3): both routes render ComingSoon,
 // and a nav that lists four rows of which three go nowhere stops reading as
-// navigation. Pengaturan stays because the account menu links to it, so the pill
-// is the honest way to say what is behind it.
+// navigation. Pengaturan lost its pill with USDX-566: the route is a real page
+// now (the custodial wallet lives there).
 const moreItems: NavItem[] = [
   { href: "/history", labelKey: "nav.history", icon: History },
-  { href: "/settings", labelKey: "nav.settings", icon: Settings, comingSoon: true },
+  { href: "/settings", labelKey: "nav.settings", icon: Settings },
 ];
 
 // Send stops being a teaser once the user owns a custodial wallet (USDX-567).
@@ -315,6 +316,11 @@ export function Sidebar({
             {t("sidebar.getUsdx")}
           </Button>
         </div>
+
+        {/* Custodial wallet (USDX-566) — a second card, not a replacement: the
+            connected-wallet card above keeps working exactly as before, and this
+            one renders nothing for a user without a custodial wallet. */}
+        <CustodialBalanceCard onNavigate={onNavigate} />
 
         {/* Test-mint strip (USDX-640). Only while the backend reports the test
             bundle in force, and only as a SEPARATE row: the card above keeps

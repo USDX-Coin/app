@@ -10,6 +10,7 @@ import type { CustodialWallet, TransferAccepted, User } from "@/types";
 
 vi.mock("@/lib/api/wallet-api", () => ({
   getCustodialWallet: vi.fn(),
+  createCustodialWallet: vi.fn(),
   transferCustodial: vi.fn(),
 }));
 const getWalletMock = vi.mocked(getCustodialWallet);
@@ -111,7 +112,7 @@ describe("useTransfer", () => {
       });
     });
 
-    describe("edge cases", () => {
+    describe("edge case", () => {
       test("setMaxAmount fills the known balance; does nothing when unknown", async () => {
         const { result } = await renderReady();
         act(() => result.current.setMaxAmount());
@@ -178,7 +179,7 @@ describe("useTransfer", () => {
           await result.current.submitWithPin("123456");
         });
         await waitFor(() => expect(result.current.formErrorKey).toBe("transfer.errWalletNotActive"));
-        expect(result.current.formErrorVars).toEqual({ status: "wallet.statusInactive" });
+        expect(result.current.formErrorVars).toEqual({ status: "wallet.status.notActive" });
         expect(result.current.walletBlocked).toBe(true);
         expect(useTransferStore.getState().pinOpen).toBe(false); // message shows in the summary
       });
@@ -227,7 +228,7 @@ describe("useTransfer", () => {
       });
     });
 
-    describe("edge cases", () => {
+    describe("edge case", () => {
       test(
         "IDEMPOTENCY_KEY_IN_PROGRESS → waits and retries with the SAME key, never a new one",
         async () => {
@@ -317,10 +318,10 @@ describe("useTransfer", () => {
 
       test("SUSPENDED / PROVISIONING wallets are named by status", () => {
         expect(mapTransferError(new ApiError(409, "WALLET_NOT_ACTIVE", "x"), t, "SUSPENDED")?.vars).toEqual({
-          status: "wallet.statusSuspended",
+          status: "wallet.status.SUSPENDED",
         });
         expect(mapTransferError(new ApiError(409, "WALLET_NOT_ACTIVE", "x"), t, "PROVISIONING")?.vars).toEqual({
-          status: "wallet.statusProvisioning",
+          status: "wallet.status.PROVISIONING",
         });
       });
     });
@@ -336,10 +337,10 @@ describe("useTransfer", () => {
       });
     });
 
-    describe("edge cases", () => {
+    describe("edge case", () => {
       test("a stale ACTIVE profile copy still gets a status word, not an empty bracket", () => {
         expect(mapTransferError(new ApiError(409, "WALLET_NOT_ACTIVE", "x"), t, "ACTIVE")?.vars).toEqual({
-          status: "wallet.statusInactive",
+          status: "wallet.status.notActive",
         });
       });
 

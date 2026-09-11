@@ -343,13 +343,10 @@ const en: Dict = {
   "pin.errInvalid": "Wrong PIN. Please try again.",
   "pin.errNotSet": "Your account has no PIN yet. Set a PIN before using your custodial wallet.",
   "pin.errLocked": "Too many wrong attempts. Try again in {time}.",
-  // Custodial wallet status words, spliced into 409 WALLET_NOT_ACTIVE messages on
-  // transfer and redeem (wallet.yaml: "FE tampilkan status wallet, jangan tawarkan
-  // retry"). `statusInactive` is the fallback when the backend says not-active but
-  // the profile copy still reads ACTIVE (stale) — refetched in the background.
-  "wallet.statusProvisioning": "still being set up",
-  "wallet.statusSuspended": "suspended",
-  "wallet.statusInactive": "not active",
+  // Fallback status word for 409 WALLET_NOT_ACTIVE messages (transfer/redeem)
+  // when the backend says not-active but the profile copy still reads ACTIVE
+  // (stale, refetched in the background). The real statuses use `wallet.status.*`.
+  "wallet.status.notActive": "not active",
   // transfer custodial — errors (wallet.yaml, USDX-567). One sentence per code:
   // the contract promises specific answers (limit, rate limit, blacklist,
   // wallet status) and a generic failure would hide the one thing the user can
@@ -937,9 +934,6 @@ const en: Dict = {
   "soon.send.desc": "Pick a recipient from the address book, enter an amount, confirm. No wallet to open, no address to copy.",
   "soon.send.headline": "Sending USDX, as easy as sending a message",
   "soon.send.meanwhile": "You can already send your USDX from your own wallet; the addresses you use often are saved in the address book.",
-  "soon.settings.desc": "Language, theme, notifications and security — all on one page, with nothing to hunt for in other menus.",
-  "soon.settings.headline": "Your account, managed in one place",
-  "soon.settings.meanwhile": "Language and theme live in the profile menu; your password is changed on the Profile page.",
   "soon.support.desc": "Send a question along with your order number, then follow the reply without switching apps.",
   "soon.support.headline": "Help from a person, not a bot",
   "soon.support.meanwhile": "Include the order number from the History page when you reach us through the channels available today.",
@@ -954,6 +948,51 @@ const en: Dict = {
   "tx.filterLabel": "Filter by transaction type",
   "tx.loadFailed.desc": "The server did not answer our request. Your transactions are not gone — only the list could not be shown.",
   "tx.loadFailed.title": "History could not be loaded",
+  // Pengaturan — a real page since USDX-566 (the custodial wallet lives here).
+  "settings.wallet.section": "USDX wallet",
+  "settings.account.title": "Account",
+  "settings.account.desc": "Password, language and theme are managed on the Profile page.",
+  // Custodial wallet — "dikasih wallet" (USDX-566, wallet.yaml). Written for
+  // someone who has never heard the words private key, gas or hex address:
+  // the address is a "receiving address", the wallet is "managed by USDX".
+  "wallet.onboarding.title": "Get a USDX wallet",
+  "wallet.offer.headline": "No wallet yet? We'll make you one.",
+  "wallet.offer.desc": "A wallet managed by USDX, tied to this account. Receive and hold USDX without another app, another password, or network fees to think about.",
+  "wallet.offer.point1": "Nothing to install — it lives in this account",
+  "wallet.offer.point2": "Receive USDX with an address or a QR code",
+  "wallet.offer.point3": "Your own wallet still works exactly as before",
+  "wallet.offer.create": "Create my wallet",
+  "wallet.offer.creating": "Creating…",
+  "wallet.offer.skip": "Not now",
+  "wallet.offer.skipHint": "You can do this any time from Settings.",
+  "wallet.managedNote": "This wallet is managed by USDX. You never handle keys or network fees.",
+  "wallet.status.PROVISIONING": "Being set up",
+  "wallet.status.ACTIVE": "Active",
+  "wallet.status.SUSPENDED": "Suspended",
+  "wallet.provisioning.title": "Your wallet is being set up",
+  "wallet.provisioning.desc": "This usually takes a few seconds. This page updates itself.",
+  "wallet.provisioning.slowTitle": "Still being set up",
+  "wallet.provisioning.slowDesc": "This is taking longer than usual. Trying again is safe — it never creates a second wallet.",
+  "wallet.ready.title": "Your wallet is ready",
+  "wallet.ready.desc": "You can receive USDX now. Share the receiving address or show the QR code.",
+  "wallet.receive.title": "Receiving address",
+  "wallet.receive.hint": "Send USDX on the Polygon network to this address.",
+  "wallet.receive.copy": "Copy address",
+  "wallet.receive.copied": "Address copied",
+  "wallet.receive.qrAlt": "QR code of the receiving address",
+  "wallet.receive.showFull": "Show full address",
+  "wallet.receive.hideFull": "Hide full address",
+  "wallet.balance.title": "Balance",
+  "wallet.balance.asOf": "as of {time}",
+  "wallet.balance.unavailable": "Balance could not be read right now.",
+  "wallet.balance.refresh": "Refresh",
+  "wallet.suspended.title": "Wallet suspended",
+  "wallet.suspended.desc": "This wallet was paused by the USDX team. Contact support to continue.",
+  "wallet.error.unavailable": "The wallet service is unavailable right now. Nothing was changed — try again in a moment.",
+  "wallet.error.create": "The wallet could not be created. Try again.",
+  "wallet.error.load": "Wallet details could not be loaded.",
+  "wallet.sidebar.title": "My USDX wallet",
+  "wallet.sidebar.receive": "Receive",
 };
 
 const id: Dict = {
@@ -1276,13 +1315,10 @@ const id: Dict = {
   "pin.errInvalid": "PIN salah. Coba lagi.",
   "pin.errNotSet": "Akun Anda belum punya PIN. Buat PIN dulu sebelum memakai wallet custodial.",
   "pin.errLocked": "Terlalu banyak percobaan salah. Coba lagi dalam {time}.",
-  // Kata status wallet custodial, disisipkan ke pesan 409 WALLET_NOT_ACTIVE di
-  // transfer dan redeem (wallet.yaml: "FE tampilkan status wallet, jangan tawarkan
-  // retry"). `statusInactive` = fallback saat backend bilang tidak aktif tapi
-  // salinan profil masih ACTIVE (basi) — di-refetch di latar.
-  "wallet.statusProvisioning": "masih disiapkan",
-  "wallet.statusSuspended": "ditangguhkan",
-  "wallet.statusInactive": "belum aktif",
+  // Kata status cadangan untuk pesan 409 WALLET_NOT_ACTIVE (transfer/redeem)
+  // saat backend bilang tidak aktif tapi salinan profil masih ACTIVE (basi,
+  // di-refetch di latar). Status sebenarnya memakai `wallet.status.*` (USDX-566).
+  "wallet.status.notActive": "belum aktif",
   // transfer custodial — error (wallet.yaml, USDX-567). Satu kalimat per kode:
   // kontraknya menjanjikan jawaban spesifik (plafon, rate limit, blacklist,
   // status wallet) dan pesan generik menyembunyikan satu-satunya hal yang bisa
@@ -1865,9 +1901,6 @@ const id: Dict = {
   "soon.send.desc": "Pilih penerima dari buku alamat, masukkan jumlah, konfirmasi. Tanpa membuka wallet, tanpa menyalin alamat.",
   "soon.send.headline": "Kirim USDX semudah kirim pesan",
   "soon.send.meanwhile": "USDX Anda sudah bisa dikirim dari wallet Anda sendiri; alamat yang sering dipakai tersimpan di buku alamat.",
-  "soon.settings.desc": "Bahasa, tema, notifikasi, dan keamanan — semua di satu halaman, tanpa mencari di menu lain.",
-  "soon.settings.headline": "Akun Anda, diatur dari satu tempat",
-  "soon.settings.meanwhile": "Bahasa dan tema ada di menu profil; kata sandi diganti di halaman Profil.",
   "soon.support.desc": "Kirim pertanyaan beserta nomor pesanan Anda, lalu ikuti balasannya tanpa berpindah aplikasi.",
   "soon.support.headline": "Bantuan dari orang, bukan robot",
   "soon.support.meanwhile": "Sertakan nomor pesanan dari halaman Riwayat saat menghubungi kami lewat kanal yang ada sekarang.",
@@ -1882,6 +1915,51 @@ const id: Dict = {
   "tx.filterLabel": "Filter jenis transaksi",
   "tx.loadFailed.desc": "Server tidak menjawab permintaan kami. Transaksi Anda tidak hilang — hanya daftarnya yang belum bisa ditampilkan.",
   "tx.loadFailed.title": "Riwayat gagal dimuat",
+  // Pengaturan — halaman sungguhan sejak USDX-566 (wallet custodial ada di sini).
+  "settings.wallet.section": "Wallet USDX",
+  "settings.account.title": "Akun",
+  "settings.account.desc": "Password, bahasa, dan tema diatur di halaman Profil.",
+  // Wallet custodial — "dikasih wallet" (USDX-566, wallet.yaml). Ditulis untuk
+  // orang yang belum pernah mendengar kata private key, gas, atau hex address:
+  // alamat disebut "alamat penerimaan", wallet-nya "dikelola USDX".
+  "wallet.onboarding.title": "Dapatkan wallet USDX",
+  "wallet.offer.headline": "Belum punya wallet? Kami buatkan.",
+  "wallet.offer.desc": "Wallet yang dikelola USDX, terikat ke akun ini. Terima dan simpan USDX tanpa aplikasi lain, tanpa kata sandi tambahan, tanpa memikirkan biaya jaringan.",
+  "wallet.offer.point1": "Tidak ada yang perlu dipasang — wallet ini ada di akun kamu",
+  "wallet.offer.point2": "Terima USDX lewat alamat atau kode QR",
+  "wallet.offer.point3": "Wallet kamu sendiri tetap bisa dipakai seperti biasa",
+  "wallet.offer.create": "Buatkan saya wallet",
+  "wallet.offer.creating": "Membuat…",
+  "wallet.offer.skip": "Nanti saja",
+  "wallet.offer.skipHint": "Bisa kapan saja dari Pengaturan.",
+  "wallet.managedNote": "Wallet ini dikelola USDX. Kamu tidak perlu mengurus kunci maupun biaya jaringan.",
+  "wallet.status.PROVISIONING": "Sedang disiapkan",
+  "wallet.status.ACTIVE": "Aktif",
+  "wallet.status.SUSPENDED": "Ditangguhkan",
+  "wallet.provisioning.title": "Wallet kamu sedang disiapkan",
+  "wallet.provisioning.desc": "Biasanya hanya beberapa detik. Halaman ini memperbarui diri sendiri.",
+  "wallet.provisioning.slowTitle": "Masih disiapkan",
+  "wallet.provisioning.slowDesc": "Ini lebih lama dari biasanya. Coba lagi aman — tidak akan membuat wallet kedua.",
+  "wallet.ready.title": "Wallet kamu siap",
+  "wallet.ready.desc": "Sekarang kamu bisa menerima USDX. Bagikan alamat penerimaan atau tunjukkan kode QR-nya.",
+  "wallet.receive.title": "Alamat penerimaan",
+  "wallet.receive.hint": "Kirim USDX di jaringan Polygon ke alamat ini.",
+  "wallet.receive.copy": "Salin alamat",
+  "wallet.receive.copied": "Alamat disalin",
+  "wallet.receive.qrAlt": "Kode QR alamat penerimaan",
+  "wallet.receive.showFull": "Lihat alamat lengkap",
+  "wallet.receive.hideFull": "Sembunyikan alamat lengkap",
+  "wallet.balance.title": "Saldo",
+  "wallet.balance.asOf": "per {time}",
+  "wallet.balance.unavailable": "Saldo belum bisa dibaca saat ini.",
+  "wallet.balance.refresh": "Muat ulang",
+  "wallet.suspended.title": "Wallet ditangguhkan",
+  "wallet.suspended.desc": "Wallet ini dihentikan sementara oleh tim USDX. Hubungi dukungan untuk melanjutkan.",
+  "wallet.error.unavailable": "Layanan wallet sedang tidak tersedia. Tidak ada yang berubah — coba lagi sebentar.",
+  "wallet.error.create": "Wallet belum bisa dibuat. Coba lagi.",
+  "wallet.error.load": "Data wallet belum bisa dimuat.",
+  "wallet.sidebar.title": "Wallet USDX saya",
+  "wallet.sidebar.receive": "Terima",
 };
 
 export const dictionaries: Record<Lang, Dict> = { id, en };

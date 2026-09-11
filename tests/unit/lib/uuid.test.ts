@@ -24,7 +24,7 @@ describe("uuidv7", () => {
     });
   });
 
-  describe("edge cases", () => {
+  describe("edge case", () => {
     test("later timestamps sort after earlier ones (time-ordered prefix)", () => {
       expect(uuidv7(1_000) < uuidv7(2_000)).toBe(true);
     });

@@ -1,14 +1,13 @@
 import { describe, test, expect, beforeEach } from "vitest";
+import { mockGetMe, MOCK_BLACKLISTED_ADDRESS } from "@/lib/api/mock-api";
 import {
   mockGetCustodialWallet,
   mockTransferCustodial,
-  mockGetMe,
   seedMockCustodialWallet,
   resetMockCustodialWallet,
   MOCK_CUSTODIAL_ADDRESS,
-  MOCK_BLACKLISTED_ADDRESS,
   MOCK_PIN,
-} from "@/lib/api/mock-api";
+} from "@/lib/api/mock-custodial-wallet";
 
 // Mock layer for the custodial wallet (wallet.yaml, USDX-567): GET /api/v2/wallet
 // + POST /api/v2/wallet/transfer with the contract's idempotency semantics. The
@@ -54,7 +53,7 @@ describe("mockGetCustodialWallet", () => {
     });
   });
 
-  describe("edge cases", () => {
+  describe("edge case", () => {
     test("balance null is reported as null (unreadable), never 0", async () => {
       seedMockCustodialWallet({ balance: null });
       const wallet = await mockGetCustodialWallet();
@@ -211,7 +210,7 @@ describe("mockTransferCustodial", () => {
     });
   });
 
-  describe("edge cases", () => {
+  describe("edge case", () => {
     test("slowFirstTransfer: first call is IN_PROGRESS, a same-key retry later settles", async () => {
       seedMockCustodialWallet({ balance: "100.00", slowFirstTransfer: true });
       await expect(mockTransferCustodial(req, KEY)).rejects.toMatchObject({

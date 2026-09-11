@@ -71,10 +71,10 @@ export interface TransferError {
 
 // Kata status untuk pesan 409 WALLET_NOT_ACTIVE. Salinan profil bisa basi (backend
 // menolak padahal profil masih ACTIVE) → "belum aktif", sambil status di-refetch.
-export function walletStatusKey(status: CustodialWalletStatus | null): string {
-  if (status === "SUSPENDED") return "wallet.statusSuspended";
-  if (status === "PROVISIONING") return "wallet.statusProvisioning";
-  return "wallet.statusInactive";
+export function walletStatusKey(status: CustodialWalletStatus | "none" | null): string {
+  if (status === "SUSPENDED") return "wallet.status.SUSPENDED";
+  if (status === "PROVISIONING") return "wallet.status.PROVISIONING";
+  return "wallet.status.notActive";
 }
 
 // Pemetaan error create → kunci i18n + lokasi tampil. Diekspor untuk diuji tanpa
@@ -194,7 +194,7 @@ export function useTransfer(
         console.error("[transfer] IDEMPOTENCY_KEY_REUSED — key dibuang", error);
         store.clearIdempotencyKey();
       }
-      const mapped = mapTransferError(error, t, wallet.status, lang);
+      const mapped = mapTransferError(error, t, wallet.status === "none" ? null : wallet.status, lang);
       // Error non-PIN tampil di Ringkasan: tutup dialog PIN supaya pesannya terlihat.
       // `null` (RATE_LIMITED → toast global) membiarkan dialog apa adanya: user
       // cukup menekan kirim lagi setelah throttle lewat, dengan key yang sama.
@@ -202,9 +202,10 @@ export function useTransfer(
     },
   });
 
+  const walletStatus = wallet.status === "none" ? null : wallet.status;
   const error = useMemo(
-    () => mapTransferError(mutation.error, t, wallet.status, lang),
-    [mutation.error, t, wallet.status, lang],
+    () => mapTransferError(mutation.error, t, walletStatus, lang),
+    [mutation.error, t, walletStatus, lang],
   );
 
   const setMaxAmount = useCallback(() => {
@@ -219,7 +220,7 @@ export function useTransfer(
   return {
     // wallet
     walletAddress: wallet.address,
-    walletStatus: wallet.status,
+    walletStatus,
     isWalletActive: wallet.isActive,
     balanceUsdx: wallet.balanceUsdx,
     balanceState: wallet.balanceState,

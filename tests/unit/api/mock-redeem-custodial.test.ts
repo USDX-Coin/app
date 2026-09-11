@@ -1,14 +1,12 @@
 import { describe, test, expect, beforeEach } from "vitest";
+import { mockCreateRedeemOrder, mockGetRedeemOrder, mockReportBurnTx } from "@/lib/api/mock-api";
 import {
-  mockCreateRedeemOrder,
-  mockGetRedeemOrder,
-  mockReportBurnTx,
   mockGetCustodialWallet,
   seedMockCustodialWallet,
   resetMockCustodialWallet,
   MOCK_CUSTODIAL_ADDRESS,
   MOCK_PIN,
-} from "@/lib/api/mock-api";
+} from "@/lib/api/mock-custodial-wallet";
 
 // Redeem, custodial burn path (redeem.yaml § burnMode, custodial-wallet.md §5.3,
 // USDX-565/567). `burnMode` is decided by the backend from `userAddress`; the
@@ -106,7 +104,7 @@ describe("mockCreateRedeemOrder — custodial", () => {
     });
   });
 
-  describe("edge cases", () => {
+  describe("edge case", () => {
     test("an external address is SELF_SIGN and needs no PIN — the existing path is untouched", async () => {
       seedMockCustodialWallet();
       const order = await mockCreateRedeemOrder({ ...base, userAddress: EXTERNAL });

@@ -13,7 +13,7 @@ import {
 // and the manual path still there behind the switch.
 test.beforeEach(async ({ page }) => {
   await forceEnglish(page);
-  await seedCustodialWallet(page);
+  await seedCustodialWallet(page, { status: "ACTIVE", balance: "1000.00" });
   await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
   await page.goto("/mint");
   await expect(page.getByText("You will mint")).toBeVisible({ timeout: 15000 });
@@ -58,7 +58,7 @@ test.describe("Mint — custodial destination", () => {
     });
   });
 
-  test.describe("edge cases", () => {
+  test.describe("edge case", () => {
     test("'Another address' brings back the manual field, address book and scanner", async ({
       page,
     }) => {

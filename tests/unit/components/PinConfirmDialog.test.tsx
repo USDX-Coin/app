@@ -57,7 +57,7 @@ describe("PinConfirmDialog", () => {
     });
   });
 
-  describe("edge cases", () => {
+  describe("edge case", () => {
     test("lockout: countdown shown, input and confirm disabled", () => {
       renderDialog({ cooldownSeconds: 900 });
       expect(screen.getByLabelText("PIN 6 digit")).toBeDisabled();

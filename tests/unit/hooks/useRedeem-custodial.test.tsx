@@ -42,7 +42,7 @@ vi.mock("@/lib/api/redeem-api", () => ({
   getRedeemOrder: vi.fn(),
   reportBurnTx: vi.fn(),
 }));
-vi.mock("@/lib/api/wallet-api", () => ({ getCustodialWallet: vi.fn() }));
+vi.mock("@/lib/api/wallet-api", () => ({ getCustodialWallet: vi.fn(), createCustodialWallet: vi.fn() }));
 
 const createMock = vi.mocked(createRedeemOrder);
 const reportMock = vi.mocked(reportBurnTx);
@@ -180,7 +180,7 @@ describe("useRedeem — custodial source", () => {
       // "tampilkan status wallet, jangan tawarkan retry" (wallet.yaml § 409): the
       // status word is supplied and the confirm button is blocked.
       expect(result.current.walletBlocked).toBe(true);
-      expect(result.current.createErrorStatusKey).toBe("wallet.statusInactive");
+      expect(result.current.createErrorStatusKey).toBe("wallet.status.notActive");
       // The stale profile copy is re-read so the message can follow reality.
       await waitFor(() => expect(getWalletMock.mock.calls.length).toBeGreaterThanOrEqual(2));
     });
@@ -209,7 +209,7 @@ describe("useRedeem — custodial source", () => {
     });
   });
 
-  describe("edge cases", () => {
+  describe("edge case", () => {
     test("switching to the external wallet restores the existing self-sign gate", async () => {
       fillForm();
       const { result } = renderHook(() => useRedeem(), { wrapper: createWrapper() });

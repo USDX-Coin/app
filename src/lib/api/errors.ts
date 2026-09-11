@@ -167,14 +167,26 @@ export function isInvalidCredentials(error: unknown): boolean {
   return isApiError(error) && error.status === 401 && error.code === "INVALID_CREDENTIALS";
 }
 
-// ── Wallet custodial (wallet.yaml § PETA KODE 409, USDX-567) ─────────────────
+// ── Wallet custodial (wallet.yaml § PETA KODE 409, USDX-566) ─────────────────
 // FE bercabang dari `code`, bukan dari status HTTP: tiga kondisi 409 beririsan.
 
-// 404 WALLET_NOT_FOUND — user belum punya wallet custodial. Di GET ini keadaan
-// NORMAL (user non-custodial), bukan kegagalan: `wallet-api` mengubahnya jadi
-// `null`, jangan pernah di-toast. Di POST /wallet/transfer artinya bug alur FE.
+// 404 WALLET_NOT_FOUND — user belum punya wallet custodial. Keadaan NORMAL
+// (user non-custodial selalu dapat ini dari GET), bukan kegagalan: `wallet-api`
+// mengubahnya jadi `null`, jangan pernah di-toast.
 export function isWalletNotFound(error: unknown): boolean {
   return isApiError(error) && error.status === 404 && error.code === "WALLET_NOT_FOUND";
+}
+
+// 409 WALLET_ALREADY_EXISTS — POST /wallet saat wallet sudah ACTIVE. Satu user =
+// satu wallet; FE arahkan ke GET, bukan menawarkan onboarding lagi.
+export function isWalletAlreadyExists(error: unknown): boolean {
+  return isApiError(error) && error.status === 409 && error.code === "WALLET_ALREADY_EXISTS";
+}
+
+// 409 WALLET_SUSPENDED — POST /wallet saat wallet ada tapi SUSPENDED (keputusan
+// ops/insiden). Tidak ada wallet pengganti; pemulihan lewat runbook ops.
+export function isWalletSuspended(error: unknown): boolean {
+  return isApiError(error) && error.status === 409 && error.code === "WALLET_SUSPENDED";
 }
 
 // 409 WALLET_NOT_ACTIVE — punya wallet tapi PROVISIONING / SUSPENDED, di

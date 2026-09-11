@@ -45,6 +45,11 @@ const STATUS_TONE: Record<string, BadgeTone> = {
   PENDING: "warning",
   REJECTED: "danger",
   UNVERIFIED: "neutral",
+  // Custodial wallet (CustodialWalletStatus, USDX-566). PROVISIONING is a wait
+  // with a way out (retry), so warning like AWAITING_BURN — not info.
+  PROVISIONING: "warning",
+  ACTIVE: "success",
+  SUSPENDED: "danger",
 }
 
 function statusTone(status: string | null | undefined): BadgeTone {

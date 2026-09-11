@@ -13,7 +13,7 @@ import {
 // `seedWallet` (the external-wallet seam) is deliberately NOT armed here.
 test.beforeEach(async ({ page }) => {
   await forceEnglish(page);
-  await seedCustodialWallet(page, { balance: "500.00" });
+  await seedCustodialWallet(page, { status: "ACTIVE", balance: "500.00" });
   await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
 });
 
@@ -91,7 +91,7 @@ test.describe("Redeem Flow (custodial)", () => {
     });
   });
 
-  test.describe("edge cases", () => {
+  test.describe("edge case", () => {
     test("switching to the external wallet restores the contextual connect", async ({ page }) => {
       await page.goto("/redeem");
       await expect(page.getByTestId("redeem-source-custodial")).toBeVisible({ timeout: 15000 });

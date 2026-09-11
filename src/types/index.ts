@@ -20,18 +20,19 @@ export interface User {
   // → arahkan user membuat PIN dulu, jangan buka dialog PIN yang pasti gagal.
   // Opsional: sesi yang di-persist sebelum field ini ada tidak membawanya.
   pinSet?: boolean;
-  // Wallet custodial user (users.yaml § User → `custodialWallet`, USDX-607).
+  // Wallet custodial user (users.yaml § User → `custodialWallet`, USDX-607/566).
   // `null` = user tidak punya (mayoritas non-custodial). Ini yang menentukan
-  // apakah opsi custodial (tujuan mint, sumber redeem, halaman transfer) muncul —
-  // TANPA memanggil `GET /api/v2/wallet` lalu menelan 404 di setiap cold start.
+  // routing: tawarkan "dikasih wallet" atau tampilkan saldo — TANPA memanggil
+  // `GET /api/v2/wallet` lalu menelan 404 di setiap cold start.
   //
   // Opsional karena `user` di-persist ke localStorage: sesi yang disimpan sebelum
   // field ini ada tidak membawanya sama sekali. `undefined` dibaca seperti `null`
-  // (tidak ada opsi yang salah), dan refresh `/auth/me` (useSession) yang mengisinya.
+  // (tidak ada penawaran yang salah), dan refresh `/auth/me` (useSession) yang
+  // mengisinya.
   custodialWallet?: CustodialWalletSummary | null;
 }
 
-// ── Wallet custodial (wallet.yaml, Gelombang 1 USDX-551 · FE USDX-566/567) ────
+// ── Wallet custodial (wallet.yaml, Gelombang 1 USDX-551 · FE USDX-566) ────────
 // Kunci dipegang sistem (wallet-service → Web3Signer → Vault); yang dibaca app
 // hanya salinan kerja backend. Status = `common.yaml § CustodialWalletStatus`.
 // TIDAK ada nilai gagal: provisioning yang gagal tetap PROVISIONING dan di-retry

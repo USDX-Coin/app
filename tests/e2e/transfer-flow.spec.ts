@@ -33,7 +33,7 @@ test.describe("Transfer Flow (custodial)", () => {
   test.describe("positive", () => {
     test.beforeEach(async ({ page }) => {
       await forceEnglish(page);
-      await seedCustodialWallet(page);
+      await seedCustodialWallet(page, { status: "ACTIVE", balance: "1000.00" });
       await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
     });
 
@@ -97,7 +97,7 @@ test.describe("Transfer Flow (custodial)", () => {
       page,
     }) => {
       await forceEnglish(page);
-      await seedCustodialWallet(page, { transferLimit: { perTx: "10.00" } });
+      await seedCustodialWallet(page, { status: "ACTIVE", balance: "1000.00", transferLimit: { perTx: "10.00" } });
       await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
 
       const pin = await openPinDialog(page);
@@ -114,7 +114,7 @@ test.describe("Transfer Flow (custodial)", () => {
       page,
     }) => {
       await forceEnglish(page);
-      await seedCustodialWallet(page);
+      await seedCustodialWallet(page, { status: "ACTIVE", balance: "1000.00" });
       await seedRateLimit(page, 3); // every mint/redeem/transfer call → 429 RATE_LIMITED
       await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
       const pin = await openPinDialog(page);
@@ -129,7 +129,7 @@ test.describe("Transfer Flow (custodial)", () => {
 
     test("amount above the balance is rejected before anything is sent", async ({ page }) => {
       await forceEnglish(page);
-      await seedCustodialWallet(page, { balance: "20.00" });
+      await seedCustodialWallet(page, { status: "ACTIVE", balance: "20.00" });
       await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
       await page.goto("/send");
       await expect(page.getByTestId("transfer-balance")).toHaveText("20 USDX", { timeout: 15000 });
@@ -141,7 +141,7 @@ test.describe("Transfer Flow (custodial)", () => {
 
     test("PROVISIONING wallet: sending is closed and says why", async ({ page }) => {
       await forceEnglish(page);
-      await seedCustodialWallet(page, { status: "PROVISIONING", address: null, balance: null });
+      await seedCustodialWallet(page, { status: "PROVISIONING" });
       await loginViaStorage(page, {
         custodialWallet: { address: null, status: "PROVISIONING" },
       });
@@ -153,7 +153,7 @@ test.describe("Transfer Flow (custodial)", () => {
     });
   });
 
-  test.describe("edge cases", () => {
+  test.describe("edge case", () => {
     test("a user without a custodial wallet still gets the Coming Soon page", async ({ page }) => {
       await forceEnglish(page);
       await loginViaStorage(page);
@@ -170,7 +170,7 @@ test.describe("Transfer Flow (custodial)", () => {
       page,
     }) => {
       await forceEnglish(page);
-      await seedCustodialWallet(page, { slowFirstTransfer: true });
+      await seedCustodialWallet(page, { status: "ACTIVE", balance: "1000.00", slowFirstTransfer: true });
       await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
       const pin = await openPinDialog(page);
       await pin.getByLabel("6-digit PIN").fill(MOCK_PIN);

@@ -72,6 +72,8 @@ src/
     layout/         # AuthLayout, Header, Sidebar, Logo
     mint/           # MintForm, MintReview, MintPageContent, skeletons
     redeem/         # RedeemForm, RedeemReview, RedeemPageContent, skeletons
+    wallet/         # Custodial wallet (USDX-566): offer, status panel, receive address + QR, sidebar card, onboarding step
+    settings/       # SettingsPageContent (Pengaturan — home of the custodial wallet)
     transfer/       # Custodial transfer: TransferForm, TransferReview, TransferResult, TransferPageContent (USDX-567)
     transactions/   # TransactionList, skeletons
     profile/        # ProfileCard, skeleton
@@ -221,6 +223,8 @@ Test helpers in `tests/helpers/`:
 | `/redeem` | Yes | SC | Redeem USDX to bank |
 | `/history` | Yes | SC | Transaction history (mint + redeem, W3) |
 | `/profile` | Yes | SC | User info + verification badge |
+| `/settings` | Yes | SC | Pengaturan: custodial "USDX wallet" (offer / address + QR + balance / status) + link to Profile (USDX-566) |
+| `/onboarding/wallet` | Yes | SC | Optional "dikasih wallet" step — where verify-email lands a new account; "Not now" → `/mint` (USDX-566) |
 | `/bridge` | Yes | SC | ComingSoon (gated — no bridge backend yet; sidebar teaser) |
 | `/send` | Yes | SC | Custodial transfer (`TransferPageContent`) for users with `user.custodialWallet`; ComingSoon for everyone else (no external-wallet send backend) |
 
@@ -241,20 +245,27 @@ Test helpers in `tests/helpers/`:
   "Segera Hadir"). For a **custodial-wallet owner** `/send` is the real transfer form
   (USDX-567) and the Send pill comes off (`Sidebar.navItemsFor`). `components/bridge/`
   and the old `components/send/` are gone; the transfer lives in `components/transfer/`
-- **Custodial wallet (Gelombang 1, USDX-551)** — read-side only in this repo so far:
-  `useCustodialWallet` reads `user.custodialWallet` from `/auth/me` (users.yaml, USDX-607)
-  and, only when present, `GET /api/v2/wallet` for the balance (`null` = unreadable → "—",
-  never 0). Onboarding "dikasih wallet" + the sidebar custodial balance card are
-  **USDX-566** (not here). The PIN is the backend's existing mechanism (`pin.yaml`); the
-  app has no set-PIN UI yet — `PIN_NOT_SET` / `user.pinSet === false` shows a "buat PIN
-  dulu" notice in `PinConfirmDialog`. Mock: `seedMockCustodialWallet` (unit) /
-  `seedCustodialWallet` (Playwright), mock PIN `123456`
+- **Custodial money paths (USDX-567)** — transfer (`/send`), mint destination
+  "wallet custodial saya", redeem source custodial. All three read the wallet through
+  `useCustodialWallet` (566) — `isActive`, `address`, `balanceState`, `pinSet`. The PIN
+  is the backend's existing mechanism (`pin.yaml`); the app has **no set-PIN UI yet** —
+  `PIN_NOT_SET` / `user.pinSet === false` shows a "buat PIN dulu" notice and disables the
+  step. Mock: `seedMockCustodialWallet` (unit, `mock-custodial-wallet.ts`) /
+  `seedCustodialWallet(page, { status, balance, …seams })` (Playwright), mock PIN `123456`
 - The `/payment` mock gateway route was deleted (it faked "Payment Successful" with a
   `setTimeout`); the real mint flow uses the cross-origin checkout handoff
 - RainbowKit wallet connection works; the USDX balance is read **on-chain for real**
   (`balanceOf` on Polygon) via `hooks/useWalletBalance` in the sidebar. Wallets are
   never auto-reconnected, so an unconnected/loading/failed read is
   shown as "—" plus a reason, never as a number (USDX-396)
+- **Custodial wallet** (USDX-566, `wallet.yaml`): `POST/GET /api/v2/wallet` via
+  `lib/api/wallet-api.ts` + `hooks/useCustodialWallet`. Routing comes from
+  `user.custodialWallet` on `/auth/me` (never "GET then swallow 404"); the poll
+  while PROVISIONING is capped (60 s) and the retry is a repeat `POST` — the
+  only thing that refreshes the backend's working copy (`custodial-wallet.md`
+  §5.5); `balance: null` renders as "—", never 0. Transfer / mint-to-custodial /
+  redeem-from-custodial UI is USDX-567 (next bullet). In mock mode the wallet lives in
+  localStorage (`usdx-mock-custodial`) and flips to ACTIVE 1.5 s after create
 - WalletConnect SSR produces `indexedDB` warnings (harmless)
 - Solana removed — EVM chains only (7 chains)
 - Validation messages are translated in both locales (`validation.*` keys in

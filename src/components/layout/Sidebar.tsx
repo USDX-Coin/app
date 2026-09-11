@@ -58,11 +58,11 @@ const transactionItems: NavItem[] = [
 //
 // Bantuan and Dukungan left the nav in PR 2 (F3): both routes render ComingSoon,
 // and a nav that lists four rows of which three go nowhere stops reading as
-// navigation. Pengaturan stays because the account menu links to it, so the pill
-// is the honest way to say what is behind it.
+// navigation. Pengaturan lost its pill with USDX-566: the route is a real page
+// now (the custodial wallet lives there).
 const moreItems: NavItem[] = [
   { href: "/history", labelKey: "nav.history", icon: History },
-  { href: "/settings", labelKey: "nav.settings", icon: Settings, comingSoon: true },
+  { href: "/settings", labelKey: "nav.settings", icon: Settings },
 ];
 
 function NavLink({ item, active, onNavigate }: { item: NavItem; active: boolean; onNavigate?: () => void }) {

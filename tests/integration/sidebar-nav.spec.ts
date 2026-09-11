@@ -103,10 +103,13 @@ test.describe("Sidebar Coming Soon teasers", () => {
       await expect(
         sidebar(page).getByRole("link", { name: "Redeem", exact: true })
       ).toBeVisible();
-      // Three pills in the whole sidebar — Bridge, Send and Settings. Settings
-      // joined them in PR 2: the route serves ComingSoon, and the account menu
-      // links to it, so the row has to say so before the click.
-      await expect(sidebar(page).getByText("Coming Soon", { exact: true })).toHaveCount(3);
+      // Two pills in the whole sidebar — Bridge and Send. Settings carried one
+      // from PR 2 until USDX-566 turned the route into a real page (the
+      // custodial wallet lives there), so its row must NOT say Coming Soon.
+      await expect(sidebar(page).getByText("Coming Soon", { exact: true })).toHaveCount(2);
+      await expect(
+        sidebar(page).getByRole("link", { name: "Settings", exact: true })
+      ).toBeVisible();
     });
   });
 

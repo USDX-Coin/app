@@ -56,6 +56,7 @@ Auth + KYC now route through real-or-mock dispatchers; mint/redeem/transactions 
 | `api/errors.ts` | `ApiError` helpers (`isEmailNotVerified`, `getRateLimitSeconds`, …) |
 | `api/auth-api.ts` | `login/register/verifyEmail/resend/forgot/reset/getMe` → `/api/v2/auth/*` or mock |
 | `api/kyc-api.ts` | `getMyKycStatus/submitKyc/requestPresignedUpload` → `/api/v2/kyc`, `/api/v2/storage` or mock |
+| `api/wallet-api.ts` | `getCustodialWallet` (404 `WALLET_NOT_FOUND` → `null`, a normal state) / `createCustodialWallet` (always 202 PROVISIONING) → `/api/v2/wallet` or mock (USDX-566) |
 | `api/mock-api.ts` | In-memory mock backend used when `env.useMock` is true. Demo user: `demo@usdx.com` / `Demo1234` |
 
 To wire a new real endpoint: add a function to the relevant `*-api.ts` that branches on `env.useMock`, calling `apiFetch` for the real path and a `mock*` fn otherwise.

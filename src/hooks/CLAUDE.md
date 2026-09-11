@@ -12,6 +12,7 @@ Significant reusable hooks that orchestrate state, validation, calculations, and
 | `useMintHandoffReset` | `mintStore` | — | Wipes the mint form + Ringkasan when /mint comes back from the cross-origin checkout handoff (bfcache restore or fresh load) |
 | `useRedeem` | `redeemStore` | `useMutation` (createRedeem) | Redeem form logic, validation |
 | `useWalletBalance` | — | on-chain `balanceOf` (wagmi) | Real USDX balance of the connected wallet — the app's only balance surface API (USDX-396). Token address comes from `useAppConfig`, env only as fallback; in `mintMode: TEST` the main balance **stays** the production token and the test token is reported separately as `testBalance` (USDX-640) |
+| `useCustodialWallet` | `authStore` (reads/syncs `user.custodialWallet`) | `useQuery` (`GET /api/v2/wallet`) + `useMutation` (`POST /api/v2/wallet`) | Custodial wallet (USDX-566): status/address/balance + create/retry. GET runs only when the profile says there is a wallet; polls while PROVISIONING with a capped window (`provisioningTimedOut` → retry = repeat POST); `balanceUsdx` is null when the backend gave null, never 0 |
 | `useTransactions` | — | `useQuery` (transactions) | Transaction history list |
 | `useChainSelector` | — | — | Chain search/filter state |
 

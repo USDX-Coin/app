@@ -72,6 +72,8 @@ src/
     layout/         # AuthLayout, Header, Sidebar, Logo
     mint/           # MintForm, MintReview, MintPageContent, skeletons
     redeem/         # RedeemForm, RedeemReview, RedeemPageContent, skeletons
+    wallet/         # Custodial wallet (USDX-566): offer, status panel, receive address + QR, sidebar card, onboarding step
+    settings/       # SettingsPageContent (Pengaturan — home of the custodial wallet)
     transactions/   # TransactionList, skeletons
     profile/        # ProfileCard, skeleton
     ui/             # shadcn/ui base components (auto-generated)
@@ -207,6 +209,8 @@ Test helpers in `tests/helpers/`:
 | `/redeem` | Yes | SC | Redeem USDX to bank |
 | `/history` | Yes | SC | Transaction history (mint + redeem, W3) |
 | `/profile` | Yes | SC | User info + verification badge |
+| `/settings` | Yes | SC | Pengaturan: custodial "USDX wallet" (offer / address + QR + balance / status) + link to Profile (USDX-566) |
+| `/onboarding/wallet` | Yes | SC | Optional "dikasih wallet" step — where verify-email lands a new account; "Not now" → `/mint` (USDX-566) |
 | `/bridge` | Yes | SC | ComingSoon (gated — no bridge backend yet; sidebar teaser) |
 | `/send` | Yes | SC | ComingSoon (gated — no send backend yet; sidebar teaser) |
 
@@ -232,6 +236,14 @@ Test helpers in `tests/helpers/`:
   (`balanceOf` on Polygon) via `hooks/useWalletBalance` in the sidebar. Wallets are
   never auto-reconnected, so an unconnected/loading/failed read is
   shown as "—" plus a reason, never as a number (USDX-396)
+- **Custodial wallet** (USDX-566, `wallet.yaml`): `POST/GET /api/v2/wallet` via
+  `lib/api/wallet-api.ts` + `hooks/useCustodialWallet`. Routing comes from
+  `user.custodialWallet` on `/auth/me` (never "GET then swallow 404"); the poll
+  while PROVISIONING is capped (60 s) and the retry is a repeat `POST` — the
+  only thing that refreshes the backend's working copy (`custodial-wallet.md`
+  §5.5); `balance: null` renders as "—", never 0. Transfer / mint-to-custodial /
+  redeem-from-custodial UI is USDX-567. In mock mode the wallet lives in
+  localStorage (`usdx-mock-custodial`) and flips to ACTIVE 1.5 s after create
 - WalletConnect SSR produces `indexedDB` warnings (harmless)
 - Solana removed — EVM chains only (7 chains)
 - Validation messages are translated in both locales (`validation.*` keys in

@@ -87,11 +87,20 @@ const en: Dict = {
   "sum.amount": "Amount",
   "sum.receiveAmount": "Receive Amount",
   "sum.mintAmount": "Mint Amount",
+  "sum.mintValue": "Mint value",
+  "sum.mintFee": "Mint fee",
+  // VA is the only channel that ships: the provider (DurianPay) declined QRIS, so
+  // the old "QRIS/VA" copy named a channel no user can ever pick (USDX-638).
+  "sum.vaFee": "VA fee",
   "sum.totalPayment": "Total Payment",
-  "sum.feeNote": "QRIS/VA fee is added at checkout.",
+  "sum.feeNote": "The VA fee is charged once, at payment.",
   // mint form / errors (USDX-201)
   "form.swapCurrency": "Swap currency",
   "mint.rateError": "Couldn't load the rate.",
+  // The mint minimum and the fees come from the backend. Without them the app
+  // has no honest number to show, so it says so instead of guessing (USDX-638).
+  "mint.configLoading": "Loading the mint limit and fees…",
+  "mint.configError": "Couldn't load the mint limit and fees, so minting is off for now.",
   "mint.errBlacklisted": "This destination address can't receive USDX.",
   "mint.errValidation": "Please check the amount and address, then try again.",
   "mint.errDisabled": "Minting isn't available yet. Please try again later.",
@@ -776,7 +785,9 @@ const en: Dict = {
   "validation.amount.required": "Enter an amount",
   "validation.amount.invalid": "Enter numbers only",
   "validation.amount.positive": "The amount must be more than 0",
-  "validation.amount.minMint": "Minimum mint is {amount} USDX",
+  // The rupiah minimum comes from GET /api/v2/config, so {amount} here is
+  // supplied by the caller, not by the static table in `validations.ts`.
+  "validation.amount.minMint": "Minimum mint value is {amount}",
   "validation.amount.maxMint": "Maximum mint is {amount} USDX",
   "validation.amount.minRedeem": "Minimum redeem is {amount} USDX",
   "validation.amount.maxRedeem": "Maximum redeem is {amount} USDX",
@@ -930,11 +941,20 @@ const id: Dict = {
   "sum.amount": "Jumlah",
   "sum.receiveAmount": "Jumlah Diterima",
   "sum.mintAmount": "Jumlah Minting",
+  "sum.mintValue": "Nilai mint",
+  "sum.mintFee": "Biaya mint",
+  // VA satu-satunya kanal yang tayang: provider (DurianPay) menolak QRIS, jadi
+  // teks lama "QRIS/VA" menyebut kanal yang tidak pernah bisa dipilih (USDX-638).
+  "sum.vaFee": "Biaya VA",
   "sum.totalPayment": "Total Pembayaran",
-  "sum.feeNote": "Biaya QRIS/VA ditambahkan saat checkout.",
+  "sum.feeNote": "Biaya VA ditagih sekali, saat pembayaran.",
   // mint form / errors (USDX-201)
   "form.swapCurrency": "Tukar mata uang",
   "mint.rateError": "Gagal memuat nilai tukar.",
+  // Batas minimum dan biaya datang dari backend. Tanpa itu app tidak punya
+  // angka yang jujur untuk ditampilkan — jadi dikatakan, bukan ditebak (USDX-638).
+  "mint.configLoading": "Memuat batas minimum dan biaya…",
+  "mint.configError": "Gagal memuat batas minimum dan biaya, jadi mint dimatikan dulu.",
   "mint.errBlacklisted": "Alamat tujuan tidak bisa menerima USDX.",
   "mint.errValidation": "Periksa kembali jumlah dan alamat, lalu coba lagi.",
   "mint.errDisabled": "Mint belum tersedia. Coba lagi nanti.",
@@ -1607,7 +1627,9 @@ const id: Dict = {
   "validation.amount.required": "Masukkan jumlahnya",
   "validation.amount.invalid": "Masukkan angka saja",
   "validation.amount.positive": "Jumlah harus lebih dari 0",
-  "validation.amount.minMint": "Mint minimal {amount} USDX",
+  // Minimum rupiah datang dari GET /api/v2/config, jadi {amount} di sini
+  // dikirim pemanggil, bukan dari tabel statis di `validations.ts`.
+  "validation.amount.minMint": "Nilai mint minimum {amount}",
   "validation.amount.maxMint": "Mint maksimal {amount} USDX",
   "validation.amount.minRedeem": "Redeem minimal {amount} USDX",
   "validation.amount.maxRedeem": "Redeem maksimal {amount} USDX",

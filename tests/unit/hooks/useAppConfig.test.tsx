@@ -1,0 +1,97 @@
+import { describe, test, expect, vi, beforeEach } from "vitest";
+import { renderHook, waitFor } from "@testing-library/react";
+import { createWrapper } from "../../helpers/test-utils";
+import { useAppConfig } from "@/hooks/useAppConfig";
+import { getAppConfig } from "@/lib/api/config-api";
+import type { AppConfig } from "@/types";
+
+vi.mock("@/lib/api/config-api", () => ({ getAppConfig: vi.fn() }));
+const getAppConfigMock = vi.mocked(getAppConfig);
+
+function config(overrides: Partial<AppConfig> = {}): AppConfig {
+  return {
+    minMintIdr: "20000.00",
+    mintFeePct: "1.0",
+    pgFeeVaFlat: "4000.00",
+    contractAddress: "0x1FF2000000000000000000000000000000000000",
+    chain: "polygon",
+    ...overrides,
+  };
+}
+
+beforeEach(() => {
+  getAppConfigMock.mockReset();
+  getAppConfigMock.mockResolvedValue(config());
+});
+
+// GET /api/v2/config (USDX-635/636) — the app's only runtime configuration.
+describe("useAppConfig", () => {
+  describe("positive", () => {
+    test("parses the decimal strings once, at the edge", async () => {
+      const { result } = renderHook(() => useAppConfig(), { wrapper: createWrapper() });
+
+      await waitFor(() => expect(result.current.isReady).toBe(true));
+      expect(result.current.minMintIdr).toBe(20_000);
+      expect(result.current.mintFeePct).toBe(1);
+      expect(result.current.pgFeeVaFlat).toBe(4_000);
+      expect(result.current.contractAddress).toBe(
+        "0x1FF2000000000000000000000000000000000000",
+      );
+    });
+
+    test("reports TEST when the backend says the test bundle is in force", async () => {
+      getAppConfigMock.mockResolvedValue(config({ mintMode: "TEST" }));
+      const { result } = renderHook(() => useAppConfig(), { wrapper: createWrapper() });
+
+      await waitFor(() => expect(result.current.isReady).toBe(true));
+      expect(result.current.mintMode).toBe("TEST");
+    });
+  });
+
+  describe("negative", () => {
+    test("a failed load reports error and hands back NO numbers", async () => {
+      getAppConfigMock.mockRejectedValue(new Error("500"));
+      const { result } = renderHook(() => useAppConfig(), { wrapper: createWrapper() });
+
+      await waitFor(() => expect(result.current.isError).toBe(true), { timeout: 5000 });
+      expect(result.current.isReady).toBe(false);
+      expect(result.current.minMintIdr).toBeNull();
+      expect(result.current.pgFeeVaFlat).toBeNull();
+      expect(result.current.contractAddress).toBeNull();
+      // An unknown mode must never read as a test one.
+      expect(result.current.mintMode).toBe("PROD");
+    });
+  });
+
+  describe("edge cases", () => {
+    test("mintMode missing from the response means PROD (USDX-636 not shipped yet)", async () => {
+      const { result } = renderHook(() => useAppConfig(), { wrapper: createWrapper() });
+
+      await waitFor(() => expect(result.current.isReady).toBe(true));
+      expect(result.current.config?.mintMode).toBeUndefined();
+      expect(result.current.mintMode).toBe("PROD");
+    });
+
+    test("an unparseable number stays null instead of collapsing to 0", async () => {
+      // 0 is a plausible minimum and a plausible fee, so it must never be what a
+      // malformed field turns into.
+      getAppConfigMock.mockResolvedValue(config({ minMintIdr: "", pgFeeVaFlat: "abc" }));
+      const { result } = renderHook(() => useAppConfig(), { wrapper: createWrapper() });
+
+      await waitFor(() => expect(result.current.mintFeePct).toBe(1));
+      expect(result.current.minMintIdr).toBeNull();
+      expect(result.current.pgFeeVaFlat).toBeNull();
+      expect(result.current.isReady).toBe(false);
+    });
+
+    test("a null contractAddress does not make the mint numbers unusable", async () => {
+      // The address is for the balance panel; the mint screen only needs the
+      // three money fields (USDX-635 § chain env kosong → contractAddress null).
+      getAppConfigMock.mockResolvedValue(config({ contractAddress: null }));
+      const { result } = renderHook(() => useAppConfig(), { wrapper: createWrapper() });
+
+      await waitFor(() => expect(result.current.isReady).toBe(true));
+      expect(result.current.contractAddress).toBeNull();
+    });
+  });
+});

@@ -7,6 +7,8 @@ const SEEDED_ADDRESS = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed";
 
 // Mint flow (USDX-201): form -> Ringkasan modal -> checkout redirect.
 // Phase 2 = Polygon-only; live rate from GET /v2/rate (mock effectiveBuyRate 16,400).
+// Limits and fees come from GET /api/v2/config (USDX-638): mock minMintIdr
+// Rp 20.000, mintFeePct 1%, pgFeeVaFlat Rp 4.000.
 test.beforeEach(async ({ page }) => {
   await forceEnglish(page);
   await loginViaStorage(page);
@@ -39,6 +41,32 @@ test.describe("Mint Page", () => {
       await expect(page.getByText("500 USDX").first()).toBeVisible();
     });
 
+    test("the review shows the VA fee and a total that includes it", async ({ page }) => {
+      // Rp 20.000 mint value: 1% mint fee = Rp 200, flat VA fee Rp 4.000,
+      // total Rp 24.200. Before USDX-638 this screen printed Rp 20.000 under
+      // "Total Payment" and only promised a fee at the next origin.
+      await page.getByRole("button", { name: "Swap currency" }).click();
+      await page.getByPlaceholder("0", { exact: true }).fill("20000");
+      await page.getByPlaceholder("0x5DC489Ad05Efc").fill(VALID_ADDRESS);
+      await page.getByRole("button", { name: "Mint", exact: true }).click();
+
+      await expect(page.getByText("Transaction Summary")).toBeVisible();
+      await expect(page.getByText("VA fee", { exact: true })).toBeVisible();
+      await expect(page.getByText("Rp 4.000")).toBeVisible();
+      await expect(page.getByText("≈ Rp 24.200")).toBeVisible();
+      // The old copy named a channel that never ships (provider declined QRIS).
+      await expect(page.getByText("QRIS")).toHaveCount(0);
+    });
+
+    test("Rp 20.000 typed on the rupiah side is accepted", async ({ page }) => {
+      await page.getByRole("button", { name: "Swap currency" }).click();
+      await page.getByPlaceholder("0", { exact: true }).fill("20000");
+      await page.getByPlaceholder("0x5DC489Ad05Efc").fill(VALID_ADDRESS);
+
+      await expect(page.getByText("Minimum mint value is")).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Mint", exact: true })).toBeEnabled();
+    });
+
     test("picks a destination from the address book", async ({ page }) => {
       await page.getByRole("button", { name: "Add address book" }).click();
       await expect(page.getByRole("heading", { name: "Address book" })).toBeVisible();
@@ -52,10 +80,23 @@ test.describe("Mint Page", () => {
       await expect(page.getByRole("button", { name: "Mint", exact: true })).toBeDisabled();
     });
 
-    test("shows min amount error", async ({ page }) => {
+    test("Rp 19.000 on the rupiah side reports the rupiah minimum", async ({ page }) => {
+      await page.getByRole("button", { name: "Swap currency" }).click();
+      await page.getByPlaceholder("0", { exact: true }).fill("19000");
+      await page.getByPlaceholder("0x5DC489Ad05Efc").fill(VALID_ADDRESS);
+
+      await expect(page.getByText("Minimum mint value is Rp 20.000")).toBeVisible();
+      await expect(page.getByRole("button", { name: "Mint", exact: true })).toBeDisabled();
+    });
+
+    test("the same amount typed on the USDX side reports the same error", async ({ page }) => {
+      // 1 USDX = Rp 16.400 — the same purchase, the other box. It used to be
+      // judged against a 10-USDX floor and reported as "Minimum mint is 10 USDX".
       await page.getByPlaceholder("0", { exact: true }).fill("1");
       await page.getByPlaceholder("0x5DC489Ad05Efc").fill(VALID_ADDRESS);
-      await expect(page.getByText("Minimum mint is 10 USDX")).toBeVisible();
+
+      await expect(page.getByText("Minimum mint value is Rp 20.000")).toBeVisible();
+      await expect(page.getByRole("button", { name: "Mint", exact: true })).toBeDisabled();
     });
 
     test("shows max amount error", async ({ page }) => {

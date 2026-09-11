@@ -7,7 +7,8 @@ Significant reusable hooks that orchestrate state, validation, calculations, and
 | Hook | Store | Query/Mutation | Purpose |
 |------|-------|---------------|---------|
 | `useAuth` | `authStore` | `useMutation` (login, register) | Auth flow + router redirect |
-| `useMint` | `mintStore` | `useMutation` (createMint) | Mint form logic, validation, fee calc |
+| `useMint` | `mintStore` | `useMutation` (createMint) | Mint form logic, rupiah-based minimum, fee calc |
+| `useAppConfig` | — | `useQuery` (`GET /api/v2/config`) | Runtime config: mint minimum (IDR), fee rates, token address, mint mode. Numbers are `null` — never a guessed default — until it loads (USDX-635/638) |
 | `useMintHandoffReset` | `mintStore` | — | Wipes the mint form + Ringkasan when /mint comes back from the cross-origin checkout handoff (bfcache restore or fresh load) |
 | `useRedeem` | `redeemStore` | `useMutation` (createRedeem) | Redeem form logic, validation |
 | `useWalletBalance` | — | on-chain `balanceOf` (wagmi) | Real USDX balance of the connected wallet — the app's only balance surface API (USDX-396) |

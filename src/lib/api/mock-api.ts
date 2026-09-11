@@ -28,6 +28,7 @@ import type {
   BankAccount,
   User,
   ConsumerRate,
+  AppConfig,
   AddressBookEntry,
   BankAccountEntry,
   MintChannelOption,
@@ -486,6 +487,10 @@ export async function mockGetBankAccounts(): Promise<BankAccount[]> {
 const MOCK_BASE_RATE = 16000;
 const MOCK_SPREAD_BUY_PCT = 2.5;
 const MOCK_SPREAD_SELL_PCT = 2.0;
+// Mint minimum, in RUPIAH — mirrors `fee_configs.min_mint_idr` (USDX-635). The
+// app has no USDX-denominated minimum any more: 10 USDX meant a different
+// rupiah figure every day, and Rp 176.182 on the day it was noticed.
+const MOCK_MIN_MINT_IDR = 20_000;
 const MOCK_MINT_FEE_PCT = 1; // % of subtotal
 const MOCK_PG_FEE_VA = 4000; // flat IDR
 const MOCK_PG_FEE_QRIS_PCT = 0.7; // % of subtotal
@@ -512,6 +517,24 @@ export async function mockGetConsumerRate(): Promise<ConsumerRate> {
     effectiveBuyRate: idr(mockEffectiveBuyRate()),
     effectiveSellRate: idr(mockEffectiveSellRate()),
     updatedAt: new Date().toISOString(),
+  };
+}
+
+// GET /api/v2/config (USDX-635). The address mirrors what a deployed backend
+// would return for Polygon; offline it only has to be a well-formed address, and
+// it deliberately matches nothing real so a mock balance read stays empty.
+const MOCK_CONTRACT_ADDRESS = "0x1FF2000000000000000000000000000000000000";
+
+export async function mockGetAppConfig(): Promise<AppConfig> {
+  await delay(120);
+  return {
+    minMintIdr: idr(MOCK_MIN_MINT_IDR),
+    mintFeePct: String(MOCK_MINT_FEE_PCT),
+    pgFeeVaFlat: idr(MOCK_PG_FEE_VA),
+    contractAddress: MOCK_CONTRACT_ADDRESS,
+    chain: "polygon",
+    // `mintMode` is deliberately absent here: it only exists once USDX-636 ships,
+    // and the app must behave as PROD when the backend doesn't send it.
   };
 }
 

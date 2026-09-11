@@ -184,6 +184,32 @@ export interface ConsumerRate {
   updatedAt: string;
 }
 
+// GET /api/v2/config — the app's single source of runtime configuration
+// (app-config.yaml, USDX-635; `mintMode` added by USDX-636). Needs a consumer
+// session (401 without one). Everything here used to be a build-time constant or
+// a copy of the backend's `fee_configs`, which is how the mint minimum ended up
+// denominated in USDX and the contract address ended up baked into a bundle.
+//
+// All money fields are decimal STRINGS, same convention as ConsumerRate — the FE
+// converts once, at the edge, and never re-floats them afterwards.
+export interface AppConfig {
+  /** Minimum mint value in IDR, compared against the order subtotal (not the total pay). */
+  minMintIdr: string;
+  /** Mint fee, PERCENT of the subtotal (fee.yaml `mintFeePct`, e.g. "1.0" = 1%). */
+  mintFeePct: string;
+  /** Payment-gateway VA fee, flat IDR (fee.yaml `pgFeeVaFlat`, e.g. "4000.00"). */
+  pgFeeVaFlat: string;
+  /** USDX token address on `chain`. null when the chain isn't configured backend-side. */
+  contractAddress: string | null;
+  /** Chain the address belongs to — "polygon" in Phase 2. */
+  chain: string;
+  /**
+   * Mint bundle currently in force (USDX-636). OPTIONAL: the field only exists
+   * once USDX-636 ships, and its absence means the normal production bundle.
+   */
+  mintMode?: "PROD" | "TEST";
+}
+
 // address-book.yaml AddressBookEntry — a saved mint destination wallet.
 export interface AddressBookEntry {
   id: string;

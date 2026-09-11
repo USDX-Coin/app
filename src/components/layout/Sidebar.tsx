@@ -19,6 +19,7 @@ import { MenuProfil } from "@/components/ui/menu-profil";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn, formatAmount } from "@/lib/utils";
 import { useWalletBalance } from "@/hooks/useWalletBalance";
+import { CustodialBalanceCard } from "@/components/wallet/CustodialBalanceCard";
 import { useAuthStore } from "@/stores/authStore";
 import { logout as revokeSession } from "@/lib/api/auth-api";
 import { useLang } from "@/providers/LanguageProvider";
@@ -301,6 +302,11 @@ export function Sidebar({
             {t("sidebar.getUsdx")}
           </Button>
         </div>
+
+        {/* Custodial wallet (USDX-566) — a second card, not a replacement: the
+            connected-wallet card above keeps working exactly as before, and this
+            one renders nothing for a user without a custodial wallet. */}
+        <CustodialBalanceCard onNavigate={onNavigate} />
 
         {/* Test-mint strip (USDX-640). Only while the backend reports the test
             bundle in force, and only as a SEPARATE row: the card above keeps

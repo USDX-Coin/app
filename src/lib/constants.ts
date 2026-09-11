@@ -13,6 +13,10 @@ export const MINT_CHAIN_ID = "polygon";
 // Redeem is Polygon-only too (week3.md § Chain). Hardcoded in the create request;
 // there's no chain picker in the redeem form.
 export const REDEEM_CHAIN_ID = "polygon";
+// Wallet custodial hanya ada di satu chain di gelombang 1 (custodial-wallet.md
+// §1/§4): transfer tidak mengirim `chain` ke backend, konstanta ini dipakai FE
+// untuk ikon jaringan + tautan explorer (USDX-567).
+export const CUSTODIAL_CHAIN_ID = "polygon";
 // Numeric EIP-155 id for the redeem chain — Polygon mainnet (137). The
 // precondition gate enforces the connected wallet is on this network before the
 // burn (week3.md § Week 3 Addendum, USDX-259); mismatch → prompt switch.

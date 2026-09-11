@@ -343,6 +343,26 @@ const en: Dict = {
   "transfer.errInProgress": "This transfer is still being processed. Wait a moment, then press Send again — it won't be sent twice.",
   "transfer.errGate": "Your account isn't eligible to send yet.",
   "transfer.errGeneric": "Couldn't send the transfer. Please try again.",
+  // transfer custodial — screen copy (USDX-567). "Sent to the network", never
+  // "successful": 202 is proof of broadcast, not of on-chain settlement, and
+  // there is no endpoint yet to watch the confirmation (USDX-577).
+  "transfer.from": "From",
+  "transfer.myWallet": "My custodial wallet",
+  "transfer.balance": "Balance",
+  "transfer.walletNotActiveTitle": "Sending unavailable",
+  "transfer.walletProvisioning": "Your custodial wallet is still being set up. Sending opens as soon as it is active.",
+  "transfer.walletSuspended": "Your custodial wallet is suspended. Sending is disabled — please contact support.",
+  "transfer.note": "Transfers on the blockchain cannot be reversed. Double-check the destination address.",
+  "transfer.continueToPin": "Continue to PIN",
+  "transfer.pinDescription": "Send {amount} USDX to {to}",
+  "transfer.sentTitle": "Transfer sent to the network",
+  "transfer.sentDesc": "Your transfer has been signed and broadcast. On-chain confirmation follows in a moment — this screen is not that confirmation.",
+  "transfer.txHash": "Transaction hash",
+  "transfer.viewOnExplorer": "View on explorer",
+  "transfer.copyHash": "Copy hash",
+  "transfer.again": "Send another transfer",
+  "route.send.desc": "No transfer was made and your balance did not change.",
+  "route.send.title": "The send page could not be loaded",
   // auth — branding panel
   "auth.brand.headline": "The Transparent & Regulated USD Stablecoin",
   "auth.brand.tagline": "Mint, redeem, bridge, and send USDX across 8 networks — fast, secure, and fully backed.",
@@ -1233,6 +1253,26 @@ const id: Dict = {
   "transfer.errInProgress": "Transfer ini masih diproses. Tunggu sebentar, lalu tekan Kirim lagi — tidak akan terkirim dua kali.",
   "transfer.errGate": "Akun Anda belum bisa mengirim USDX.",
   "transfer.errGeneric": "Gagal mengirim transfer. Coba lagi.",
+  // transfer custodial — teks layar (USDX-567). "Dikirim ke jaringan", bukan
+  // "berhasil": 202 adalah bukti broadcast, bukan bukti settle on-chain, dan
+  // belum ada endpoint pemantau konfirmasinya (USDX-577).
+  "transfer.from": "Dari",
+  "transfer.myWallet": "Wallet custodial saya",
+  "transfer.balance": "Saldo",
+  "transfer.walletNotActiveTitle": "Belum bisa mengirim",
+  "transfer.walletProvisioning": "Wallet custodial Anda masih disiapkan. Pengiriman terbuka begitu wallet aktif.",
+  "transfer.walletSuspended": "Wallet custodial Anda ditangguhkan. Pengiriman dinonaktifkan — hubungi dukungan.",
+  "transfer.note": "Transfer di blockchain tidak dapat dibatalkan. Periksa kembali alamat tujuan.",
+  "transfer.continueToPin": "Lanjut ke PIN",
+  "transfer.pinDescription": "Kirim {amount} USDX ke {to}",
+  "transfer.sentTitle": "Transfer dikirim ke jaringan",
+  "transfer.sentDesc": "Transfer sudah ditandatangani dan disiarkan. Konfirmasi on-chain menyusul beberapa saat lagi — layar ini bukan konfirmasi itu.",
+  "transfer.txHash": "Hash transaksi",
+  "transfer.viewOnExplorer": "Lihat di explorer",
+  "transfer.copyHash": "Salin hash",
+  "transfer.again": "Transfer lagi",
+  "route.send.desc": "Tidak ada transfer yang dibuat dan saldo Anda tidak berubah.",
+  "route.send.title": "Halaman kirim gagal dimuat",
   // auth — branding panel
   "auth.brand.headline": "Stablecoin USD yang Transparan & Teregulasi",
   "auth.brand.tagline": "Mint, redeem, bridge, dan kirim USDX di 8 jaringan — cepat, aman, dan sepenuhnya dijamin.",

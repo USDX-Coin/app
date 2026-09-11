@@ -118,7 +118,7 @@ test.describe("Custodial wallet flow", () => {
     });
   });
 
-  test.describe("edge cases", () => {
+  test.describe("edge case", () => {
     test("pressing create twice does not error and does not make a second wallet", async ({
       page,
     }) => {

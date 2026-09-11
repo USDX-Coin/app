@@ -174,7 +174,7 @@ describe("useCustodialWallet", () => {
     });
   });
 
-  describe("edge cases", () => {
+  describe("edge case", () => {
     test("polling stops after the budget and reports provisioningTimedOut; retry (POST again) restarts it", async () => {
       signIn({ address: null, status: "PROVISIONING" });
       getMock.mockResolvedValue(PROVISIONING);

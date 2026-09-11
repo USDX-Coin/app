@@ -76,7 +76,7 @@ test.describe("Wallet onboarding step", () => {
     });
   });
 
-  test.describe("edge cases", () => {
+  test.describe("edge case", () => {
     test("an account that already has a wallet sees it, not the offer", async ({ page }) => {
       await forceEnglish(page);
       await seedCustodialWallet(page, { status: "ACTIVE", balance: "12.00" });

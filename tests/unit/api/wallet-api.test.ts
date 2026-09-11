@@ -106,7 +106,7 @@ describe("getCustodialWallet", () => {
     });
   });
 
-  describe("edge cases", () => {
+  describe("edge case", () => {
     test("a 404 with a different code is NOT swallowed — only WALLET_NOT_FOUND is normal", async () => {
       fetchMock.mockResolvedValueOnce(
         jsonResponse(404, {
@@ -181,7 +181,7 @@ describe("createCustodialWallet", () => {
     });
   });
 
-  describe("edge cases", () => {
+  describe("edge case", () => {
     test("a 401 still fires the global unauthorized handler (session gone)", async () => {
       fetchMock.mockResolvedValueOnce(
         jsonResponse(401, {

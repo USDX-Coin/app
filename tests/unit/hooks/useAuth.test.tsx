@@ -117,7 +117,7 @@ describe("useAuth", () => {
       });
     });
 
-    describe("edge cases", () => {
+    describe("edge case", () => {
       test("a user object from before the field existed reads like 'no wallet'", () => {
         expect(afterVerifyEmailPath({})).toBe("/onboarding/wallet");
       });

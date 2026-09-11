@@ -159,7 +159,7 @@ test.describe("Settings — custodial wallet", () => {
     });
   });
 
-  test.describe("edge cases", () => {
+  test.describe("edge case", () => {
     test("provisioning that outlasts the poll window shows 'still being set up' + try again, and the retry heals it", async ({
       page,
     }) => {

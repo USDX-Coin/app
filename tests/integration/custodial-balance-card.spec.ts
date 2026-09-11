@@ -64,7 +64,7 @@ test.describe("Sidebar — custodial balance card", () => {
     });
   });
 
-  test.describe("edge cases", () => {
+  test.describe("edge case", () => {
     test("PROVISIONING shows a status pill and no number — there is no address to read yet", async ({
       page,
     }) => {

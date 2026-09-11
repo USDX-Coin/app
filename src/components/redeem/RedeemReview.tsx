@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { PinConfirmDialog } from "@/components/shared/PinConfirmDialog";
 import { useRedeem } from "@/hooks/useRedeem";
 import { formatAmount, formatIDR, truncateAddress } from "@/lib/utils";
 import { getChainById } from "@/lib/chains";
@@ -60,6 +61,13 @@ export function RedeemReview({ open, onOpenChange }: RedeemReviewProps) {
     submitRedeem,
     isCreating,
     createErrorKey,
+    isCustodialSource,
+    pinOpen,
+    setPinOpen,
+    openPin,
+    pinErrorKey,
+    pinNotSet,
+    pinCooldownSeconds,
   } = useRedeem();
 
   const selectedChain = getChainById(REDEEM_CHAIN_ID);
@@ -68,9 +76,21 @@ export function RedeemReview({ open, onOpenChange }: RedeemReviewProps) {
   // The owner sees their own number in full (un-mask 2026-06-25, USDX-270).
 
   function handleConfirm() {
+    // Custodial (USDX-567): the PIN is the approval and travels with the create,
+    // so "Konfirmasi & Burn" opens the PIN dialog; the create fires from there.
+    if (isCustodialSource) {
+      openPin();
+      return;
+    }
     // On success the hook navigates to the tracker (this modal unmounts); on
     // failure the error is surfaced via `createErrorKey`, so swallow the reject.
     submitRedeem().catch(() => {});
+  }
+
+  function handlePin(pin: string) {
+    // PIN failures stay in the dialog (`pinErrorKey`); others close it and show
+    // in this summary via `createErrorKey`.
+    submitRedeem(pin).catch(() => {});
   }
 
   return (
@@ -96,6 +116,9 @@ export function RedeemReview({ open, onOpenChange }: RedeemReviewProps) {
               {selectedChain?.name}
             </Row>
             <Row label={t("sum.sourceWallet")}>
+              {isCustodialSource && (
+                <span className="text-muted-text">{t("redeem.sourceCustodial")} ·</span>
+              )}
               {walletAddress ? truncateAddress(walletAddress) : "—"}
             </Row>
             <Row label={t("sum.bankDestination")}>{destination.bankName}</Row>
@@ -118,11 +141,15 @@ export function RedeemReview({ open, onOpenChange }: RedeemReviewProps) {
             </div>
           </div>
 
-          <Alert tone="info">{t("redeem.burnNote")}</Alert>
+          <Alert tone="info">
+            {isCustodialSource ? t("redeem.custodialNote") : t("redeem.burnNote")}
+          </Alert>
 
           {/* Precondition gate (week3.md § Precondition connect-wallet, USDX-259):
               wrong network blocks with a switch prompt; insufficient USDX blocks;
-              low POL is a non-blocking warning. */}
+              low POL is a non-blocking warning. On the custodial source the hook
+              reports chainOk=true / lowGasWarning=false, so only the balance
+              check can render here. */}
           {!chainOk && (
             <Alert
               tone="warning"
@@ -176,6 +203,23 @@ export function RedeemReview({ open, onOpenChange }: RedeemReviewProps) {
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* Custodial approval (USDX-567): the only place the user says yes — after
+          this there is no wallet signature. Rendered inside the summary dialog
+          so the figures stay behind it. */}
+      {isCustodialSource && (
+        <PinConfirmDialog
+          open={pinOpen}
+          onOpenChange={setPinOpen}
+          description={t("redeem.pinDescription", { amount: formatAmount(amountUsdx) })}
+          onSubmit={handlePin}
+          isSubmitting={isCreating}
+          errorKey={pinErrorKey}
+          cooldownSeconds={pinCooldownSeconds}
+          pinNotSet={pinNotSet}
+          confirmLabel={t("btn.confirmBurn")}
+        />
+      )}
     </Dialog>
   );
 }

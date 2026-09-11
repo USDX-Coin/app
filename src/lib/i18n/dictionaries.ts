@@ -297,6 +297,17 @@ const en: Dict = {
   "redeem.errGeneric": "Something went wrong. Please try again.",
   "redeem.errInsufficientBalance": "Your USDX balance is not enough for this redeem.",
   "redeem.errWalletBlacklisted": "This wallet cannot burn USDX.",
+  // redeem — custodial burn source (USDX-567, custodial-wallet.md §5.3). The
+  // system signs after the PIN; there is no wallet signature screen and the
+  // tracker says "processing" instead of "sign in your wallet".
+  "redeem.sourceLabel": "Burn from",
+  "redeem.sourceCustodial": "My custodial wallet",
+  "redeem.sourceExternal": "External wallet",
+  "redeem.custodialNote": "After you confirm with your PIN the system burns the USDX for you — no wallet signature needed. IDR is sent to your bank account once the burn is confirmed.",
+  "redeem.pinDescription": "Burn {amount} USDX from my custodial wallet",
+  "redeem.statusAwaitingBurnCustodialDesc": "The system is processing the burn — nothing to do on your side.",
+  "redeem.custodialBurnProcessing": "Processing burn from your custodial wallet — waiting for on-chain confirmation.",
+  "redeem.errWalletNotActive": "Your custodial wallet can't burn right now — it is still being set up or has been suspended. No order was created.",
   // redeem — precondition gate (network / balance / gas), USDX-259
   "redeem.wrongNetwork": "Switch your wallet to Polygon to continue.",
   "redeem.switchNetwork": "Switch to Polygon",
@@ -1213,6 +1224,17 @@ const id: Dict = {
   "redeem.errGeneric": "Terjadi kesalahan. Silakan coba lagi.",
   "redeem.errInsufficientBalance": "Saldo USDX Anda tidak cukup untuk redeem ini.",
   "redeem.errWalletBlacklisted": "Wallet ini tidak dapat melakukan burn USDX.",
+  // redeem — sumber burn custodial (USDX-567, custodial-wallet.md §5.3). Sistem
+  // menandatangani setelah PIN; tidak ada layar tanda tangan wallet dan tracker
+  // berkata "memproses", bukan "tanda tangani di wallet".
+  "redeem.sourceLabel": "Burn dari",
+  "redeem.sourceCustodial": "Wallet custodial saya",
+  "redeem.sourceExternal": "Wallet eksternal",
+  "redeem.custodialNote": "Setelah konfirmasi PIN, sistem membakar USDX atas nama Anda — tanpa tanda tangan wallet. IDR dikirim ke rekening Anda setelah burn terkonfirmasi.",
+  "redeem.pinDescription": "Bakar {amount} USDX dari wallet custodial saya",
+  "redeem.statusAwaitingBurnCustodialDesc": "Sistem sedang memproses burn — tidak ada yang perlu Anda lakukan.",
+  "redeem.custodialBurnProcessing": "Memproses burn dari wallet custodial Anda — menunggu konfirmasi on-chain.",
+  "redeem.errWalletNotActive": "Wallet custodial Anda belum bisa burn saat ini — masih disiapkan atau ditangguhkan. Tidak ada pesanan yang dibuat.",
   // redeem — precondition gate (jaringan / saldo / gas), USDX-259
   "redeem.wrongNetwork": "Alihkan wallet Anda ke Polygon untuk melanjutkan.",
   "redeem.switchNetwork": "Alihkan ke Polygon",

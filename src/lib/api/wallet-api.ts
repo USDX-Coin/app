@@ -20,7 +20,7 @@ import { env } from "@/lib/env";
 import { apiFetch } from "./client";
 import { isWalletNotFound } from "./errors";
 import type { CustodialWallet } from "@/types";
-import { mockCreateCustodialWallet, mockGetCustodialWallet } from "./mock-api";
+import { mockCreateCustodialWallet, mockGetCustodialWallet } from "./mock-custodial-wallet";
 
 export async function getCustodialWallet(): Promise<CustodialWallet | null> {
   try {

@@ -1,14 +1,13 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
+import { mockGetMe, mockLogin } from "@/lib/api/mock-api";
 import {
   mockCreateCustodialWallet,
   mockGetCustodialWallet,
-  mockGetMe,
-  mockLogin,
   resetMockCustodialWallet,
   MOCK_CUSTODIAL_ADDRESS,
   MOCK_PROVISIONING_MS,
   type MockCustodialState,
-} from "@/lib/api/mock-api";
+} from "@/lib/api/mock-custodial-wallet";
 
 // The mock persists its wallet in localStorage ("usdx-mock-custodial") so the
 // Playwright flows survive page loads. jsdom gives every test the same store,
@@ -113,7 +112,7 @@ describe("mock custodial wallet", () => {
     });
   });
 
-  describe("edge cases", () => {
+  describe("edge case", () => {
     test("a stuck wallet never activates on GET, and a repeat POST (retry) heals it", async () => {
       seed({ status: "PROVISIONING", stuck: true });
 

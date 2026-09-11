@@ -882,7 +882,6 @@ const en: Dict = {
   // Custodial wallet — "dikasih wallet" (USDX-566, wallet.yaml). Written for
   // someone who has never heard the words private key, gas or hex address:
   // the address is a "receiving address", the wallet is "managed by USDX".
-  "wallet.title": "USDX wallet",
   "wallet.onboarding.title": "Get a USDX wallet",
   "wallet.offer.headline": "No wallet yet? We'll make you one.",
   "wallet.offer.desc": "A wallet managed by USDX, tied to this account. Receive and hold USDX without another app, another password, or network fees to think about.",
@@ -1777,7 +1776,6 @@ const id: Dict = {
   // Wallet custodial — "dikasih wallet" (USDX-566, wallet.yaml). Ditulis untuk
   // orang yang belum pernah mendengar kata private key, gas, atau hex address:
   // alamat disebut "alamat penerimaan", wallet-nya "dikelola USDX".
-  "wallet.title": "Wallet USDX",
   "wallet.onboarding.title": "Dapatkan wallet USDX",
   "wallet.offer.headline": "Belum punya wallet? Kami buatkan.",
   "wallet.offer.desc": "Wallet yang dikelola USDX, terikat ke akun ini. Terima dan simpan USDX tanpa aplikasi lain, tanpa kata sandi tambahan, tanpa memikirkan biaya jaringan.",

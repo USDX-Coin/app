@@ -4,9 +4,11 @@
 // Transaksi). Final confirmation before the burn. The precondition gate
 // (network = Polygon, USDX balance ≥ amount, POL gas warning) must pass before
 // "Konfirmasi & Burn" enables. Confirm calls POST /v2/redeem (sending the
-// connected userAddress), then the hook navigates to the status tracker and signs
-// + broadcasts the burn (real on-chain via wagmi, USDX-263; simulated on the mock
-// layer). Create errors (422 INVALID_BANK_ACCOUNT / INSUFFICIENT_BALANCE /
+// connected userAddress), then the hook navigates to the status tracker — which
+// states the destination the ORDER answered with and asks the customer to agree to
+// it before the burn can run (USDX-661). The names/numbers shown HERE are still the
+// customer's own input: the order does not exist yet, so nothing on this screen is
+// the bank's answer. Create errors (422 INVALID_BANK_ACCOUNT / INSUFFICIENT_BALANCE /
 // WALLET_BLACKLISTED / VALIDATION_ERROR, 503 REDEEM_DISABLED) surface inline.
 
 import {

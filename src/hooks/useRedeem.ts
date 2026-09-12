@@ -4,9 +4,10 @@
 // sell rate (GET /v2/rate `effectiveSellRate`) + fee breakdown + validation + the
 // contextual wallet connect & precondition gate (network/balance/gas) + the
 // create-order mutation (POST /v2/redeem, sending the connected `userAddress`),
-// then hands the created order to the status tracker and runs the guarded burn.
-// The on-chain burn is real via wagmi when env.useMock is off (USDX-263); the
-// mock layer simulates it offline (lib/redeem/burn.ts).
+// then hands the created order to the status tracker. The burn itself is run by the
+// tracker, after the customer has explicitly agreed to the payout destination the
+// order came back with (USDX-661) — the on-chain burn is real via wagmi when
+// env.useMock is off (USDX-263); the mock layer simulates it offline.
 
 import { useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
@@ -16,7 +17,6 @@ import { useCustodialWallet } from "@/hooks/useCustodialWallet";
 import { useCooldown, DEFAULT_COOLDOWN_SECONDS } from "@/hooks/useCooldown";
 import { walletStatusKey } from "@/hooks/useTransfer";
 import { useRedeemPreconditions } from "@/lib/redeem/wallet";
-import { useRedeemBurn } from "@/hooks/useRedeemBurn";
 import { createRedeemOrder } from "@/lib/api/redeem-api";
 import { computeRedeemBreakdown } from "@/lib/redeem/fees";
 import {
@@ -112,7 +112,6 @@ export function useRedeem() {
   // external wallet only. Always called (rules of hooks); ignored on the
   // custodial path, which has no network to switch and no gas to hold.
   const preconditions = useRedeemPreconditions(breakdown.amountUsdx);
-  const { runBurn } = useRedeemBurn();
 
   // What burns and what it holds, per source. The custodial balance comes from
   // GET /api/v2/wallet (null = unknown, never 0); the external one from the
@@ -243,24 +242,25 @@ export function useRedeem() {
     }
   }
 
-  // Create the order → navigate to the tracker → sign + broadcast the burn (with
-  // the guard double-burn state machine). The burn is fired (not awaited) so the
-  // modal closes as soon as the order exists; the tracker polls and reflects
-  // AWAITING_BURN → … → PAYOUT_COMPLETE and the burn state.
+  // Create the order → navigate to the tracker. The burn is NOT fired from here
+  // (USDX-661, bni-integration.md § 17.12): the tracker first states the payout
+  // destination as the ORDER answered it — bank · nomor rekening · nama pemilik
+  // menurut bank — and waits for an explicit agreement. Until then the burn button
+  // is disabled, and pressing it is what runs `runBurn` (the same guarded path the
+  // resume-from-/history flow already used). Mengonfirmasi ketikan sendiri di
+  // Ringkasan bukan verifikasi apa pun: nama dari inquiry baru ada setelah order
+  // terbit, jadi jedanya memang harus di sini.
   //
   // Custodial (`burnMode: CUSTODIAL` — decided by the BACKEND in the create
-  // response, not by the FE): nothing to sign. The PIN sent with the create was
-  // the approval; the system dispatches the burn and the tracker shows
-  // "memproses burn" until the scanner confirms. `runBurn` also refuses a
-  // CUSTODIAL order on its own, so a stale `source` can never trigger a wallet.
+  // response, not by the FE): nothing to sign and nothing to confirm. The PIN sent
+  // with the create was the approval; the system dispatches the burn and the tracker
+  // shows "memproses burn" until the scanner confirms.
   async function submitRedeem(pin?: string) {
     const order = await createMutation.mutateAsync(pin);
     setPinNotSet(false);
     store.setOrderId(order.id);
     store.setStep("tracker");
-    if (order.burnMode !== "CUSTODIAL") {
-      void runBurn(order, preconditions.address ?? "");
-    } else {
+    if (order.burnMode === "CUSTODIAL") {
       custodial.invalidate(); // saldo turun begitu burn masuk blok
     }
     return order;

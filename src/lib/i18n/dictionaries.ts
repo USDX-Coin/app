@@ -286,6 +286,13 @@ const en: Dict = {
   "redeem.statusProcessingDesc": "Sending IDR to your bank account.",
   "redeem.statusCompleteDesc": "IDR has been disbursed to your bank account.",
   "redeem.statusExpiredDesc": "The burn window passed without an on-chain burn.",
+  // redeem — payout rejected definitively (USDX-664, common.yaml § RedeemStatus).
+  // A warning, not an error: the money is waiting for a person. No promise of a
+  // refund or a re-mint — there is no such policy — and nothing for the customer
+  // to retry, because they cannot fix this themselves.
+  "redeem.statusPayoutFailed": "Payout needs attention",
+  "redeem.statusPayoutFailedDesc":
+    "Your USDX is already burned and the transfer to your bank has not gone through. Our team is settling the payout — there is nothing you need to do.",
   "redeem.burnTx": "Burn transaction",
   "redeem.viewOnExplorer": "View on explorer",
   "redeem.expiresIn": "Burn window expires in {time}",
@@ -327,6 +334,19 @@ const en: Dict = {
   "redeem.resume": "Continue",
   "redeem.walletMismatch": "This order is bound to another wallet ({address}). Connect that wallet to burn.",
   "redeem.connectToBurn": "Connect your wallet to burn.",
+  // redeem — destination confirmation before the burn (USDX-661, § 17.12). The
+  // holder name is the BANK's answer for that account number, which is the whole
+  // point: a mistyped number that happens to belong to someone else is invisible
+  // everywhere else in the flow. The name is repeated inside the checkbox sentence
+  // so the tick cannot be given without reading where the money goes.
+  "redeem.accountNumber": "Account number",
+  "redeem.confirmDestTitle": "Check the destination account",
+  "redeem.confirmDestNameSource": "The bank's answer for this account number.",
+  "redeem.confirmDestNameMissing": "The bank did not return a holder name for this account.",
+  "redeem.confirmDestWarning":
+    "Once you burn, your USDX is gone permanently and the transfer to this account cannot be reversed.",
+  "redeem.confirmDestCheck": "I have checked it — the IDR goes to {name}.",
+  "redeem.confirmDestCheckNoName": "I have checked the destination account above.",
   "sum.sourceWallet": "Source wallet",
   "sum.bankDestination": "Destination bank",
   "sum.accountName": "Account holder",
@@ -1258,6 +1278,13 @@ const id: Dict = {
   "redeem.statusProcessingDesc": "Mengirim IDR ke rekening bank Anda.",
   "redeem.statusCompleteDesc": "IDR telah dicairkan ke rekening bank Anda.",
   "redeem.statusExpiredDesc": "Jendela burn berakhir tanpa burn on-chain.",
+  // redeem — pencairan ditolak definitif (USDX-664, common.yaml § RedeemStatus).
+  // Peringatan, bukan galat: uangnya menunggu orang. Tidak menjanjikan refund atau
+  // mint ulang — kebijakannya tidak ada — dan tidak ada yang bisa nasabah coba
+  // lagi, karena ini bukan sesuatu yang bisa ia perbaiki sendiri.
+  "redeem.statusPayoutFailed": "Pencairan bermasalah",
+  "redeem.statusPayoutFailedDesc":
+    "USDX Anda sudah terbakar dan transfer ke rekening Anda belum berhasil. Tim kami sedang menuntaskan pembayarannya — tidak ada yang perlu Anda lakukan.",
   "redeem.burnTx": "Transaksi burn",
   "redeem.viewOnExplorer": "Lihat di explorer",
   "redeem.expiresIn": "Jendela burn berakhir dalam {time}",
@@ -1299,6 +1326,19 @@ const id: Dict = {
   "redeem.resume": "Lanjutkan",
   "redeem.walletMismatch": "Order ini terikat ke wallet lain ({address}). Hubungkan wallet itu untuk burn.",
   "redeem.connectToBurn": "Hubungkan wallet Anda untuk burn.",
+  // redeem — konfirmasi tujuan sebelum burn (USDX-661, § 17.12). Nama pemilik
+  // adalah JAWABAN BANK atas nomor rekening itu, dan justru itu intinya: nomor
+  // salah ketik yang kebetulan milik orang lain tidak terlihat di mana pun lagi
+  // sepanjang alur. Namanya diulang di kalimat centangnya supaya persetujuan tidak
+  // bisa diberikan tanpa membaca ke mana uangnya pergi.
+  "redeem.accountNumber": "Nomor rekening",
+  "redeem.confirmDestTitle": "Periksa rekening tujuan",
+  "redeem.confirmDestNameSource": "Jawaban bank atas nomor rekening ini.",
+  "redeem.confirmDestNameMissing": "Bank tidak mengembalikan nama pemilik untuk rekening ini.",
+  "redeem.confirmDestWarning":
+    "Begitu Anda burn, USDX hangus permanen dan transfer ke rekening ini tidak bisa dibatalkan.",
+  "redeem.confirmDestCheck": "Saya sudah memeriksa — rupiahnya dikirim ke {name}.",
+  "redeem.confirmDestCheckNoName": "Saya sudah memeriksa rekening tujuan di atas.",
   "sum.sourceWallet": "Wallet sumber",
   "sum.bankDestination": "Bank tujuan",
   "sum.accountName": "Atas nama",

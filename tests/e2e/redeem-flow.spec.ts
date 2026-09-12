@@ -1,9 +1,20 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { loginViaStorage, forceEnglish, seedWallet } from "../helpers/playwright-utils";
 
+// Pre-burn destination agreement (USDX-661): tick the confirmation, then burn.
+// Its own coverage lives in redeem-confirm-destination.spec.ts; here it is the
+// step every create path has to walk through.
+async function confirmDestinationAndBurn(page: Page) {
+  const block = page.getByTestId("redeem-confirm-destination");
+  await expect(block).toBeVisible({ timeout: 15000 });
+  await block.getByRole("checkbox").click();
+  await page.getByRole("button", { name: "Burn USDX" }).click();
+}
+
 // Redeem is the only flow that needs a wallet: form -> contextual connect
-// (no global button) -> Ringkasan -> sign/burn (simulated in W3) -> status
-// tracker polling AWAITING_BURN -> … -> PAYOUT_COMPLETE (USDX-243).
+// (no global button) -> Ringkasan -> confirm the payout destination the order came
+// back with (USDX-661) -> sign/burn (simulated in W3) -> status tracker polling
+// AWAITING_BURN -> … -> PAYOUT_COMPLETE (USDX-243).
 test.beforeEach(async ({ page }) => {
   await forceEnglish(page);
   await seedWallet(page); // connect resolves to a mock address (no extension in CI)
@@ -36,6 +47,11 @@ test.describe("Redeem Flow", () => {
       // Confirm & Burn → status tracker
       await page.getByRole("button", { name: "Confirm & Burn" }).click();
       await expect(page.getByText(/Simulation mode/)).toBeVisible({ timeout: 15000 });
+
+      // Pre-burn: agree to the destination the ORDER answered with (USDX-661),
+      // then burn. Nothing burns before that.
+      await confirmDestinationAndBurn(page);
+
       // Mock lifecycle auto-completes a few seconds after the burn.
       await expect(page.getByText("Payout complete")).toBeVisible({ timeout: 20000 });
       await expect(page.getByText("Burn transaction")).toBeVisible();
@@ -72,8 +88,10 @@ test.describe("Redeem Flow", () => {
       await expect(dialog.getByText(/1234563210/)).toBeVisible();
       await expect(dialog.getByText("SINGGIH BRILIAN TARA")).toBeVisible();
 
-      // Confirm & Burn → tracker reaches payout (mock resolved bankAccountId).
+      // Confirm & Burn → pre-burn destination agreement → tracker reaches payout
+      // (mock resolved bankAccountId).
       await page.getByRole("button", { name: "Confirm & Burn" }).click();
+      await confirmDestinationAndBurn(page);
       await expect(page.getByText("Payout complete")).toBeVisible({ timeout: 20000 });
     });
   });

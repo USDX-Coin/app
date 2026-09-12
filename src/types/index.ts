@@ -369,6 +369,14 @@ export type RedeemStatus =
   | "BURNED" // Redeem event detected (amount matched)
   | "PROCESSING_PAYOUT" // disbursement created with the provider
   | "PAYOUT_COMPLETE" // payout confirmed
+  // Payout rejected DEFINITIVELY by the provider (business 4xx on submit, or
+  // checkStatus/webhook answering FAILED) — common.yaml § RedeemStatus rev
+  // 2026-09-12, D22, backend#320 (USDX-471). Not a dead end: it means "waiting
+  // for ops", who resolve it via RESEND (→ PROCESSING_PAYOUT), SETTLED_MANUAL
+  // (→ PAYOUT_COMPLETE) or CLOSED (stays PAYOUT_FAILED). Transport failures never
+  // reach it. The contract says clients MUST render it (USDX-664), so it stays out
+  // of the tracker's STEPS and gets a state of its own.
+  | "PAYOUT_FAILED"
   | "EXPIRED"; // AWAITING_BURN passed expires_at without a burn (late burn → BURNED)
 
 // POST /api/v2/redeem response (redeem.yaml RedeemOrderCreated). Carries the

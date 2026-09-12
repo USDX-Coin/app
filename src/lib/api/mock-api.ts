@@ -925,6 +925,28 @@ const MOCK_BLACKLISTED_WALLET = MOCK_BLACKLISTED_ADDRESS;
 // INSUFFICIENT_BALANCE (the backend backstop to the client-side gate). Unarmed →
 // skipped (best-effort, like the real RPC pre-check).
 const MOCK_WALLET_BALANCE_KEY = "usdx-mock-wallet-balance";
+// Test seam (USDX-664): armed → the payout is REJECTED definitively instead of
+// completing, so the order lands on PAYOUT_FAILED (the state ops resolve by hand —
+// conventions.md § Status Enums → Redeem Order). Stands in for a business 4xx at
+// submit: there is no payout reference, because the transfer never existed. The
+// lifecycle is otherwise untouched (AWAITING_BURN → BURNED → PAYOUT_FAILED).
+const PAYOUT_FAILED_KEY = "usdx-mock-payout-failed";
+// Test seam (USDX-661): armed → the account inquiry answers with THIS holder name,
+// whatever the customer typed. The real backend overrides the name with the inquiry
+// result (week3.md § Bank Account Book — "nama di-override hasil inquiry"); the mock
+// passes the typed name through, so without a seam "the screen shows the bank's
+// answer, not your input" is not provable offline.
+const INQUIRY_NAME_KEY = "usdx-mock-inquiry-name";
+
+function mockPayoutFailed(): boolean {
+  if (typeof localStorage === "undefined") return false;
+  return localStorage.getItem(PAYOUT_FAILED_KEY) != null;
+}
+
+function mockInquiryName(): string | null {
+  if (typeof localStorage === "undefined") return null;
+  return localStorage.getItem(INQUIRY_NAME_KEY);
+}
 
 function mockWalletBalanceUsdx(): number | null {
   if (typeof localStorage === "undefined") return null;
@@ -1158,7 +1180,11 @@ export async function mockCreateRedeemOrder(
     bankCode: dest.bankCode,
     bankName: getBankName(dest.bankCode),
     bankAccountNumber: dest.accountNumber,
-    bankAccountName: dest.accountName,
+    // Nama pemilik di order = hasil inquiry, bukan ketikan nasabah (week3.md §
+    // Validasi rekening). Mock meneruskan ketikan kecuali seam INQUIRY_NAME_KEY
+    // diarmed — jalur yang dipakai untuk membuktikan layar pra-burn membaca
+    // jawaban bank (USDX-661), bukan state form.
+    bankAccountName: mockInquiryName() ?? dest.accountName,
     status: "AWAITING_BURN",
     expiresAt: new Date(nowMs + MOCK_REDEEM_BURN_TTL_MS).toISOString(),
   };
@@ -1287,6 +1313,10 @@ function resolveRedeemDetail(record: MockRedeemRecord): RedeemOrderDetail {
         status = "BURNED";
       } else if (elapsed < MOCK_BURNED_VISIBLE_MS) {
         status = "BURNED";
+      } else if (mockPayoutFailed()) {
+        // Ditolak definitif oleh provider (§17.3): keluar dari lifecycle otomatis
+        // dan menunggu ops. Tanpa `payoutRef` — transfernya belum pernah ada.
+        status = "PAYOUT_FAILED";
       } else if (elapsed < MOCK_PAYOUT_COMPLETE_MS) {
         status = "PROCESSING_PAYOUT";
         payoutRef = "MOCK-" + order.orderNumber;
@@ -1361,6 +1391,9 @@ function seededRedeemTransactions(): ConsumerTransaction[] {
     { usdx: 100, status: "PAYOUT_COMPLETE", burned: true },
     { usdx: 250, status: "PROCESSING_PAYOUT", burned: true },
     { usdx: 500, status: "EXPIRED", burned: false },
+    // USDX-664: riwayat harus punya satu baris PAYOUT_FAILED — badge-nya dibaca
+    // manusia, bukan kode mentah, dan itu hanya terlihat kalau barisnya ada.
+    { usdx: 75, status: "PAYOUT_FAILED", burned: true },
   ];
   return seeds.map((s, i) => {
     const gross = s.usdx * rate;

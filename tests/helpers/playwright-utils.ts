@@ -141,6 +141,27 @@ export async function pickOccupation(page: Page, label: string) {
   await expect(page.getByTestId("occupation-trigger")).toContainText(label);
 }
 
+/**
+ * Pilih satu nilai di dropdown KYC (`KycSelect`). Sejak commit 8177459 tujuh kontrol
+ * itu Radix `Select`, bukan `<select>` native, jadi `selectOption("#gender", …)` sudah
+ * tidak mungkin jalan: triggernya `<button role="combobox">` dan pilihannya baru ada
+ * di DOM setelah panelnya terbuka (USDX-671). Polanya sama dengan `redeem.spec.ts`
+ * dan `balance-test-mode.spec.ts`.
+ *
+ * Dialamati lewat `#id`, bukan nama aksesibelnya: spec KYC berjalan di DUA bahasa
+ * sementara id-nya sama di keduanya. `option` memakai teks yang TERLIHAT — nilai enum
+ * tidak pernah sampai ke DOM Radix — jadi untuk spec dwibahasa kirim RegExp yang
+ * memuat kedua label, seperti kotak pencarian di `pickOccupation`.
+ */
+export async function pickKycSelect(page: Page, id: string, option: string | RegExp) {
+  const trigger = page.locator(`#${id}`);
+  await trigger.click();
+  await page.getByRole("option", { name: option, exact: true }).click();
+  // Bukan sekadar "kliknya mendarat": triggernya harus benar-benar membawa jawaban
+  // itu sekarang, karena di situlah satu-satunya tempat nilai terpilih terbaca.
+  await expect(trigger).toHaveText(option);
+}
+
 /** Tiny valid PNG for upload tests (file-type/size validation is client-side). */
 export const TEST_PNG = {
   name: "photo.png",

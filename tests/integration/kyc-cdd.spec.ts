@@ -3,6 +3,7 @@ import {
   loginViaStorage,
   forceEnglish,
   forceIndonesian,
+  pickKycSelect,
   pickOccupation,
   seedKycStatus,
   TEST_PNG,
@@ -42,10 +43,15 @@ const ENUM_VALUES = [
 ] as const;
 
 /**
- * `<select>` yang tersisa: placeholder (4) + anggota (5 + 4 + 4 + 4). Pekerjaan
- * TIDAK ikut dihitung — sejak USDX-586 ia combobox pencarian, bukan `<select>`.
+ * Anggota enum yang bisa dipilih di empat dropdown CDD: 5 + 4 + 4 + 4. Pekerjaan
+ * TIDAK ikut dihitung — sejak USDX-586 ia combobox pencarian, bukan dropdown biasa.
+ *
+ * Dulu 21, yaitu 17 anggota + 4 opsi kosong. Empat opsi kosong itu hilang bersama
+ * `<select>`-nya (commit 8177459): placeholder Radix hidup di TRIGGER, bukan sebagai
+ * baris yang bisa dipilih di dalam panel. Jadi 17 adalah jumlah yang benar sekarang,
+ * bukan angka yang dilonggarkan supaya tesnya hijau (USDX-671).
  */
-const TOTAL_CDD_OPTIONS = 21;
+const TOTAL_CDD_OPTIONS = 17;
 
 // Distinctive so a storage scan can prove they were never persisted.
 const NPWP_SENTINEL = "091234567890000";
@@ -74,17 +80,28 @@ async function fillIdentity(page: Page) {
 }
 
 async function fillIdentityExtras(page: Page) {
-  await page.selectOption("#gender", "LAKI_LAKI");
-  await page.selectOption("#maritalStatus", "KAWIN");
+  await pickKycSelect(page, "gender", "Male");
+  await pickKycSelect(page, "maritalStatus", "Married");
   await page.getByLabel("Mother's Maiden Name").fill("Siti Aminah");
 }
 
-async function fillCdd(page: Page) {
+/**
+ * Jawab blok CDD. Dropdown dipilih lewat LABEL yang terlihat (Radix tidak pernah
+ * menaruh nilai enum di DOM), jadi label dikirim sebagai RegExp dua bahasa — helper
+ * ini dipakai juga oleh tes yang berjalan di locale `id` (USDX-671).
+ *
+ * `skip` meninggalkan satu dropdown tak terjawab. Itu satu-satunya cara "kosong"
+ * masih bisa dicapai: Radix tidak punya opsi kosong, jadi jawaban yang sudah masuk
+ * tidak bisa ditarik lagi — oleh tes maupun oleh nasabah.
+ */
+async function fillCdd(page: Page, opts: { skip?: "sourceOfFunds" } = {}) {
   await pickOccupation(page, "Karyawan Swasta");
-  await page.selectOption("#sourceOfFunds", "SALARY");
-  await page.selectOption("#annualIncomeRange", "FROM_100M_TO_500M");
-  await page.selectOption("#netWorthRange", "FROM_500M_TO_2B");
-  await page.selectOption("#transactionPurpose", "INVESTMENT");
+  if (opts.skip !== "sourceOfFunds") {
+    await pickKycSelect(page, "sourceOfFunds", /^(Salary|Gaji)$/);
+  }
+  await pickKycSelect(page, "annualIncomeRange", /^Rp 100 (million|juta) - Rp 500 (million|juta)$/);
+  await pickKycSelect(page, "netWorthRange", /^Rp 500 (million|juta) - Rp 2 (billion|miliar)$/);
+  await pickKycSelect(page, "transactionPurpose", /^(Investment|Investasi)$/);
 }
 
 async function uploadPhotos(page: Page) {
@@ -154,13 +171,21 @@ test.describe("KYC CDD fields", () => {
       await expect(page.getByLabel("Nilai Harta Kekayaan")).toBeVisible();
       await expect(page.getByLabel("Tujuan Transaksi")).toBeVisible();
 
-      // Option text, not option value.
+      // Option text, not option value — dan sejak dropdown pindah ke Radix pilihan
+      // itu hanya ada di DOM selama panelnya terbuka (USDX-671).
+      await page.locator("#annualIncomeRange").click();
       await expect(
-        page.locator("#annualIncomeRange option", { hasText: "Rp 100 juta - Rp 500 juta" }),
+        page.getByRole("option", { name: "Rp 100 juta - Rp 500 juta", exact: true }),
       ).toHaveCount(1);
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("option")).toHaveCount(0);
+
+      await page.locator("#netWorthRange").click();
       await expect(
-        page.locator("#netWorthRange option", { hasText: "Rp 500 juta - Rp 2 miliar" }),
+        page.getByRole("option", { name: "Rp 500 juta - Rp 2 miliar", exact: true }),
       ).toHaveCount(1);
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("option")).toHaveCount(0);
       // Pekerjaan: label Permendagri apa adanya, tidak diterjemahkan ulang.
       await pickOccupation(page, "Karyawan Swasta");
     });
@@ -191,8 +216,13 @@ test.describe("KYC CDD fields", () => {
       await gotoKyc(page);
       await fillIdentity(page);
       await fillIdentityExtras(page);
-      await fillCdd(page);
-      await page.selectOption("#sourceOfFunds", ""); // back to the placeholder
+      // Sumber dana sengaja TIDAK dijawab. Dulu tesnya menjawab semuanya lalu memilih
+      // opsi kosong (`selectOption("#sourceOfFunds", "")`) untuk kembali ke
+      // placeholder; Radix tidak punya opsi kosong sama sekali, jadi jalan itu sudah
+      // tidak ada — bukan hanya bagi tes, bagi nasabah juga (USDX-671). Maksud
+      // tesnya sama: satu dropdown tak terjawab menahan submit, dan hanya field itu
+      // yang ditandai.
+      await fillCdd(page, { skip: "sourceOfFunds" });
       await uploadPhotos(page);
       await page.getByRole("button", { name: "Submit for Verification" }).click();
 
@@ -221,21 +251,36 @@ test.describe("KYC CDD fields", () => {
       await gotoKyc(page, "id");
       await fillCdd(page);
 
-      // Every <option> must carry a human label in its text and the technical
-      // member only in its value attribute.
-      const options = await page.$$eval(
-        "#sourceOfFunds option, #annualIncomeRange option, #netWorthRange option, #transactionPurpose option",
-        (els) =>
-          els.map((el) => ({
-            value: (el as HTMLOptionElement).value,
-            text: (el.textContent ?? "").trim(),
-          })),
-      );
-      expect(options).toHaveLength(TOTAL_CDD_OPTIONS);
-      for (const { value, text } of options) {
-        expect(text.length).toBeGreaterThan(0);
-        if (value === "") continue;
-        expect(text, `option ${value} renders its technical value`).not.toContain(value);
+      // Setiap pilihan wajib membawa label manusia. Nilai teknisnya tidak lagi bisa
+      // dibandingkan per pilihan: Radix tidak menaruhnya di DOM sama sekali — tidak
+      // sebagai `<option value>`, tidak sebagai atribut apa pun (USDX-671). Jadi yang
+      // dikumpulkan adalah teks yang benar-benar dibaca nasabah dari tiap panel, lalu
+      // SELURUH daftar itu diperiksa terhadap SEMUA anggota enum di bawah — lebih
+      // ketat daripada mencocokkan tiap pilihan dengan nilainya sendiri.
+      const labels: string[] = [];
+      for (const id of [
+        "sourceOfFunds",
+        "annualIncomeRange",
+        "netWorthRange",
+        "transactionPurpose",
+      ]) {
+        await page.locator(`#${id}`).click();
+        const options = page.getByRole("option");
+        await expect(options.first()).toBeVisible();
+        labels.push(...(await options.allInnerTexts()).map((text) => text.trim()));
+        await page.keyboard.press("Escape");
+        await expect(options).toHaveCount(0);
+      }
+
+      expect(labels).toHaveLength(TOTAL_CDD_OPTIONS);
+      for (const label of labels) {
+        expect(label.length).toBeGreaterThan(0);
+      }
+      for (const value of ENUM_VALUES) {
+        expect(
+          labels.join("\n"),
+          `enum member ${value} is rendered as an option label`,
+        ).not.toContain(value);
       }
 
       // And nothing else on the page leaks one either (selected value, summary…).
@@ -272,12 +317,16 @@ test.describe("KYC CDD fields", () => {
       const pep = page.getByLabel(/holds a public office/);
       await pep.check();
       await page.getByLabel("Relationship and office held").fill(PEP_SENTINEL);
-      await page.selectOption("#sourceOfWealth", "SALARY_ACCUMULATION");
+      await pickKycSelect(page, "sourceOfWealth", "Accumulated salary");
       await pep.uncheck();
       await pep.check();
       // Keduanya ditarik kembali, bukan sekadar disembunyikan.
       await expect(page.getByLabel("Relationship and office held")).toHaveValue("");
-      await expect(page.locator("#sourceOfWealth")).toHaveValue("");
+      // `toHaveValue` tidak berlaku untuk dropdown Radix — triggernya `<button>`,
+      // tanpa atribut `value` (USDX-671). Bukti bahwa jawabannya benar-benar ditarik
+      // sekarang adalah triggernya kembali menampilkan teks nilai kosongnya, yang
+      // justru hal yang dilihat nasabah.
+      await expect(page.locator("#sourceOfWealth")).toHaveText("Select source of wealth");
     });
 
     test("NPWP and the PEP relation never reach local or session storage", async ({
@@ -290,7 +339,7 @@ test.describe("KYC CDD fields", () => {
       await page.getByLabel("NPWP (optional)").fill(NPWP_SENTINEL);
       await page.getByLabel(/holds a public office/).check();
       await page.getByLabel("Relationship and office held").fill(PEP_SENTINEL);
-      await page.selectOption("#sourceOfWealth", "SALARY_ACCUMULATION");
+      await pickKycSelect(page, "sourceOfWealth", "Accumulated salary");
       await uploadPhotos(page);
 
       // While typing…
@@ -341,8 +390,11 @@ test.describe("KYC occupation picker", () => {
     }) => {
       await gotoKyc(page);
       await trigger(page).click();
-      // Dibatasi ke listbox milik cmdk: `<option>` dari `<select>` bawaan juga
-      // ber-role "option" dan akan ikut terhitung kalau tidak dipersempit.
+      // Dibatasi ke listbox milik cmdk. Alasan aslinya (`<option>` dari `<select>`
+      // bawaan ikut terhitung) sudah lewat — tidak ada `<select>` di form ini lagi —
+      // tapi pembatasan ini tetap dipertahankan: ia yang membuat hitungan 99 hanya
+      // berbicara tentang panel pekerjaan, bukan tentang panel apa pun yang kebetulan
+      // sedang terbuka (USDX-671).
       const jobs = page.getByRole("listbox").getByRole("option");
       await expect(jobs).toHaveCount(99);
 
@@ -360,10 +412,10 @@ test.describe("KYC occupation picker", () => {
       await fillIdentity(page);
       await fillIdentityExtras(page);
       await pickOccupation(page, "Wiraswasta");
-      await page.selectOption("#sourceOfFunds", "BUSINESS");
-      await page.selectOption("#annualIncomeRange", "OVER_1B");
-      await page.selectOption("#netWorthRange", "OVER_10B");
-      await page.selectOption("#transactionPurpose", "INVESTMENT");
+      await pickKycSelect(page, "sourceOfFunds", "Business income");
+      await pickKycSelect(page, "annualIncomeRange", "Over Rp 1 billion");
+      await pickKycSelect(page, "netWorthRange", "Over Rp 10 billion");
+      await pickKycSelect(page, "transactionPurpose", "Investment");
       await uploadPhotos(page);
 
       // Tidak ada error "Pekerjaan wajib dipilih" → validator melihat anggota enum
@@ -393,10 +445,10 @@ test.describe("KYC occupation picker", () => {
       await gotoKyc(page);
       await fillIdentity(page);
       await fillIdentityExtras(page);
-      await page.selectOption("#sourceOfFunds", "SALARY");
-      await page.selectOption("#annualIncomeRange", "UNDER_100M");
-      await page.selectOption("#netWorthRange", "UNDER_500M");
-      await page.selectOption("#transactionPurpose", "PAYMENT");
+      await pickKycSelect(page, "sourceOfFunds", "Salary");
+      await pickKycSelect(page, "annualIncomeRange", "Under Rp 100 million");
+      await pickKycSelect(page, "netWorthRange", "Under Rp 500 million");
+      await pickKycSelect(page, "transactionPurpose", "Payment");
       await uploadPhotos(page);
 
       await trigger(page).click();

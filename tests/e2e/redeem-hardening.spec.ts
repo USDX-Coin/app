@@ -52,7 +52,7 @@ test.describe("Redeem hardening — precondition gate", () => {
       await openRingkasan(page);
 
       await expect(page.getByRole("button", { name: "Switch to Polygon" })).toBeVisible();
-      await expect(page.getByRole("button", { name: "Confirm & Burn" })).toBeDisabled();
+      await expect(page.getByRole("button", { name: "Continue to Confirmation" })).toBeDisabled();
     });
 
     test("insufficient USDX balance → message + burn disabled", async ({ page }) => {
@@ -67,7 +67,7 @@ test.describe("Redeem hardening — precondition gate", () => {
       await openRingkasan(page);
 
       await expect(page.getByText("Insufficient USDX balance.")).toBeVisible();
-      await expect(page.getByRole("button", { name: "Confirm & Burn" })).toBeDisabled();
+      await expect(page.getByRole("button", { name: "Continue to Confirmation" })).toBeDisabled();
     });
   });
 
@@ -84,7 +84,7 @@ test.describe("Redeem hardening — precondition gate", () => {
       await openRingkasan(page);
 
       await expect(page.getByText(/enough POL/)).toBeVisible();
-      await expect(page.getByRole("button", { name: "Confirm & Burn" })).toBeEnabled();
+      await expect(page.getByRole("button", { name: "Continue to Confirmation" })).toBeEnabled();
     });
   });
 });
@@ -100,7 +100,7 @@ test.describe("Redeem hardening — burn-tx report + guard", () => {
 
       await fillForm(page);
       await openRingkasan(page);
-      await page.getByRole("button", { name: "Confirm & Burn" }).click();
+      await page.getByRole("button", { name: "Continue to Confirmation" }).click();
       await confirmDestination(page);
       await page.getByRole("button", { name: "Burn USDX" }).click();
 
@@ -124,7 +124,7 @@ test.describe("Redeem hardening — burn-tx report + guard", () => {
 
       await fillForm(page);
       await openRingkasan(page);
-      await page.getByRole("button", { name: "Confirm & Burn" }).click();
+      await page.getByRole("button", { name: "Continue to Confirmation" }).click();
       await confirmDestination(page);
       await page.getByRole("button", { name: "Burn USDX" }).click();
 

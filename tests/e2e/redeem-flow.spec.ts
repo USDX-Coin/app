@@ -44,8 +44,8 @@ test.describe("Redeem Flow", () => {
       await expect(page.getByText("Transaction Summary")).toBeVisible();
       await expect(page.getByText(/Burn USDX cannot be undone/)).toBeVisible();
 
-      // Confirm & Burn → status tracker
-      await page.getByRole("button", { name: "Confirm & Burn" }).click();
+      // Lanjut ke Konfirmasi → order dibuat → status tracker
+      await page.getByRole("button", { name: "Continue to Confirmation" }).click();
       await expect(page.getByText(/Simulation mode/)).toBeVisible({ timeout: 15000 });
 
       // Pre-burn: agree to the destination the ORDER answered with (USDX-661),
@@ -88,9 +88,9 @@ test.describe("Redeem Flow", () => {
       await expect(dialog.getByText(/1234563210/)).toBeVisible();
       await expect(dialog.getByText("SINGGIH BRILIAN TARA")).toBeVisible();
 
-      // Confirm & Burn → pre-burn destination agreement → tracker reaches payout
+      // Lanjut ke Konfirmasi → pre-burn destination agreement → tracker reaches payout
       // (mock resolved bankAccountId).
-      await page.getByRole("button", { name: "Confirm & Burn" }).click();
+      await page.getByRole("button", { name: "Continue to Confirmation" }).click();
       await confirmDestinationAndBurn(page);
       await expect(page.getByText("Payout complete")).toBeVisible({ timeout: 20000 });
     });

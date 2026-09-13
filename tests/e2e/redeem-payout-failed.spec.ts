@@ -24,7 +24,7 @@ async function burnWithFailedPayout(page: Page) {
   const redeem = page.getByRole("button", { name: "Redeem", exact: true });
   await redeem.click();
   await redeem.click();
-  await page.getByRole("button", { name: "Confirm & Burn" }).click();
+  await page.getByRole("button", { name: "Continue to Confirmation" }).click();
 
   // Konfirmasi tujuan (USDX-661) lalu burn — lifecycle mock lanjut sendiri.
   const block = page.getByTestId("redeem-confirm-destination");
@@ -48,7 +48,13 @@ test.describe("Redeem — PAYOUT_FAILED", () => {
       // Jujur tapi menenangkan: USDX sudah terbakar, tim menanganinya, tidak ada
       // yang perlu nasabah lakukan.
       await expect(state).toContainText(/already burned/);
+      await expect(state).toContainText(/team is handling it/);
       await expect(state).toContainText(/nothing you need to do/);
+      // Tapi TIDAK menjanjikan pembayarannya jadi: ops bisa me-resolve order ini
+      // CLOSED (= tidak akan dibayar) dan FE tidak punya field resolusi untuk
+      // membedakannya dari RESEND/SETTLED_MANUAL.
+      await expect(state).not.toContainText(/settling the payout/);
+      await expect(state).not.toContainText(/will be paid/);
 
       // Stepper diganti seluruhnya: tidak ada langkah yang tampak aktif-menggantung.
       await expect(page.getByText("Awaiting burn")).toHaveCount(0);

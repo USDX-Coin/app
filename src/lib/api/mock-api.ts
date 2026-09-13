@@ -1030,6 +1030,10 @@ function seedResumableRedeemOrder() {
     bankName: getBankName("014"),
     bankAccountNumber: "1234563210",
     bankAccountName: "Demo User",
+    // `bankAccountNameVerified` sengaja TIDAK diisi (USDX-672): ini bentuk payload
+    // order lama — kolomnya NULL di DB, backend membacanya `false`. Jadi jalur resume
+    // dari /history menguji cabang `undefined` apa adanya, dan layar pra-burn di situ
+    // wajib menahan klaim "jawaban bank".
     status: "AWAITING_BURN",
     expiresAt: new Date(expiresAtMs).toISOString(),
   };
@@ -1185,6 +1189,11 @@ export async function mockCreateRedeemOrder(
     // diarmed — jalur yang dipakai untuk membuktikan layar pra-burn membaca
     // jawaban bank (USDX-661), bukan state form.
     bankAccountName: mockInquiryName() ?? dest.accountName,
+    // USDX-672: `true` HANYA kalau inquiry benar-benar menjawab nama. Tanpa seam,
+    // mock meng-echo ketikan nasabah — persis seperti provider MOCK di backend —
+    // jadi nilainya `false`, dan layar pra-burn tidak boleh menyebutnya jawaban
+    // bank. Seam ber-nama-kosong (bank menjawab tanpa nama) juga `false`.
+    bankAccountNameVerified: (mockInquiryName() ?? "") !== "",
     status: "AWAITING_BURN",
     expiresAt: new Date(nowMs + MOCK_REDEEM_BURN_TTL_MS).toISOString(),
   };

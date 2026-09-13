@@ -410,6 +410,18 @@ export interface RedeemOrderCreated {
   bankName: string; // resolved from bankCode (un-mask 2026-06-25, USDX-269/270)
   bankAccountNumber: string; // full number — owner sees their own data (un-mask 2026-06-25)
   bankAccountName: string; // user sees their own data
+  // Apakah nama di `bankAccountName` datang dari JAWABAN inquiry provider atas nomor
+  // rekening ini (redeem.yaml § RedeemOrderCreated / § RedeemOrder, sot#38, USDX-672).
+  // `false` = itu nama yang diketik/disimpan nasabah, dipakai apa adanya karena
+  // provider tidak menjawab nama (backend: `inquiry.accountName ?? bank.bankAccountName`
+  // — provider MOCK meng-echo ketikan nasabah; adapter SNAP menjawab `null` kalau bank
+  // tidak mengirim `beneficiaryAccountName`).
+  //
+  // Opsional di tipe: payload backend sebelum USDX-672 tidak membawanya. Yang tidak
+  // membawa WAJIB dibaca seperti `false` — klaim "jawaban bank" hanya boleh dipasang
+  // kalau response benar-benar mengatakannya, dan menahan klaim saat tidak tahu adalah
+  // satu-satunya arah yang aman di layar yang seharusnya menangkap salah rekening.
+  bankAccountNameVerified?: boolean;
   status: RedeemStatus;
   expiresAt: string;
 }

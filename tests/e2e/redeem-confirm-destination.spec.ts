@@ -8,9 +8,14 @@ import {
 
 // Konfirmasi tujuan sebelum burn (USDX-661, bni-integration.md § 17.12). Setelah
 // order terbit dan SEBELUM burn bisa dijalankan, layar menyebutkan tujuan dari
-// response order — bank · nomor rekening · nama pemilik menurut bank — dan burn
-// tetap mati sampai nasabah menyetujuinya secara eksplisit. Berlaku di jalur create
-// maupun jalur melanjutkan order dari /history.
+// response order — bank · nomor rekening · nama pemilik — dan burn tetap mati sampai
+// nasabah menyetujuinya secara eksplisit. Berlaku di jalur create maupun jalur
+// melanjutkan order dari /history.
+//
+// USDX-672: apakah nama itu boleh disebut "jawaban bank" ditentukan
+// `bankAccountNameVerified` di response order, bukan diasumsikan. Mock meng-echo
+// ketikan nasabah seperti provider MOCK di backend → `false`; seam
+// `usdx-mock-inquiry-name` adalah satu-satunya jalur yang membuatnya `true` offline.
 
 const TYPED_NAME = "SINGGIH BRILIAN TARA";
 
@@ -35,7 +40,7 @@ async function createOrder(page: Page) {
   await expect(page.getByText("You will redeem")).toBeVisible({ timeout: 15000 });
   await fillForm(page);
   await openRingkasan(page);
-  await page.getByRole("button", { name: "Confirm & Burn" }).click();
+  await page.getByRole("button", { name: "Continue to Confirmation" }).click();
 }
 
 test.describe("Redeem — confirm destination before burn", () => {
@@ -85,6 +90,45 @@ test.describe("Redeem — confirm destination before burn", () => {
       await expect(block.getByText(TYPED_NAME)).toHaveCount(0);
       // Dan kalimat persetujuannya menyebut nama itu, bukan nama ketikan.
       await expect(block.getByText(/the IDR goes to SITI AMINAH/)).toBeVisible();
+      // Inquiry menjawab nama → order `bankAccountNameVerified: true` → dan HANYA di
+      // sini klaim "jawaban bank" boleh dipasang (USDX-672).
+      await expect(page.getByTestId("redeem-destination-name-note")).toHaveText(
+        "The bank's answer for this account number.",
+      );
+    });
+
+    // USDX-672 — cabang yang SELALU terjadi di lingkungan ber-MOCK: backend jatuh ke
+    // nama ketikan nasabah karena provider tidak menjawab nama. Layar tetap
+    // menampilkan namanya dan tetap meminta persetujuan, tapi tidak boleh menyebutnya
+    // jawaban bank: keyakinan palsu di titik ini lebih buruk daripada tidak ada
+    // layarnya.
+    test("no verification from the bank → the name is shown with no provenance claim", async ({
+      page,
+    }) => {
+      await forceEnglish(page);
+      await seedWallet(page);
+      // Seam inquiry TIDAK diarmed: mock meneruskan ketikan nasabah, persis seperti
+      // provider MOCK → `bankAccountNameVerified: false`.
+      await loginViaStorage(page);
+      await createOrder(page);
+
+      const block = page.getByTestId("redeem-confirm-destination");
+      await expect(block).toBeVisible({ timeout: 15000 });
+      // Namanya tetap tampil penuh — tidak disembunyikan, tidak jadi "—".
+      await expect(page.getByTestId("redeem-destination-name")).toHaveText(TYPED_NAME);
+      const note = page.getByTestId("redeem-destination-name-note");
+      await expect(note).toHaveText(
+        "This name has not been confirmed by the bank — check it carefully yourself before you agree.",
+      );
+      await expect(note).not.toContainText("bank's answer");
+      await expect(block.getByText(/bank's answer/)).toHaveCount(0);
+
+      // Gerbangnya tidak melemah dan tidak ada langkah baru: satu centang, lalu burn.
+      const burn = page.getByRole("button", { name: "Burn USDX" });
+      await expect(burn).toBeDisabled();
+      await expect(block.getByRole("checkbox")).toHaveCount(1);
+      await block.getByRole("checkbox").click();
+      await expect(burn).toBeEnabled();
     });
 
     test("resume from history asks for the same agreement", async ({ page }) => {
@@ -106,6 +150,12 @@ test.describe("Redeem — confirm destination before burn", () => {
       const block = page.getByTestId("redeem-confirm-destination");
       await expect(block).toBeVisible();
       await expect(page.getByTestId("redeem-destination-name")).toHaveText("Demo User");
+      // Order ber-seed tidak membawa `bankAccountNameVerified` sama sekali (bentuk
+      // order lama, kolomnya NULL) → dibaca seperti `false`, klaimnya ditahan
+      // (USDX-672).
+      await expect(page.getByTestId("redeem-destination-name-note")).toHaveText(
+        "This name has not been confirmed by the bank — check it carefully yourself before you agree.",
+      );
 
       const burn = page.getByRole("button", { name: "Burn USDX" });
       await expect(burn).toBeDisabled();

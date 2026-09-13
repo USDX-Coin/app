@@ -91,8 +91,16 @@ components/
   renders the destination from the ORDER RESPONSE (`lib/redeem/destination.ts`:
   `orderDestination`) and disables the burn button until the checkbox is ticked
   (`burnDisabled`). The agreement is stored as the *order id* that was agreed to, so a
-  different order opened in the same component never inherits it. `useRedeem.submitRedeem`
-  therefore does NOT fire the burn any more — the tracker's button does.
+  different order opened in the same component never inherits it (proved in
+  `tests/unit/components/RedeemStatus.test.tsx`). `useRedeem.submitRedeem` therefore does
+  NOT fire the burn any more — the tracker's button does.
+- **Holder-name provenance (USDX-672)** — the caption "jawaban bank atas nomor rekening ini"
+  is only attached when the order says `bankAccountNameVerified === true`
+  (`orderDestination.accountNameVerified`). `false` and a missing field are read the same
+  way: show the name, claim nothing about where it came from, still require the agreement.
+  The reason is a backend fallback invisible to the client — `inquiry.accountName ??
+  bank.bankAccountName` — which makes the displayed name the customer's own typing whenever
+  the provider answers no name (always, under provider `MOCK`).
 - **`PAYOUT_FAILED`** is not in `STEPS`: it REPLACES the stepper with one warning-tone
   `Alert` (never `danger`, never a retry button — the customer cannot fix it). The tracker
   keeps polling: the status is "waiting for ops", not terminal (`conventions.md § Status

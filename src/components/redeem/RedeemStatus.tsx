@@ -12,10 +12,18 @@
 //
 // USDX-661 (bni-integration.md § 17.12): while AWAITING_BURN on the SELF_SIGN path
 // the screen first states the destination from the ORDER RESPONSE — bank · account
-// number · the holder name the BANK answered — and asks for an explicit agreement
-// as a step of its own. Until it is given the burn button is disabled. This is the
-// only point where "a mistyped number that happens to be valid and belongs to
-// someone else" can still be caught for free.
+// number · holder name — and asks for an explicit agreement as a step of its own.
+// Until it is given the burn button is disabled. This is the only point where "a
+// mistyped number that happens to be valid and belongs to someone else" can still
+// be caught for free.
+//
+// USDX-672: that name is only called the BANK's answer when the order says
+// `bankAccountNameVerified: true`. The backend falls back to the name the customer
+// typed when the provider answers no name (`inquiry.accountName ??
+// bank.bankAccountName`), so captioning it "the bank's answer" unconditionally would
+// hand out false confidence exactly where the screen is supposed to catch a mistake.
+// `false` and a missing field are read the same way: show the name, claim nothing
+// about where it came from, and still require the agreement.
 //
 // USDX-664: PAYOUT_FAILED is not one of the STEPS. It gets a state of its own
 // (replacing the stepper) so the journey never renders with no step active.
@@ -106,7 +114,8 @@ export function RedeemStatus() {
   // has already been agreed to, so the confirmation step comes down.
   const burnInFlight =
     burnState === "submitting" || burnState === "submitted" || order.burnSubmittedAt != null;
-  // Tujuan dari RESPONSE ORDER — jawaban bank, bukan ketikan nasabah (USDX-661).
+  // Tujuan dari RESPONSE ORDER, bukan state form (USDX-661); `accountNameVerified`
+  // menentukan apakah namanya boleh disebut jawaban bank (USDX-672).
   const destination = orderDestination(order);
   const confirmRequired = destinationConfirmRequired(order, burnInFlight);
   const destinationConfirmed = confirmedOrderId === order.id;
@@ -226,8 +235,9 @@ export function RedeemStatus() {
 
       {/* Konfirmasi tujuan sebelum burn (USDX-661, § 17.12). Jeda yang disengaja
           sebelum satu-satunya aksi yang tidak bisa dibatalkan di app ini: tujuan
-          dibacakan dari response order — termasuk NAMA PEMILIK MENURUT BANK — dan
-          nama itu diulang di kalimat persetujuannya, supaya centangnya tidak bisa
+          dibacakan dari response order — termasuk NAMA PEMILIK, dengan keterangan
+          apakah nama itu jawaban bank atau belum terkonfirmasi (USDX-672) — dan nama
+          itu diulang di kalimat persetujuannya, supaya centangnya tidak bisa
           diberikan tanpa membaca ke rekening siapa rupiahnya pergi. */}
       {confirmRequired && (
         <div
@@ -255,10 +265,20 @@ export function RedeemStatus() {
               >
                 {destination.accountName}
               </span>
-              <span className="text-xs text-muted-text">
-                {destination.accountNameKnown
-                  ? t("redeem.confirmDestNameSource")
-                  : t("redeem.confirmDestNameMissing")}
+              {/* Keterangan asal nama (USDX-672). Klaim "jawaban bank" hanya
+                  dipasang kalau order menyatakannya terverifikasi; `false` dan field
+                  yang belum dikirim backend sama-sama jatuh ke kalimat yang tidak
+                  mengklaim apa pun — dan menyuruh nasabah memeriksa sendiri, karena
+                  di situlah satu-satunya pemeriksaan yang tersisa. */}
+              <span
+                className="text-xs text-muted-text"
+                data-testid="redeem-destination-name-note"
+              >
+                {!destination.accountNameKnown
+                  ? t("redeem.confirmDestNameMissing")
+                  : destination.accountNameVerified
+                    ? t("redeem.confirmDestNameSource")
+                    : t("redeem.confirmDestNameUnverified")}
               </span>
             </div>
           </div>

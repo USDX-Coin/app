@@ -19,6 +19,7 @@ const ORDER_RESPONSE = {
   bankName: "BCA",
   bankAccountNumber: "1234563210",
   bankAccountName: "SITI AMINAH", // jawaban bank atas nomor di atas
+  bankAccountNameVerified: true, // …dan order-nya menyatakan itu memang jawaban bank
 };
 
 describe("orderDestination", () => {
@@ -29,6 +30,7 @@ describe("orderDestination", () => {
         accountNumber: "1234563210",
         accountName: "SITI AMINAH",
         accountNameKnown: true,
+        accountNameVerified: true,
       });
     });
 
@@ -48,6 +50,8 @@ describe("orderDestination", () => {
         const dest = orderDestination({ ...ORDER_RESPONSE, bankAccountName });
         expect(dest.accountName).toBe(ACCOUNT_NAME_FALLBACK);
         expect(dest.accountNameKnown).toBe(false);
+        // Tak ada nama = tak ada yang bisa diklaim terverifikasi, apa pun isi flag-nya.
+        expect(dest.accountNameVerified).toBe(false);
         // Nomor rekening tetap penuh — yang tidak diketahui hanya namanya.
         expect(dest.accountNumber).toBe("1234563210");
       }
@@ -66,6 +70,64 @@ describe("orderDestination", () => {
         accountNumber: "1234563210",
         accountName: "SITI AMINAH",
       });
+    });
+  });
+});
+
+// USDX-672 — inti tiketnya: backend jatuh ke nama ketikan nasabah saat provider
+// tidak menjawab nama (`inquiry.accountName ?? bank.bankAccountName`), dan tanpa
+// `bankAccountNameVerified` klien tidak punya cara membedakannya. Jadi yang diuji di
+// sini adalah HAK BICARA layar itu: kapan ia boleh berkata "jawaban bank".
+describe("orderDestination — provenance of the holder name", () => {
+  describe("positive", () => {
+    test("verified only when the order says so explicitly", () => {
+      expect(orderDestination(ORDER_RESPONSE).accountNameVerified).toBe(true);
+    });
+  });
+
+  describe("negative", () => {
+    test("false → the name is shown, but nothing is claimed about where it came from", () => {
+      // Jalur provider MOCK: nama yang tampil justru ketikan nasabah sendiri.
+      const dest = orderDestination({
+        ...ORDER_RESPONSE,
+        bankAccountName: "BUDI SANTOSO",
+        bankAccountNameVerified: false,
+      });
+      expect(dest.accountName).toBe("BUDI SANTOSO"); // tetap ditampilkan
+      expect(dest.accountNameKnown).toBe(true); // bukan "—"
+      expect(dest.accountNameVerified).toBe(false); // tapi tanpa klaim asal-usul
+    });
+
+    test("a missing field is read exactly like false — backend has not merged yet", () => {
+      const { bankAccountNameVerified: _omitted, ...withoutTheField } = ORDER_RESPONSE;
+      const dest = orderDestination(withoutTheField);
+      expect(dest.accountName).toBe("SITI AMINAH");
+      expect(dest.accountNameVerified).toBe(false);
+    });
+  });
+
+  describe("edge cases", () => {
+    test("only a literal true verifies — no truthiness, no null, no string", () => {
+      const notTrue = [false, undefined, null, 0, 1, "true", "", {}];
+      for (const value of notTrue) {
+        const dest = orderDestination({
+          ...ORDER_RESPONSE,
+          bankAccountNameVerified: value as unknown as boolean,
+        });
+        expect(dest.accountNameVerified, `${String(value)} must not verify`).toBe(false);
+      }
+    });
+
+    test("the agreement is still required either way — the gate does not weaken", () => {
+      for (const bankAccountNameVerified of [true, false, undefined]) {
+        const dest = orderDestination({ ...ORDER_RESPONSE, bankAccountNameVerified });
+        expect(destinationConfirmRequired({ status: "AWAITING_BURN" }, false)).toBe(true);
+        // Dan tombol burn tetap mati sampai dicentang, terverifikasi atau tidak.
+        expect(
+          burnDisabled({ canBurn: true, walletMatches: true, destinationConfirmed: false }),
+        ).toBe(true);
+        expect(dest.accountName).toBe("SITI AMINAH"); // namanya tidak pernah disembunyikan
+      }
     });
   });
 });
@@ -174,6 +236,21 @@ describe("RedeemStatus PAYOUT_FAILED", () => {
         );
       }
     });
+
+    // Ops bisa me-resolve order ini CLOSED = tidak akan dibayar, dan FE tidak punya
+    // field resolusi untuk membedakannya dari RESEND/SETTLED_MANUAL. Jadi teksnya
+    // tidak boleh menjanjikan pembayarannya jadi — cuma bahwa orang menanganinya.
+    test("promises the team is handling it, never that the payout will happen", () => {
+      for (const lang of ["id", "en"] as const) {
+        const copy = dictionaries[lang]["redeem.statusPayoutFailedDesc"];
+        expect(copy).not.toMatch(
+          /menuntaskan pembayaran|melanjutkan pembayaran|akan dibayar|akan dicairkan|settling the payout|complete the payout|will be paid|will be disbursed/i,
+        );
+        // Tetap menyebut keadaannya apa adanya dan tidak membebani nasabah.
+        expect(copy).toMatch(/sudah terbakar|already burned/i);
+        expect(copy).toMatch(/tim kami sedang menangani|our team is handling/i);
+      }
+    });
   });
 });
 
@@ -186,6 +263,7 @@ describe("destination confirmation copy", () => {
         "redeem.accountNumber",
         "redeem.confirmDestTitle",
         "redeem.confirmDestNameSource",
+        "redeem.confirmDestNameUnverified",
         "redeem.confirmDestNameMissing",
         "redeem.confirmDestWarning",
         "redeem.confirmDestCheck",
@@ -204,6 +282,43 @@ describe("destination confirmation copy", () => {
         // Varian tanpa nama tidak boleh menyisakan placeholder yang tak terisi.
         expect(dictionaries[lang]["redeem.confirmDestCheckNoName"]).not.toContain("{name}");
       }
+    });
+
+    // USDX-672: satu-satunya kalimat yang boleh mengklaim asal nama adalah
+    // `confirmDestNameSource`, dan ia hanya dipasang saat terverifikasi.
+    test("only the verified caption claims the bank answered", () => {
+      expect(dictionaries.id["redeem.confirmDestNameSource"]).toMatch(/^Jawaban bank/);
+      expect(dictionaries.en["redeem.confirmDestNameSource"]).toMatch(/bank's answer/);
+      for (const lang of ["id", "en"] as const) {
+        const unverified = dictionaries[lang]["redeem.confirmDestNameUnverified"];
+        // Tidak mengklaim bank menjawab apa pun…
+        expect(unverified).not.toMatch(/jawaban bank|bank's answer|menurut bank|from the bank/i);
+        // …tidak menyebut provider (nasabah tidak perlu tahu soal itu)…
+        expect(unverified).not.toMatch(/provider|inquiry|MOCK|DurianPay|backend|API/i);
+        // …dan tidak menakuti dengan tuduhan ada yang salah.
+        expect(unverified).not.toMatch(/salah|palsu|penipuan|wrong|invalid|fraud|error/i);
+      }
+      // Yang ia katakan: belum dikonfirmasi bank, jadi periksa sendiri.
+      expect(dictionaries.id["redeem.confirmDestNameUnverified"]).toMatch(
+        /belum dikonfirmasi bank/,
+      );
+      expect(dictionaries.id["redeem.confirmDestNameUnverified"]).toMatch(/periksa sendiri/);
+      expect(dictionaries.en["redeem.confirmDestNameUnverified"]).toMatch(
+        /not been confirmed by the bank/,
+      );
+      expect(dictionaries.en["redeem.confirmDestNameUnverified"]).toMatch(/check it carefully/);
+    });
+
+    // F3 — tombol Ringkasan tidak lagi mengaku membakar: handler-nya cuma membuat order.
+    test("the Ringkasan button names the step it reaches, not a burn", () => {
+      for (const lang of ["id", "en"] as const) {
+        expect(dictionaries[lang]["btn.continueToConfirm"]).toBeTruthy();
+        expect(dictionaries[lang]["btn.continueToConfirm"]).not.toMatch(/burn|bakar/i);
+      }
+      // Dialog PIN custodial tetap "Konfirmasi & Burn" — di situ ia benar: PIN-nya
+      // membuat order SEKALIGUS menyuruh sistem membakarnya.
+      expect(dictionaries.id["btn.confirmBurn"]).toMatch(/Burn/);
+      expect(dictionaries.en["btn.confirmBurn"]).toMatch(/Burn/);
     });
 
     test("the warning states both consequences: USDX gone, transfer irreversible", () => {

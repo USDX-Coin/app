@@ -28,8 +28,8 @@ test.describe("Rate limit (429 RATE_LIMITED)", () => {
       await redeem.click(); // open Ringkasan
       await expect(page.getByText("Transaction Summary")).toBeVisible();
 
-      // Confirm & Burn → POST /v2/redeem returns 429 RATE_LIMITED.
-      await page.getByRole("button", { name: "Confirm & Burn" }).click();
+      // Lanjut ke Konfirmasi → POST /v2/redeem returns 429 RATE_LIMITED.
+      await page.getByRole("button", { name: "Continue to Confirmation" }).click();
 
       // Central throttle toast appears…
       await expect(

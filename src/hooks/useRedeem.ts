@@ -244,8 +244,9 @@ export function useRedeem() {
 
   // Create the order → navigate to the tracker. The burn is NOT fired from here
   // (USDX-661, bni-integration.md § 17.12): the tracker first states the payout
-  // destination as the ORDER answered it — bank · nomor rekening · nama pemilik
-  // menurut bank — and waits for an explicit agreement. Until then the burn button
+  // destination as the ORDER answered it — bank · nomor rekening · nama pemilik, and
+  // whether that name is the bank's answer at all (USDX-672, `bankAccountNameVerified`)
+  // — and waits for an explicit agreement. Until then the burn button
   // is disabled, and pressing it is what runs `runBurn` (the same guarded path the
   // resume-from-/history flow already used). Mengonfirmasi ketikan sendiri di
   // Ringkasan bukan verifikasi apa pun: nama dari inquiry baru ada setelah order

@@ -7,11 +7,19 @@
 // PAYOUT_COMPLETE — dan USDX nasabah sudah hangus. Layar pra-burn adalah satu-
 // satunya titik di mana kesalahan itu masih gratis dibatalkan.
 //
-// Yang dijaga di sini dua hal, keduanya murni dan bisa diuji lepas dari React:
-//   1. tujuan yang ditampilkan dibaca dari RESPONSE ORDER (jawaban bank), bukan
-//      dari form yang diketik nasabah — kalau keduanya berbeda, perbedaan itu
-//      sendiri informasi yang berguna;
-//   2. tombol burn tidak bisa ditekan sebelum persetujuan diberikan.
+// Yang dijaga di sini tiga hal, semuanya murni dan bisa diuji lepas dari React:
+//   1. tujuan yang ditampilkan dibaca dari RESPONSE ORDER, bukan dari form yang
+//      diketik nasabah — kalau keduanya berbeda, perbedaan itu sendiri informasi
+//      yang berguna;
+//   2. layar hanya boleh menyebut nama itu "jawaban bank" kalau response order
+//      menyatakannya `bankAccountNameVerified: true` (USDX-672). Backend punya
+//      fallback yang tidak terlihat dari luar — `inquiry.accountName ??
+//      bank.bankAccountName` — jadi nama di response bisa saja ketikan nasabah
+//      sendiri. Melabelinya "jawaban bank" di situ memberi keyakinan palsu tepat
+//      di titik yang seharusnya menangkap kesalahan, yang lebih buruk daripada
+//      tidak ada layar ini sama sekali;
+//   3. tombol burn tidak bisa ditekan sebelum persetujuan diberikan — di kedua
+//      keadaan, terverifikasi atau tidak. Gerbangnya tidak melemah.
 
 import type { BurnMode, RedeemStatus } from "@/types";
 
@@ -25,17 +33,28 @@ export interface OrderDestination {
   accountName: string;
   /** False kalau API tidak mengirim nama — layar tetap meminta konfirmasi. */
   accountNameKnown: boolean;
+  /**
+   * Apakah layar BOLEH menyebut nama itu jawaban bank atas nomor rekening ini
+   * (USDX-672). True hanya kalau response order menyatakannya secara eksplisit dan
+   * namanya memang ada. `false` DAN `undefined` sama-sama menghasilkan false:
+   * payload yang belum membawa field ini tidak membuktikan apa pun, dan klaim yang
+   * tidak bisa dibuktikan tidak dipasang. Persetujuan tetap diminta di kedua
+   * keadaan — yang berbeda cuma apa yang layar berani katakan soal asal namanya.
+   */
+  accountNameVerified: boolean;
 }
 
 /**
  * Tujuan payout apa adanya dari response order: bank · nomor rekening · nama
- * pemilik menurut bank. Tidak pernah membaca state form — itu ketikan nasabah,
- * dan mengonfirmasi ketikan sendiri bukan verifikasi apa pun.
+ * pemilik, plus apakah nama itu boleh disebut jawaban bank. Tidak pernah membaca
+ * state form — itu ketikan nasabah, dan mengonfirmasi ketikan sendiri bukan
+ * verifikasi apa pun.
  */
 export function orderDestination(order: {
   bankName?: string | null;
   bankAccountNumber?: string | null;
   bankAccountName?: string | null;
+  bankAccountNameVerified?: boolean | null;
 }): OrderDestination {
   const name = order.bankAccountName?.trim() ?? "";
   return {
@@ -43,6 +62,9 @@ export function orderDestination(order: {
     accountNumber: order.bankAccountNumber?.trim() || ACCOUNT_NAME_FALLBACK,
     accountName: name || ACCOUNT_NAME_FALLBACK,
     accountNameKnown: name !== "",
+    // `=== true` dengan sengaja, bukan truthiness: `undefined` (backend belum
+    // membawa field ini) harus jatuh ke false, sama seperti `false` eksplisit.
+    accountNameVerified: name !== "" && order.bankAccountNameVerified === true,
   };
 }
 

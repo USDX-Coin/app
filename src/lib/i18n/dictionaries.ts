@@ -271,7 +271,10 @@ const en: Dict = {
   "redeem.disbursementFee": "Disbursement fee",
   "redeem.totalFee": "Total fee",
   "redeem.netPayout": "You will receive",
-  "redeem.minPayout": "Minimum payout is Rp10,000",
+  // USDX-682: the figure is the configured `minRedeemIdr` (GET /api/v2/config),
+  // passed in as `{amount}` already formatted as rupiah. Never hardcode it here —
+  // ops move it from the back office and the copy must follow without a release.
+  "redeem.minPayout": "Minimum payout is {amount}",
   "redeem.connectWallet": "Connect Wallet",
   "redeem.walletBalance": "Balance",
   "redeem.burnNote": "Burn USDX cannot be undone. IDR is sent to your bank account once the burn is confirmed.",
@@ -907,7 +910,6 @@ const en: Dict = {
   // supplied by the caller, not by the static table in `validations.ts`.
   "validation.amount.minMint": "Minimum mint value is {amount}",
   "validation.amount.maxMint": "Maximum mint is {amount} USDX",
-  "validation.amount.minRedeem": "Minimum redeem is {amount} USDX",
   "validation.amount.maxRedeem": "Maximum redeem is {amount} USDX",
   // transfer custodial (USDX-567)
   "validation.amount.decimals": "Use at most 6 decimal places",
@@ -1283,7 +1285,7 @@ const id: Dict = {
   "redeem.disbursementFee": "Biaya pencairan",
   "redeem.totalFee": "Total biaya",
   "redeem.netPayout": "Anda akan terima",
-  "redeem.minPayout": "Jumlah diterima minimal Rp10.000",
+  "redeem.minPayout": "Jumlah diterima minimal {amount}",
   "redeem.connectWallet": "Hubungkan Wallet",
   "redeem.walletBalance": "Saldo",
   "redeem.burnNote": "Burn USDX tidak dapat dibatalkan. IDR dikirim ke rekening setelah burn terkonfirmasi.",
@@ -1913,7 +1915,6 @@ const id: Dict = {
   // dikirim pemanggil, bukan dari tabel statis di `validations.ts`.
   "validation.amount.minMint": "Nilai mint minimum {amount}",
   "validation.amount.maxMint": "Mint maksimal {amount} USDX",
-  "validation.amount.minRedeem": "Redeem minimal {amount} USDX",
   "validation.amount.maxRedeem": "Redeem maksimal {amount} USDX",
   // transfer custodial (USDX-567)
   "validation.amount.decimals": "Maksimal 6 angka di belakang koma",

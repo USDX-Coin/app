@@ -11,6 +11,7 @@ const getAppConfigMock = vi.mocked(getAppConfig);
 function config(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
     minMintIdr: "20000.00",
+    minRedeemIdr: "20000.00",
     mintFeePct: "1.0",
     pgFeeVaFlat: "4000.00",
     contractAddress: "0x1FF2000000000000000000000000000000000000",
@@ -32,6 +33,7 @@ describe("useAppConfig", () => {
 
       await waitFor(() => expect(result.current.isReady).toBe(true));
       expect(result.current.minMintIdr).toBe(20_000);
+      expect(result.current.minRedeemIdr).toBe(20_000);
       expect(result.current.mintFeePct).toBe(1);
       expect(result.current.pgFeeVaFlat).toBe(4_000);
       expect(result.current.contractAddress).toBe(
@@ -68,6 +70,7 @@ describe("useAppConfig", () => {
       await waitFor(() => expect(result.current.isError).toBe(true), { timeout: 5000 });
       expect(result.current.isReady).toBe(false);
       expect(result.current.minMintIdr).toBeNull();
+      expect(result.current.minRedeemIdr).toBeNull();
       expect(result.current.pgFeeVaFlat).toBeNull();
       expect(result.current.contractAddress).toBeNull();
       // An unknown mode must never read as a test one.
@@ -112,6 +115,29 @@ describe("useAppConfig", () => {
       expect(result.current.mintAvailable).toBe(true);
     });
 
+    // USDX-682: `minRedeemIdr` arrives with the BACKEND half of this ticket, which
+    // merges after this app does. Both facts below are what make shipping the app
+    // first safe.
+    test("an absent minRedeemIdr is null, not 0 and not a guessed floor", async () => {
+      const { minRedeemIdr: _dropped, ...withoutRedeemMin } = config();
+      getAppConfigMock.mockResolvedValue(withoutRedeemMin);
+      const { result } = renderHook(() => useAppConfig(), { wrapper: createWrapper() });
+
+      await waitFor(() => expect(result.current.minMintIdr).toBe(20_000));
+      expect(result.current.config?.minRedeemIdr).toBeUndefined();
+      expect(result.current.minRedeemIdr).toBeNull();
+    });
+
+    test("an absent minRedeemIdr does not make the config un-ready", async () => {
+      // `isReady` gates the MINT screen. Folding the redeem field into it would
+      // switch mint off for the whole rollout window, for a field mint never uses.
+      const { minRedeemIdr: _dropped, ...withoutRedeemMin } = config();
+      getAppConfigMock.mockResolvedValue(withoutRedeemMin);
+      const { result } = renderHook(() => useAppConfig(), { wrapper: createWrapper() });
+
+      await waitFor(() => expect(result.current.isReady).toBe(true));
+    });
+
     test("an absent testContractAddress reads exactly like null", async () => {
       // The field does not exist until USDX-636 ships; "absent" and "null" must
       // not take different code paths.
@@ -125,11 +151,14 @@ describe("useAppConfig", () => {
     test("an unparseable number stays null instead of collapsing to 0", async () => {
       // 0 is a plausible minimum and a plausible fee, so it must never be what a
       // malformed field turns into.
-      getAppConfigMock.mockResolvedValue(config({ minMintIdr: "", pgFeeVaFlat: "abc" }));
+      getAppConfigMock.mockResolvedValue(
+        config({ minMintIdr: "", minRedeemIdr: "abc", pgFeeVaFlat: "abc" }),
+      );
       const { result } = renderHook(() => useAppConfig(), { wrapper: createWrapper() });
 
       await waitFor(() => expect(result.current.mintFeePct).toBe(1));
       expect(result.current.minMintIdr).toBeNull();
+      expect(result.current.minRedeemIdr).toBeNull();
       expect(result.current.pgFeeVaFlat).toBeNull();
       expect(result.current.isReady).toBe(false);
     });

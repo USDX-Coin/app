@@ -502,6 +502,11 @@ const MOCK_SPREAD_SELL_PCT = 2.0;
 // app has no USDX-denominated minimum any more: 10 USDX meant a different
 // rupiah figure every day, and Rp 176.182 on the day it was noticed.
 const MOCK_MIN_MINT_IDR = 20_000;
+// Redeem minimum, in RUPIAH — mirrors `fee_configs.min_redeem_idr` (USDX-682),
+// same default as the mint one because the PM set them equal. Judged on the NET
+// payout. The app no longer has a USDX-denominated redeem minimum: 10 USDX meant
+// Rp 162.500 at a 16.250 sell rate, 16x the floor the backend actually enforces.
+const MOCK_MIN_REDEEM_IDR = 20_000;
 const MOCK_MINT_FEE_PCT = 1; // % of subtotal
 const MOCK_PG_FEE_VA = 4000; // flat IDR
 const MOCK_PG_FEE_QRIS_PCT = 0.7; // % of subtotal
@@ -587,6 +592,7 @@ export async function mockGetAppConfig(): Promise<AppConfig> {
   // modes — it is never swapped.
   return {
     minMintIdr: idr(MOCK_MIN_MINT_IDR),
+    minRedeemIdr: idr(MOCK_MIN_REDEEM_IDR),
     mintFeePct: String(MOCK_MINT_FEE_PCT),
     pgFeeVaFlat: idr(MOCK_PG_FEE_VA),
     contractAddress: MOCK_CONTRACT_ADDRESS,
@@ -1150,13 +1156,18 @@ export async function mockCreateRedeemOrder(
   if (dest.accountNumber === MOCK_INVALID_BANK_ACCOUNT) {
     throw new ApiError(422, "INVALID_BANK_ACCOUNT", "Rekening tujuan tidak valid atau tidak ditemukan");
   }
-  // Minimum payout floor checked from create (week3.md § Min payout) → reject
-  // before the user burns.
-  if (b.netPayoutIdr < MIN_REDEEM_PAYOUT_IDR) {
+  // Minimum net payout checked from create (week3.md § Min payout) → reject before
+  // the user burns. Two layers, mirroring `redeem.pricing.ts` (USDX-682): the
+  // CONFIGURED minimum (`fee_configs.min_redeem_idr`, the same value this mock
+  // serves as `minRedeemIdr`) standing on the hard Asasta floor underneath it. The
+  // configured value may only raise the floor, never lower it, so the effective
+  // bound is the larger of the two.
+  const minNetPayoutIdr = Math.max(MOCK_MIN_REDEEM_IDR, MIN_REDEEM_PAYOUT_IDR);
+  if (b.netPayoutIdr < minNetPayoutIdr) {
     throw new ApiError(
       422,
       "VALIDATION_ERROR",
-      `Jumlah diterima minimal Rp${MIN_REDEEM_PAYOUT_IDR.toLocaleString("id-ID")}`,
+      `Jumlah diterima minimal Rp${minNetPayoutIdr.toLocaleString("id-ID")}`,
     );
   }
   const nowMs = Date.now();

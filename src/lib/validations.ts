@@ -1,8 +1,4 @@
-import {
-  MAX_MINT_AMOUNT,
-  MIN_REDEEM_AMOUNT,
-  MAX_REDEEM_AMOUNT,
-} from "./constants";
+import { MAX_MINT_AMOUNT, MAX_REDEEM_AMOUNT } from "./constants";
 import { formatAmount } from "./utils";
 
 // Every validator returns an **i18n key**, never a sentence (finding D1: the
@@ -102,7 +98,11 @@ export function validateAmount(
     return null;
   }
 
-  if (num < MIN_REDEEM_AMOUNT) return "validation.amount.minRedeem";
+  // Redeem has NO minimum here (USDX-682). The minimum is a rupiah figure judged
+  // on the NET payout — the money the customer receives after fees — which this
+  // function never sees; `useRedeem` owns that check against `minRedeemIdr` from
+  // GET /api/v2/config. The ceiling stays, because a token-supply guard is
+  // genuinely a USDX bound.
   if (num > MAX_REDEEM_AMOUNT) return "validation.amount.maxRedeem";
   return null;
 }
@@ -225,11 +225,12 @@ export function validateBankAccountName(value: string): string | null {
 // on screen uses, so the limit in the error reads like the figure above it.
 // `validation.amount.minMint` is absent on purpose: its number is the rupiah
 // minimum from GET /api/v2/config, which only the caller has. It passes it as
-// `vars` below.
+// `vars` below. There is no redeem-minimum entry at all: that message
+// (`redeem.minPayout`) belongs to the net payout and is rendered by the form,
+// which gets its rupiah figure from the config the same way.
 const VALIDATION_VARS: Record<string, Record<string, string>> = {
   "validation.password.minLength": { min: String(PASSWORD_MIN_LENGTH) },
   "validation.amount.maxMint": { amount: formatAmount(MAX_MINT_AMOUNT) },
-  "validation.amount.minRedeem": { amount: formatAmount(MIN_REDEEM_AMOUNT) },
   "validation.amount.maxRedeem": { amount: formatAmount(MAX_REDEEM_AMOUNT) },
 };
 

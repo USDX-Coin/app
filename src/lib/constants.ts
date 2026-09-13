@@ -4,7 +4,13 @@ export const EXCHANGE_RATE = 1; // 1 USDX = 1 USD
 // GET /api/v2/config (`minMintIdr`). The constant it replaced was 10 USDX — a
 // bound whose rupiah value changed with the rate every day.
 export const MAX_MINT_AMOUNT = 1_000_000;
-export const MIN_REDEEM_AMOUNT = 10;
+// No MIN_REDEEM_AMOUNT here either (USDX-682) — the same mistake as the mint one
+// above, found one ticket later. It was 10 USDX, so its rupiah value moved with
+// the rate: at a sell rate of 16.250 it meant a Rp 162.500 floor, 16x the rupiah
+// minimum the backend enforces, and nobody ever decided that number. The redeem
+// minimum is a RUPIAH figure ops move from the back office; it arrives at runtime
+// from GET /api/v2/config (`minRedeemIdr`) and is judged on the NET payout — the
+// rupiah the customer actually receives.
 export const MAX_REDEEM_AMOUNT = 1_000_000;
 export const MINTING_FEE_PERCENT = 0.007; // 0.7%
 // Phase 2 = Polygon-only consumer mint (week2.md § Week 2 Decisions, Chain).
@@ -48,8 +54,14 @@ export const POLYGON_RPC_URL = process.env.NEXT_PUBLIC_POLYGON_RPC_URL ?? "";
 // values come from the backend at INT-1 (USDX-249).
 export const REDEEM_FEE_PCT = 1.0; // % of gross IDR
 export const DISBURSEMENT_FEE_FLAT_IDR = 5_000; // flat IDR per payout (provider service fee)
-// Minimum net payout — Asasta bills floor (week3.md § Min payout). Checked from
-// create: net below this is rejected before the user burns.
+// The BACKEND's hard floor on net payout — Asasta bills floor (week3.md § Min
+// payout), `MIN_NET_PAYOUT_IDR` in `redeem.pricing.ts`. It stays, and it is
+// deliberately NOT a second client-side minimum (USDX-682): the only minimum this
+// app shows or enforces is `minRedeemIdr` from GET /api/v2/config, which the
+// backend validates as >= this floor and may only ever RAISE. Two numbers both
+// claiming to be "the minimum" is exactly what produced the 10-USDX bug. Its one
+// consumer is the mock backend (`mock-api.ts`), which mirrors the real
+// create-time check.
 export const MIN_REDEEM_PAYOUT_IDR = 10_000;
 // USDX has 6 on-chain decimals (amount "100" → amountWei "100000000").
 export const USDX_DECIMALS = 6;

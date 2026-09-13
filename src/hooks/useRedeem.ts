@@ -13,6 +13,7 @@ import { useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useRedeemStore } from "@/stores/redeemStore";
 import { useConsumerRate } from "@/hooks/useConsumerRate";
+import { useAppConfig } from "@/hooks/useAppConfig";
 import { useCustodialWallet } from "@/hooks/useCustodialWallet";
 import { useCooldown, DEFAULT_COOLDOWN_SECONDS } from "@/hooks/useCooldown";
 import { walletStatusKey } from "@/hooks/useTransfer";
@@ -24,13 +25,12 @@ import {
   validateBankAccountNumber,
   validateBankAccountName,
 } from "@/lib/validations";
-import { parseAmount } from "@/lib/utils";
+import { parseAmount, formatIDR } from "@/lib/utils";
 import { getBankName } from "@/lib/banks";
 import {
   REDEEM_CHAIN_ID,
   REDEEM_FEE_PCT,
   DISBURSEMENT_FEE_FLAT_IDR,
-  MIN_REDEEM_PAYOUT_IDR,
   MAX_REDEEM_AMOUNT,
 } from "@/lib/constants";
 import {
@@ -79,6 +79,12 @@ export function redeemErrorKey(error: unknown): string | null {
 export function useRedeem() {
   const store = useRedeemStore();
   const rateQuery = useConsumerRate();
+  // The redeem minimum is backend-owned (USDX-682): a rupiah figure from
+  // `fee_configs.min_redeem_idr`, served by GET /api/v2/config, movable from the
+  // back office without a release. The fee rates on this screen are still the
+  // app's own constants, so the config is consulted for the bound and nothing
+  // else — a missing response does not blank the form.
+  const config = useAppConfig();
   // Sumber burn (USDX-567, custodial-wallet.md §5.3): wallet custodial user
   // (sistem yang menandatangani setelah PIN) atau wallet eksternal ter-connect
   // (self-sign, jalur existing). Pilihan hanya ada untuk pemilik wallet ACTIVE;
@@ -123,8 +129,9 @@ export function useRedeem() {
     : preconditions.insufficientBalance;
   const canBurn = isCustodialSource ? !insufficientBalance : preconditions.canBurn;
 
-  // Validate the USDX amount against the redeem min/max. A USD input is itself
-  // the USDX amount; an IDR input needs the rate to convert first (skip until loaded).
+  // Shape + the USDX ceiling only (USDX-682): the minimum left this validator
+  // when it stopped being a USDX number. A USD input is itself the USDX amount;
+  // an IDR input needs the rate to convert first (skip until loaded).
   const amountError = !store.amount
     ? null
     : store.amountCurrency === "USD"
@@ -140,12 +147,32 @@ export function useRedeem() {
     ? validateBankAccountName(store.bankAccountName)
     : null;
 
-  // Net payout must clear the minimum (week3.md § Min payout). Only meaningful
-  // once an amount is entered and the rate has loaded.
+  // THE redeem minimum — one number, in rupiah, judged on what the customer
+  // actually receives (`minRedeemIdr` vs `net_payout_idr`, app-config.yaml
+  // § AppConfig.minRedeemIdr). Before USDX-682 this screen carried two bounds that
+  // both called themselves the minimum: this net-payout floor, and a 10-USDX
+  // amount check worth Rp 162.500 at a 16.250 rate. The USDX one is gone.
+  //
+  // `minRedeemIdr == null` (the backend field ships after this app does, or the
+  // config request failed) asserts NOTHING. Not 10 USDX, not Rp 10.000, not the
+  // last known value: the app has no minimum to state, `POST /api/v2/redeem` still
+  // enforces the real one and its 422 renders inline in the Ringkasan. Falling
+  // back to a number instead is how a client ends up rejecting a redeem nobody
+  // decided to reject — and closing the screen instead would take redeem down for
+  // every user for the whole rollout window, which is a far worse failure than a
+  // bound checked one round-trip later.
+  const minRedeemIdr = config.minRedeemIdr;
   const belowMinPayout =
     enteredAmount > 0 &&
     effectiveSellRate != null &&
-    breakdown.netPayoutIdr < MIN_REDEEM_PAYOUT_IDR;
+    minRedeemIdr != null &&
+    breakdown.netPayoutIdr < minRedeemIdr;
+
+  // The rupiah figure inside "Jumlah diterima minimal Rp 20.000" — it belongs to
+  // the config, so it travels with the message instead of being copied into a
+  // dictionary (id-ID formatting via `formatIDR`, same as the mint minimum).
+  const minPayoutVars =
+    belowMinPayout && minRedeemIdr != null ? { amount: formatIDR(minRedeemIdr) } : undefined;
 
   // Bank destination is two-path (USDX-267): a saved account needs only the picked
   // reference; manual entry needs the full, valid trio.
@@ -298,6 +325,11 @@ export function useRedeem() {
     accountNumberError,
     accountNameError,
     belowMinPayout,
+    // `{amount}` for `redeem.minPayout` — the configured minimum, formatted.
+    minPayoutVars,
+    // runtime config (GET /api/v2/config): null while the backend has no
+    // `minRedeemIdr` yet, which means "no client-side minimum", not zero.
+    minRedeemIdr,
     isFormValid,
     // burn source (USDX-567): custodial wallet (PIN, system signs) or external
     // wallet (connect + self-sign). The switch only exists for custodial owners.

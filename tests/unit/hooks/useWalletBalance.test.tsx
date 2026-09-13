@@ -45,6 +45,7 @@ function setConfig(
   useAppConfigMock.mockReturnValue({
     config: null,
     minMintIdr: 20_000,
+    minRedeemIdr: 20_000,
     mintFeePct: 1,
     pgFeeVaFlat: 4_000,
     contractAddress,
@@ -252,6 +253,7 @@ describe("useWalletBalance", () => {
       useAppConfigMock.mockReturnValue({
         config: null,
         minMintIdr: null,
+        minRedeemIdr: null,
         mintFeePct: null,
         pgFeeVaFlat: null,
         contractAddress: null,

@@ -5,6 +5,10 @@ import { useMint } from "@/hooks/useMint";
 import { useMintStore } from "@/stores/mintStore";
 import { useAuthStore } from "@/stores/authStore";
 import { mintCheckoutCode } from "@/lib/api/auth-api";
+import { getAppConfig } from "@/lib/api/config-api";
+import { createMintOrder } from "@/lib/api/mint-api";
+import { ApiError } from "@/lib/api/client";
+import type { AppConfig, MintOrderCreated } from "@/types";
 
 const { pushMock } = vi.hoisted(() => ({ pushMock: vi.fn() }));
 
@@ -20,9 +24,38 @@ vi.mock("@/lib/api/auth-api", () => ({
 }));
 const mintCheckoutCodeMock = vi.mocked(mintCheckoutCode);
 
+// USDX-638: the mint minimum and the fee rates are backend-owned
+// (GET /api/v2/config). Mocked so a test can move the minimum the way an admin
+// would, and can fail the endpoint to prove the app invents nothing.
+vi.mock("@/lib/api/config-api", () => ({
+  getAppConfig: vi.fn(),
+}));
+const getAppConfigMock = vi.mocked(getAppConfig);
+
+// Create is stubbed so a test can play the gate closing mid-session (503
+// MINT_UNDER_MAINTENANCE, USDX-640). Only the order id matters to this hook —
+// everything it does with the response is build the checkout URL.
+vi.mock("@/lib/api/mint-api", () => ({ createMintOrder: vi.fn() }));
+const createMintOrderMock = vi.mocked(createMintOrder);
+const CREATED_ORDER = { id: "mint_test_1" } as MintOrderCreated;
+
 const VALID_ADDRESS = "0x1234567890abcdef1234567890abcdef12345678";
 // mock rate: baseRate 16000 × (1 + 2.5%) = 16400
 const EFFECTIVE_RATE = 16400;
+// GET /api/v2/config defaults: Rp 20.000 minimum, 1% mint fee, Rp 4.000 flat VA.
+const MIN_MINT_IDR = 20_000;
+const VA_FEE_IDR = 4_000;
+
+function config(overrides: Partial<AppConfig> = {}): AppConfig {
+  return {
+    minMintIdr: "20000.00",
+    mintFeePct: "1.0",
+    pgFeeVaFlat: "4000.00",
+    contractAddress: "0x1FF2000000000000000000000000000000000000",
+    chain: "polygon",
+    ...overrides,
+  };
+}
 
 beforeEach(() => {
   useMintStore.getState().reset();
@@ -30,18 +63,44 @@ beforeEach(() => {
   pushMock.mockReset();
   mintCheckoutCodeMock.mockReset();
   mintCheckoutCodeMock.mockResolvedValue("handoff-xyz");
+  getAppConfigMock.mockReset();
+  getAppConfigMock.mockResolvedValue(config());
+  createMintOrderMock.mockReset();
+  createMintOrderMock.mockResolvedValue(CREATED_ORDER);
 });
 
 describe("useMint", () => {
+  // The minimum is a RUPIAH figure from GET /api/v2/config, judged on the order
+  // subtotal from whichever side the user typed on (USDX-638). Before this, an
+  // IDR entry was converted to USDX and compared to a hardcoded 10 — so Rp 20.000
+  // was rejected with "Mint minimal 10 USDX", a bound worth Rp 176.182 that day.
   describe("validation", () => {
+    // Renders the hook with the amount already entered, and waits for both
+    // backend reads (rate + config) the validation depends on.
+    async function withAmount(amount: string, currency: "USD" | "IDR" = "USD") {
+      useMintStore.getState().setAmountCurrency(currency);
+      useMintStore.getState().setAmount(amount);
+      useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
+      const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+      await waitFor(() => {
+        expect(result.current.effectiveBuyRate).toBe(EFFECTIVE_RATE);
+        expect(result.current.isConfigReady).toBe(true);
+      });
+      return result;
+    }
+
     describe("positive", () => {
+      test("Rp 20.000 on the rupiah side passes and the form is mintable", async () => {
+        const result = await withAmount(String(MIN_MINT_IDR), "IDR");
+
+        expect(result.current.amountError).toBeNull();
+        expect(result.current.addressError).toBeNull();
+        expect(result.current.isFormValid).toBe(true);
+      });
+
       test("no errors and form valid once the rate has loaded", async () => {
-        useMintStore.getState().setAmount("100");
-        useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
+        const result = await withAmount("100");
 
-        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
-
-        await waitFor(() => expect(result.current.effectiveBuyRate).toBe(EFFECTIVE_RATE));
         expect(result.current.amountError).toBeNull();
         expect(result.current.addressError).toBeNull();
         expect(result.current.isFormValid).toBe(true);
@@ -49,16 +108,32 @@ describe("useMint", () => {
     });
 
     describe("negative", () => {
-      test("amountError for USD amount below minimum (rate-independent)", () => {
-        useMintStore.getState().setAmount("5");
-        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+      test("Rp 19.000 on the rupiah side reports the rupiah minimum", async () => {
+        const result = await withAmount("19000", "IDR");
+
         expect(result.current.amountError).toBe("validation.amount.minMint");
+        // The number in the sentence is the config's, formatted id-ID —
+        // "Nilai mint minimum Rp 20.000".
+        expect(result.current.amountErrorVars).toEqual({ amount: "Rp 20.000" });
+        expect(result.current.isFormValid).toBe(false);
       });
 
-      test("amountError for USD amount above maximum", () => {
-        useMintStore.getState().setAmount("2000000");
-        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+      test("the SAME amount entered on the USDX side reports the SAME error", async () => {
+        // 1 USDX = Rp 16.400 → a Rp 16.400 subtotal, under the Rp 20.000 floor.
+        const result = await withAmount("1", "USD");
+
+        expect(result.current.subtotalIdr).toBe(EFFECTIVE_RATE);
+        expect(result.current.amountError).toBe("validation.amount.minMint");
+        expect(result.current.isFormValid).toBe(false);
+      });
+
+      test("amountError for USD amount above maximum", async () => {
+        const result = await withAmount("2000000");
         expect(result.current.amountError).toBe("validation.amount.maxMint");
+        // The ceiling keeps its OWN number. Every amount message shares the
+        // `{amount}` placeholder, so shipping the config's rupiah figure with
+        // every error rewrote this one into "Maximum mint is Rp 20.000 USDX".
+        expect(result.current.amountErrorVars).toBeUndefined();
       });
 
       test("addressError for invalid EVM address", () => {
@@ -83,6 +158,143 @@ describe("useMint", () => {
         // Synchronously (before the rate query resolves) the form can't be valid.
         expect(result.current.effectiveBuyRate).toBeNull();
         expect(result.current.isFormValid).toBe(false);
+      });
+
+      test("a subtotal exactly on the minimum is accepted", async () => {
+        const result = await withAmount(String(MIN_MINT_IDR), "IDR");
+        expect(result.current.subtotalIdr).toBe(MIN_MINT_IDR);
+        expect(result.current.amountError).toBeNull();
+      });
+
+      test("moving the minimum in the back office moves the app's bound", async () => {
+        // Same Rp 30.000 purchase, two different configs — no rebuild in between.
+        getAppConfigMock.mockResolvedValue(config({ minMintIdr: "20000.00" }));
+        const passing = await withAmount("30000", "IDR");
+        expect(passing.current.amountError).toBeNull();
+
+        getAppConfigMock.mockResolvedValue(config({ minMintIdr: "50000.00" }));
+        const failing = await withAmount("30000", "IDR");
+        expect(failing.current.amountError).toBe("validation.amount.minMint");
+        expect(failing.current.amountErrorVars).toEqual({ amount: "Rp 50.000" });
+      });
+    });
+  });
+
+  // The config carries the only honest numbers the mint screen has. When it does
+  // not arrive, the screen says so — it does not fall back to a guessed floor
+  // that would reject a valid Rp 20.000, nor to a guessed fee on a payment total.
+  describe("config unavailable", () => {
+    describe("negative", () => {
+      test("a failed config load disables Mint and invents no bound", async () => {
+        getAppConfigMock.mockRejectedValue(new Error("500"));
+        useMintStore.getState().setAmountCurrency("IDR");
+        useMintStore.getState().setAmount("19000");
+        useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
+
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+
+        await waitFor(() => expect(result.current.isConfigError).toBe(true), { timeout: 5000 });
+        expect(result.current.isConfigReady).toBe(false);
+        expect(result.current.isFormValid).toBe(false);
+        // No minimum was asserted against an amount the app cannot judge, and no
+        // fee figure was made up for the review screen.
+        expect(result.current.amountError).toBeNull();
+        expect(result.current.minMintIdr).toBeNull();
+        expect(result.current.vaFeeIdr).toBeNull();
+        expect(result.current.totalPayIdr).toBeNull();
+      });
+
+      test("an otherwise valid form is not mintable while the config is missing", async () => {
+        getAppConfigMock.mockRejectedValue(new Error("500"));
+        useMintStore.getState().setAmount("100");
+        useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
+
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+
+        await waitFor(() => expect(result.current.effectiveBuyRate).toBe(EFFECTIVE_RATE));
+        await waitFor(() => expect(result.current.isConfigError).toBe(true), { timeout: 5000 });
+        expect(result.current.isFormValid).toBe(false);
+      });
+    });
+  });
+
+  // What the user is about to be billed, shown BEFORE leaving for checkout
+  // (USDX-638). The old review printed the subtotal under "Total Pembayaran" and
+  // promised a fee later; on a Rp 20.000 order that hidden fee is 20%.
+  describe("payment breakdown", () => {
+    describe("positive", () => {
+      test("itemises mint fee and flat VA fee into the total the user pays", async () => {
+        useMintStore.getState().setAmountCurrency("IDR");
+        useMintStore.getState().setAmount("100000");
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+
+        await waitFor(() => expect(result.current.isConfigReady).toBe(true));
+        await waitFor(() => expect(result.current.subtotalIdr).toBe(100_000));
+
+        expect(result.current.mintFeeIdr).toBe(1_000); // 1% of the subtotal
+        expect(result.current.vaFeeIdr).toBe(VA_FEE_IDR); // flat, not a percentage
+        expect(result.current.totalPayIdr).toBe(105_000);
+      });
+
+      test("the VA fee stays flat as the order grows", async () => {
+        useMintStore.getState().setAmountCurrency("IDR");
+        useMintStore.getState().setAmount("20000");
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+
+        await waitFor(() => expect(result.current.isConfigReady).toBe(true));
+        await waitFor(() => expect(result.current.subtotalIdr).toBe(20_000));
+
+        expect(result.current.vaFeeIdr).toBe(VA_FEE_IDR);
+        expect(result.current.totalPayIdr).toBe(20_000 + 200 + VA_FEE_IDR);
+      });
+    });
+
+    describe("edge cases", () => {
+      test("no amount entered → no figures at all, not zeroes", async () => {
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+        await waitFor(() => expect(result.current.isConfigReady).toBe(true));
+
+        expect(result.current.mintFeeIdr).toBeNull();
+        expect(result.current.vaFeeIdr).toBeNull();
+        expect(result.current.totalPayIdr).toBeNull();
+      });
+
+      // The backend floors total_pay to whole rupiah (`floorTotalPayIdr`,
+      // mint-order.pricing.ts). A USDX-denominated amount almost always produces
+      // a fractional subtotal, so without the same flooring the review would
+      // quote a rupiah more than the VA actually bills.
+      test("a fractional subtotal is floored to whole rupiah, like the invoice", async () => {
+        useMintStore.getState().setAmount("0.123"); // USD side
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+
+        await waitFor(() => expect(result.current.isConfigReady).toBe(true));
+        await waitFor(() => expect(result.current.subtotalIdr).toBeCloseTo(2017.2, 4));
+
+        // 2017.20 subtotal + 20.17 mint fee (1%, settled to 2 dp) + 4000.00 VA
+        // = 6037.37 → floored to 6037.
+        expect(result.current.mintFeeIdr).toBe(20.17);
+        expect(result.current.vaFeeIdr).toBe(4_000);
+        expect(result.current.totalPayIdr).toBe(6_037);
+      });
+
+      test("components settle to 2 dp BEFORE the sum is floored", async () => {
+        // 0.7 USDX × 16,400 = 11,480 exactly; a 0.755% fee lands on 86.674 and
+        // must become 86.67 before the sum, which is what the backend stores.
+        getAppConfigMock.mockResolvedValue(config({ mintFeePct: "0.755" }));
+        useMintStore.getState().setAmount("0.7");
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+
+        await waitFor(() => expect(result.current.mintFeeIdr).toBe(86.67));
+        expect(result.current.totalPayIdr).toBe(15_566); // 11480 + 86.67 + 4000 = 15566.67
+      });
+
+      test("the total is always a whole number of rupiah", async () => {
+        for (const amount of ["0.123", "1.7", "13.31"]) {
+          useMintStore.getState().setAmount(amount);
+          const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+          await waitFor(() => expect(result.current.totalPayIdr).not.toBeNull());
+          expect(Number.isInteger(result.current.totalPayIdr)).toBe(true);
+        }
       });
     });
   });
@@ -123,12 +335,154 @@ describe("useMint", () => {
     });
   });
 
+  // Swapping moves which side you type in. It must not change how much you are
+  // buying — the digits used to be carried across untouched, so Rp 19.000 was
+  // read back as 19.000 USDX: an order ~16.000x larger than the one on screen
+  // (USDX-650).
   describe("currency toggle", () => {
-    test("toggleCurrency switches USD <-> IDR", () => {
+    // Renders with the rate settled, so a toggle has something to convert with.
+    async function ready(amount: string, currency: "USD" | "IDR") {
+      useMintStore.getState().setAmountCurrency(currency);
+      useMintStore.getState().setAmount(amount);
       const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
-      expect(result.current.amountCurrency).toBe("USD");
-      act(() => result.current.toggleCurrency());
-      expect(useMintStore.getState().amountCurrency).toBe("IDR");
+      await waitFor(() => expect(result.current.effectiveBuyRate).toBe(EFFECTIVE_RATE));
+      return result;
+    }
+
+    describe("positive", () => {
+      test("toggleCurrency switches USD <-> IDR", () => {
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+        expect(result.current.amountCurrency).toBe("USD");
+        act(() => result.current.toggleCurrency());
+        expect(useMintStore.getState().amountCurrency).toBe("IDR");
+      });
+
+      test("IDR → USDX converts instead of relabelling", async () => {
+        const result = await ready("19000", "IDR");
+
+        act(() => result.current.toggleCurrency());
+
+        // 19,000 / 16,400 = 1.158537 USDX — not 19,000 USDX.
+        expect(useMintStore.getState().amountCurrency).toBe("USD");
+        expect(Number(useMintStore.getState().amount)).toBeCloseTo(19_000 / EFFECTIVE_RATE, 6);
+        // The purchase is unchanged: the rupiah side still reads ~Rp 19.000.
+        await waitFor(() => expect(result.current.subtotalIdr).toBeCloseTo(19_000, 1));
+      });
+
+      test("USDX → IDR converts and lands on whole rupiah", async () => {
+        const result = await ready("2", "USD");
+
+        act(() => result.current.toggleCurrency());
+
+        expect(useMintStore.getState().amountCurrency).toBe("IDR");
+        expect(useMintStore.getState().amount).toBe(String(2 * EFFECTIVE_RATE));
+        await waitFor(() => expect(result.current.amountUsdx).toBeCloseTo(2, 6));
+      });
+
+      test("a whole USDX figure keeps its plain spelling, no trailing zeros", async () => {
+        // 32,800 / 16,400 = exactly 2 — the field should read "2", not "2.000000".
+        const result = await ready(String(2 * EFFECTIVE_RATE), "IDR");
+
+        act(() => result.current.toggleCurrency());
+
+        expect(useMintStore.getState().amount).toBe("2");
+      });
+    });
+
+    describe("negative", () => {
+      test("an empty box stays empty — a swap must not invent a 0", async () => {
+        const result = await ready("", "IDR");
+
+        act(() => result.current.toggleCurrency());
+
+        expect(useMintStore.getState().amount).toBe("");
+        expect(useMintStore.getState().amountCurrency).toBe("USD");
+      });
+
+      test("no rate yet → the swap is held, nothing is relabelled", () => {
+        useMintStore.getState().setAmountCurrency("IDR");
+        useMintStore.getState().setAmount("19000");
+        // Rendered without waiting: the rate query has not resolved.
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+        expect(result.current.effectiveBuyRate).toBeNull();
+
+        act(() => result.current.toggleCurrency());
+
+        // Both untouched — a flipped label over these digits is the bug itself.
+        expect(useMintStore.getState().amount).toBe("19000");
+        expect(useMintStore.getState().amountCurrency).toBe("IDR");
+      });
+    });
+
+    describe("edge cases", () => {
+      // The ticket asks for this to be measured, not assumed: rounding on each
+      // leg could make the figure climb a little every press.
+      test("ten round trips do not move the amount", async () => {
+        const result = await ready("19000", "IDR");
+
+        act(() => result.current.toggleCurrency()); // settle onto the 6-dp grid
+        const afterFirst = useMintStore.getState().amount;
+
+        for (let i = 0; i < 10; i++) {
+          act(() => result.current.toggleCurrency());
+          act(() => result.current.toggleCurrency());
+        }
+
+        expect(useMintStore.getState().amountCurrency).toBe("USD");
+        expect(useMintStore.getState().amount).toBe(afterFirst);
+      });
+
+      test("the rupiah figure returns to itself after a round trip", async () => {
+        const result = await ready("19000", "IDR");
+
+        act(() => result.current.toggleCurrency());
+        act(() => result.current.toggleCurrency());
+
+        expect(useMintStore.getState().amountCurrency).toBe("IDR");
+        expect(useMintStore.getState().amount).toBe("19000");
+      });
+
+      test("no drift from either side, across a spread of amounts", async () => {
+        for (const [amount, currency] of [
+          ["19000", "IDR"],
+          ["20000", "IDR"],
+          ["123457", "IDR"],
+          ["2", "USD"],
+          ["0.37", "USD"],
+          ["1000", "USD"],
+        ] as const) {
+          useMintStore.getState().reset();
+          const result = await ready(amount, currency);
+
+          act(() => result.current.toggleCurrency());
+          act(() => result.current.toggleCurrency());
+          const afterOne = useMintStore.getState().amount;
+
+          for (let i = 0; i < 5; i++) {
+            act(() => result.current.toggleCurrency());
+            act(() => result.current.toggleCurrency());
+          }
+
+          expect({ amount, settled: useMintStore.getState().amount }).toEqual({
+            amount,
+            settled: afterOne,
+          });
+        }
+      });
+
+      test("the minimum still reads correctly after a swap", async () => {
+        // Rp 19.000 is under the Rp 20.000 floor. Swapping to the USDX side must
+        // not talk the amount past the gate (USDX-638).
+        useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
+        const result = await ready("19000", "IDR");
+        await waitFor(() => expect(result.current.amountError).toBe("validation.amount.minMint"));
+
+        act(() => result.current.toggleCurrency());
+
+        await waitFor(() => expect(result.current.amountCurrency).toBe("USD"));
+        expect(result.current.amountError).toBe("validation.amount.minMint");
+        expect(result.current.isFormValid).toBe(false);
+      });
     });
   });
 
@@ -188,6 +542,105 @@ describe("useMint", () => {
 
         expect(href).toContain("/checkout/mint_");
         expect(href).not.toContain("#code=");
+      });
+    });
+  });
+
+  // Minting is open only to a list of testers while the test bundle runs
+  // (USDX-636). Someone outside that list has to be told BEFORE they type a
+  // figure — and told it is maintenance, never that there is a test mode. That
+  // word is ours; an ordinary user reading it would reasonably wonder whether
+  // their money is going somewhere experimental.
+  describe("mint unavailable", () => {
+    describe("positive", () => {
+      test("mintAvailable true → nothing changes, the form is mintable", async () => {
+        getAppConfigMock.mockResolvedValue(config({ mintAvailable: true }));
+        useMintStore.getState().setAmount("100");
+        useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
+
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+
+        await waitFor(() => expect(result.current.isFormValid).toBe(true));
+        expect(result.current.isMintUnavailable).toBe(false);
+      });
+
+      test("the field being absent is the same as true (USDX-636 not shipped yet)", async () => {
+        useMintStore.getState().setAmount("100");
+        useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
+
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+
+        await waitFor(() => expect(result.current.isFormValid).toBe(true));
+        expect(result.current.isMintUnavailable).toBe(false);
+      });
+    });
+
+    describe("negative", () => {
+      test("mintAvailable false closes the form even when everything else is valid", async () => {
+        getAppConfigMock.mockResolvedValue(config({ mintAvailable: false }));
+        useMintStore.getState().setAmount("100");
+        useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
+
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+
+        await waitFor(() => expect(result.current.isMintUnavailable).toBe(true));
+        expect(result.current.isFormValid).toBe(false);
+        // The amount itself is fine — the gate is the only reason.
+        expect(result.current.amountError).toBeNull();
+      });
+
+      test("a 503 mid-session surfaces the maintenance notice, not a raw error", async () => {
+        createMintOrderMock.mockRejectedValueOnce(
+          new ApiError(503, "MINT_UNDER_MAINTENANCE", "gate closed"),
+        );
+        useMintStore.getState().setAmount("100");
+        useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
+
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+        await waitFor(() => expect(result.current.isFormValid).toBe(true));
+        await act(async () => {
+          await result.current.submitMint().catch(() => {});
+        });
+
+        await waitFor(() =>
+          expect(result.current.createErrorKey).toBe("mint.maintenanceNotice"),
+        );
+        // …and the page closes behind it: the gate moved, so the form must not
+        // invite an immediate retry.
+        expect(result.current.isMintUnavailable).toBe(true);
+        expect(result.current.isFormValid).toBe(false);
+      });
+    });
+
+    describe("edge cases", () => {
+      test("a different 503 is NOT read as maintenance", async () => {
+        // MINT_DISABLED is the whole environment being off, and keeps its own
+        // sentence. Collapsing the two would tell a user to come back later from
+        // an environment that is never coming back.
+        createMintOrderMock.mockRejectedValueOnce(
+          new ApiError(503, "MINT_DISABLED", "env gate"),
+        );
+        useMintStore.getState().setAmount("100");
+        useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
+
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+        await waitFor(() => expect(result.current.isFormValid).toBe(true));
+        await act(async () => {
+          await result.current.submitMint().catch(() => {});
+        });
+
+        await waitFor(() => expect(result.current.createErrorKey).toBe("mint.errDisabled"));
+        expect(result.current.isMintUnavailable).toBe(false);
+      });
+
+      test("a config that failed to load does not read as maintenance", async () => {
+        // A network blip and a closed gate need different explanations.
+        getAppConfigMock.mockRejectedValue(new Error("500"));
+        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+
+        await waitFor(() => expect(result.current.isConfigError).toBe(true), { timeout: 5000 });
+        expect(result.current.isMintUnavailable).toBe(false);
+        expect(result.current.isFormValid).toBe(false); // still blocked, different reason
       });
     });
   });

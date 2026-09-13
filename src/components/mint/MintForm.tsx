@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowUpDown, BookText, ScanLine } from "lucide-react";
+import { ArrowUpDown, BookText, ScanLine, Wallet } from "lucide-react";
 import { useMint } from "@/hooks/useMint";
 import { useKycGate } from "@/hooks/useKycGate";
 import { formatAmount } from "@/lib/utils";
@@ -17,6 +17,7 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { KycGateDialog } from "@/components/kyc/KycGateDialog";
 import { MintReview } from "@/components/mint/MintReview";
 import { AddressBookPicker } from "@/components/mint/AddressBookPicker";
@@ -46,6 +47,7 @@ function AmountBox({
   onChange,
   computed,
   ariaLabel,
+  disabled,
 }: {
   label: string;
   chip: React.ReactNode;
@@ -54,6 +56,7 @@ function AmountBox({
   onChange: (value: string) => void;
   computed: string;
   ariaLabel: string;
+  disabled?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-4 rounded-xl bg-muted p-4 transition-control has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-focus-ring has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-card">
@@ -68,6 +71,7 @@ function AmountBox({
             onChange={(e) => onChange(e.target.value)}
             className={AMOUNT_INPUT_CLASS}
             aria-label={ariaLabel}
+            disabled={disabled}
           />
         ) : (
           <p className="truncate text-2xl font-semibold tracking-tight text-foreground">
@@ -93,11 +97,21 @@ export function MintForm() {
     isRateError,
     isRateFetching,
     refetchRate,
-    destinationAddress,
+    manualAddress,
     setDestinationAddress,
+    destinationSource,
+    setDestinationSource,
+    custodialAvailable,
+    custodialAddress,
     amountError,
+    amountErrorVars,
     addressError,
     isFormValid,
+    isMintUnavailable,
+    isConfigReady,
+    isConfigLoading,
+    isConfigFetching,
+    refetchConfig,
     selectedChain,
     // Ringkasan visibility is store state, not component state: the
     // post-handoff reset has to be able to close it from outside React.
@@ -117,11 +131,19 @@ export function MintForm() {
 
   const onAmountChange = (value: string) => setAmount(value.replace(/[^0-9.]/g, ""));
   const usdxDisplay = isRateLoading && amount ? "…" : amountUsdx > 0 ? formatAmount(amountUsdx) : "0";
-  const idrDisplay = isRateLoading && amount ? "…" : subtotalIdr > 0 ? formatAmount(subtotalIdr) : "0";
+  // Whole rupiah, like every other rupiah figure in this flow (`formatIDR` in the
+  // Ringkasan). Without it a swapped amount reads "19,000.01": the USDX side is
+  // held to six decimals, so multiplying back leaves a fraction of a rupiah that
+  // is not a real part of the price — and on this screen it would read as the
+  // amount having moved.
+  const idrDisplay =
+    isRateLoading && amount ? "…" : subtotalIdr > 0 ? formatAmount(Math.round(subtotalIdr)) : "0";
 
   // The hooks hand back i18n keys (validations.ts returns keys, not sentences —
   // finding D1); the sentence is made here, where the language is known.
-  const amountErrorText = translateValidation(t, amountError);
+  // The mint minimum is a rupiah figure from GET /api/v2/config, so the number
+  // in the message travels with the error rather than living in the dictionary.
+  const amountErrorText = translateValidation(t, amountError, amountErrorVars);
   const addressErrorText = translateValidation(t, addressError);
 
   // Which currency the amount is denominated in. The denominated box is the
@@ -164,6 +186,7 @@ export function MintForm() {
       onChange={onAmountChange}
       computed={usdxDisplay}
       ariaLabel={isUsd ? t("form.youWillMint") : t("form.youWillReceive")}
+      disabled={isMintUnavailable}
     />
   );
 
@@ -177,11 +200,28 @@ export function MintForm() {
       onChange={onAmountChange}
       computed={idrDisplay}
       ariaLabel={t("form.youWillPay")}
+      disabled={isMintUnavailable}
     />
   );
 
   return (
     <div className="flex w-full max-w-lg flex-col gap-6 rounded-2xl border border-border bg-card p-5">
+      {/* Minting is closed for this user (USDX-640). The notice is the FIRST
+          thing in the card on purpose: the point is that nobody types a figure,
+          reads the fees and reaches the summary before finding out. The fields
+          below are disabled for the same reason — a form that still takes input
+          reads as "keep going".
+
+          It says maintenance and nothing more. The real reason is that minting
+          is open to a list of testers while the test bundle runs, and that is
+          our business, not a distinction an ordinary user should have to make
+          about where their money is going. */}
+      {isMintUnavailable && (
+        <Alert tone="warning" title={t("mint.maintenanceTitle")}>
+          {t("mint.maintenanceNotice")}
+        </Alert>
+      )}
+
       <div className="flex flex-col gap-4">
         {/* Amount boxes with center currency swap. Toggling the denomination
             swaps the whole boxes (label + logo + value) top/bottom — the
@@ -207,6 +247,7 @@ export function MintForm() {
                 variant="outline"
                 size="icon"
                 onClick={toggleCurrency}
+                disabled={isMintUnavailable}
                 aria-label={t("form.swapCurrency")}
                 className="absolute left-1/2 top-1/2 size-11 -translate-x-1/2 -translate-y-1/2 rounded-full"
               >
@@ -252,59 +293,137 @@ export function MintForm() {
           )}
         </div>
 
-        {/* Destination address — manual / pick from address book / scan (W3) */}
-        <Field>
-          <div className="mb-1.5 flex items-center justify-between gap-2">
-            <FieldLabel htmlFor="mint-address">{t("form.toThisAddress")}</FieldLabel>
-            <Button
-              type="button"
-              variant="link"
-              size="sm"
-              className="-mr-3"
-              onClick={() => setPickerOpen(true)}
+        {/* Destination source (USDX-567): a user with an ACTIVE custodial wallet
+            sees "Wallet custodial saya" first and by default — the address is
+            filled from the profile, nothing to type. "Alamat lain" is the
+            unchanged manual / address-book / scan path. Users without a
+            custodial wallet never see this switch. */}
+        {custodialAvailable && (
+          <div className="flex flex-col gap-2">
+            <p className="text-sm font-medium text-muted-text">{t("mint.destLabel")}</p>
+            <ToggleGroup
+              type="single"
+              value={destinationSource}
+              onValueChange={(v) => {
+                if (v === "custodial" || v === "manual") setDestinationSource(v);
+              }}
+              aria-label={t("mint.destLabel")}
+              className="w-full"
+              size="default"
             >
-              {t("form.addAddressBook")}
-            </Button>
+              <ToggleGroupItem value="custodial" className="flex-1" disabled={isMintUnavailable}>
+                <Wallet />
+                {t("mint.destCustodial")}
+              </ToggleGroupItem>
+              <ToggleGroupItem value="manual" className="flex-1" disabled={isMintUnavailable}>
+                <BookText />
+                {t("mint.destManual")}
+              </ToggleGroupItem>
+            </ToggleGroup>
           </div>
-          <InputGroup>
-            <InputGroupInput
-              id="mint-address"
-              placeholder={t("form.addressPh")}
-              value={destinationAddress}
-              onChange={(e) => setDestinationAddress(e.target.value)}
-              aria-invalid={!!addressErrorText}
-              aria-describedby="mint-address-error"
-            />
-            <InputGroupAddon align="inline-end">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <InputGroupButton
-                    size="icon"
-                    onClick={() => setPickerOpen(true)}
-                    aria-label={t("addrbook.pickTitle")}
-                  >
-                    <BookText />
-                  </InputGroupButton>
-                </TooltipTrigger>
-                <TooltipContent>{t("addrbook.pickTitle")}</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <InputGroupButton
-                    size="icon"
-                    onClick={() => setScanOpen(true)}
-                    aria-label={t("scan.open")}
-                  >
-                    <ScanLine />
-                  </InputGroupButton>
-                </TooltipTrigger>
-                <TooltipContent>{t("scan.open")}</TooltipContent>
-              </Tooltip>
-            </InputGroupAddon>
-          </InputGroup>
-          <FieldHelp id="mint-address" error={addressErrorText} />
-        </Field>
+        )}
+
+        {custodialAvailable && destinationSource === "custodial" ? (
+          <div
+            className="flex items-center gap-3 rounded-xl bg-muted p-3"
+            data-testid="mint-dest-custodial"
+          >
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-card text-muted-text">
+              <Wallet className="size-4" />
+            </span>
+            <div className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate text-sm font-medium text-foreground">
+                {t("mint.destCustodial")}
+              </span>
+              <span className="truncate font-mono text-xs text-muted-text">{custodialAddress}</span>
+              <span className="text-xs text-muted-text">{t("mint.destCustodialHint")}</span>
+            </div>
+          </div>
+        ) : (
+          /* Destination address — manual / pick from address book / scan (W3) */
+          <Field>
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+              <FieldLabel htmlFor="mint-address">{t("form.toThisAddress")}</FieldLabel>
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                className="-mr-3"
+                disabled={isMintUnavailable}
+                onClick={() => setPickerOpen(true)}
+              >
+                {t("form.addAddressBook")}
+              </Button>
+            </div>
+            <InputGroup>
+              <InputGroupInput
+                id="mint-address"
+                placeholder={t("form.addressPh")}
+                value={manualAddress}
+                onChange={(e) => setDestinationAddress(e.target.value)}
+                disabled={isMintUnavailable}
+                aria-invalid={!!addressErrorText}
+                aria-describedby="mint-address-error"
+              />
+              <InputGroupAddon align="inline-end">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <InputGroupButton
+                      size="icon"
+                      disabled={isMintUnavailable}
+                      onClick={() => setPickerOpen(true)}
+                      aria-label={t("addrbook.pickTitle")}
+                    >
+                      <BookText />
+                    </InputGroupButton>
+                  </TooltipTrigger>
+                  <TooltipContent>{t("addrbook.pickTitle")}</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <InputGroupButton
+                      size="icon"
+                      disabled={isMintUnavailable}
+                      onClick={() => setScanOpen(true)}
+                      aria-label={t("scan.open")}
+                    >
+                      <ScanLine />
+                    </InputGroupButton>
+                  </TooltipTrigger>
+                  <TooltipContent>{t("scan.open")}</TooltipContent>
+                </Tooltip>
+              </InputGroupAddon>
+            </InputGroup>
+            <FieldHelp id="mint-address" error={addressErrorText} />
+          </Field>
+        )}
       </div>
+
+      {/* The minimum and the fees are backend-owned (USDX-635/638). Until they
+          land there is no honest amount to validate against and no fee to show,
+          so Mint is off and says why — rather than falling back to a guessed
+          bound that would silently reject a perfectly valid Rp 20.000. */}
+      {!isConfigReady && !isMintUnavailable && (
+        <Alert
+          tone={isConfigLoading ? "info" : "danger"}
+          shape="strip"
+          action={
+            isConfigLoading ? undefined : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refetchConfig()}
+                loading={isConfigFetching}
+                loadingLabel={t("common.processing")}
+              >
+                {t("common.retry")}
+              </Button>
+            )
+          }
+        >
+          {isConfigLoading ? t("mint.configLoading") : t("mint.configError")}
+        </Alert>
+      )}
 
       {/* Non-VERIFIED stays clickable so the KYC gate dialog can explain why
           the action is locked (USDX-153); form validation only gates VERIFIED. */}
@@ -312,7 +431,10 @@ export function MintForm() {
         type="button"
         variant="brand"
         size="lg"
-        disabled={gate.verified && !isFormValid}
+        // Closed for everyone while minting is unavailable — including the
+        // non-VERIFIED path, which otherwise opens the KYC dialog and invites
+        // someone to finish KYC for an action they still could not take.
+        disabled={isMintUnavailable || (gate.verified && !isFormValid)}
         onClick={() => gate.guard(() => setReviewOpen(true))}
       >
         {t("btn.mint")}

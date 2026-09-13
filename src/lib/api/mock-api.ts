@@ -28,6 +28,7 @@ import type {
   BankAccount,
   User,
   ConsumerRate,
+  AppConfig,
   AddressBookEntry,
   BankAccountEntry,
   MintChannelOption,
@@ -38,7 +39,18 @@ import type {
   RedeemOrderCreated,
   RedeemOrderDetail,
   RedeemStatus,
+  BurnMode,
 } from "@/types";
+import {
+  MOCK_CONTRACT_ADDRESS,
+  MOCK_BLACKLISTED_ADDRESS,
+  withCustodialWallet,
+  isMockCustodialAddress,
+  requireAndVerifyMockPin,
+  requireActiveCustodialWallet,
+  mockCustodialBalanceUsdx,
+  debitMockCustodialBalance,
+} from "./mock-custodial-wallet";
 import { ApiError, type Paginated } from "./client";
 import { validatePassword, validateAddress } from "@/lib/validations";
 import { getBankName } from "@/lib/banks";
@@ -168,7 +180,7 @@ export async function mockLogin(req: LoginRequest): Promise<AuthResponse> {
     throw new ApiError(403, "ACCOUNT_SUSPENDED", "Your account is suspended");
   }
   currentEmail = account.user.email;
-  return { user: account.user, token: tokenFor(account.user) };
+  return { user: withCustodialWallet(account.user), token: tokenFor(account.user) };
 }
 
 // Backend normalizes 08xxx → +62xxx before the phone_hash uniqueness check
@@ -221,7 +233,7 @@ export async function mockVerifyEmail(req: VerifyEmailRequest): Promise<AuthResp
     accounts.get("demo@usdx.com")!;
   account.user.emailVerifiedAt = new Date().toISOString();
   currentEmail = account.user.email;
-  return { user: account.user, token: tokenFor(account.user) };
+  return { user: withCustodialWallet(account.user), token: tokenFor(account.user) };
 }
 
 export async function mockResendVerification(): Promise<void> {
@@ -241,7 +253,7 @@ export async function mockResetPassword(req: ResetPasswordRequest): Promise<Auth
   const account = currentAccount() ?? accounts.get("demo@usdx.com")!;
   account.user.emailVerifiedAt = account.user.emailVerifiedAt ?? new Date().toISOString();
   currentEmail = account.user.email;
-  return { user: account.user, token: tokenFor(account.user) };
+  return { user: withCustodialWallet(account.user), token: tokenFor(account.user) };
 }
 
 // Mock change-password (auth.yaml § changePasswordV2, USDX-172). Verifies the
@@ -282,12 +294,12 @@ export async function mockMintCheckoutCode(): Promise<string> {
 export async function mockGetMe(): Promise<User> {
   await delay(200);
   const account = currentAccount();
-  if (account) return account.user;
+  if (account) return withCustodialWallet(account.user);
   // Storage-seeded session (Playwright loginViaStorage): the in-memory mock has
   // no logged-in account, so mirror the persisted user instead of falling back
   // to DEMO_USER — otherwise the /v2/auth/me refresh (useSession) would
   // overwrite seeded state like `name: null` (USDX-153 header fallback tests).
-  return persistedUser() ?? DEMO_USER;
+  return withCustodialWallet(persistedUser() ?? DEMO_USER);
 }
 
 function persistedUser(): User | null {
@@ -486,6 +498,10 @@ export async function mockGetBankAccounts(): Promise<BankAccount[]> {
 const MOCK_BASE_RATE = 16000;
 const MOCK_SPREAD_BUY_PCT = 2.5;
 const MOCK_SPREAD_SELL_PCT = 2.0;
+// Mint minimum, in RUPIAH — mirrors `fee_configs.min_mint_idr` (USDX-635). The
+// app has no USDX-denominated minimum any more: 10 USDX meant a different
+// rupiah figure every day, and Rp 176.182 on the day it was noticed.
+const MOCK_MIN_MINT_IDR = 20_000;
 const MOCK_MINT_FEE_PCT = 1; // % of subtotal
 const MOCK_PG_FEE_VA = 4000; // flat IDR
 const MOCK_PG_FEE_QRIS_PCT = 0.7; // % of subtotal
@@ -493,7 +509,10 @@ const MOCK_PG_FEE_QRIS_PCT = 0.7; // % of subtotal
 // and returns 422 RECIPIENT_BLACKLISTED (USDX-192, week2.md § Endpoints Mint).
 // The mock mirrors that for this sentinel so the FE inline-error path (USDX-201)
 // is exercisable offline.
-export const MOCK_BLACKLISTED_ADDRESS = "0x000000000000000000000000000000000000dead";
+// `MOCK_BLACKLISTED_ADDRESS` (mint + redeem + transfer) lives in
+// mock-custodial-wallet.ts so the transfer mock can use it without a cyclic
+// import; re-exported here for the mint/redeem tests that always imported it.
+export { MOCK_BLACKLISTED_ADDRESS };
 const MOCK_MIN_TOTAL_PAY_IDR = 10_000; // Asasta floor (week2.md § Min amount)
 const MOCK_VA_BANKS: VaBank[] = [
   "BCA", "BNI", "BRI", "CIMB", "DANAMON", "INA", "MANDIRI", "PERMATA", "MAYBANK",
@@ -512,6 +531,72 @@ export async function mockGetConsumerRate(): Promise<ConsumerRate> {
     effectiveBuyRate: idr(mockEffectiveBuyRate()),
     effectiveSellRate: idr(mockEffectiveSellRate()),
     updatedAt: new Date().toISOString(),
+  };
+}
+
+// GET /api/v2/config (USDX-635). `MOCK_CONTRACT_ADDRESS` (the production token)
+// lives in mock-custodial-wallet.ts, which the custodial wallet reports as its
+// `contractAddress` too — one address for both, as on the real backend.
+// The test-bundle token (USDX-636 ships the real one), returned as
+// `testContractAddress` alongside the unchanged production `contractAddress`.
+const MOCK_TEST_CONTRACT_ADDRESS = "0x2702000000000000000000000000000000000000";
+// E2E seam (mock-only): arm to "TEST" to make the mock backend report the test
+// mint bundle, the way the back-office switch will (USDX-636). Nothing else in
+// the app can reach that state offline.
+const MINT_MODE_OVERRIDE_KEY = "usdx-mock-mint-mode";
+// E2E seam (mock-only): arm to "false" to play a user who is NOT on the list
+// allowed to mint while the test bundle runs (USDX-636/640) — the mint page then
+// shows the maintenance notice.
+const MINT_AVAILABLE_OVERRIDE_KEY = "usdx-mock-mint-available";
+// E2E seam (mock-only), one-shot: the NEXT create replies 503
+// MINT_UNDER_MAINTENANCE, i.e. the gate closed after the config was read. Mirrors
+// BURN_REJECT_KEY — it disarms itself so a retry can go through.
+const MINT_MAINTENANCE_KEY = "usdx-mock-mint-maintenance";
+
+function mockMintMode(): "PROD" | "TEST" {
+  if (typeof localStorage === "undefined") return "PROD";
+  return localStorage.getItem(MINT_MODE_OVERRIDE_KEY) === "TEST" ? "TEST" : "PROD";
+}
+
+function mockMintAvailable(): boolean {
+  if (typeof localStorage === "undefined") return true;
+  return localStorage.getItem(MINT_AVAILABLE_OVERRIDE_KEY) !== "false";
+}
+
+function maybeThrowUnderMaintenance(): void {
+  if (typeof localStorage === "undefined") return;
+  if (localStorage.getItem(MINT_MAINTENANCE_KEY) == null) return;
+  localStorage.removeItem(MINT_MAINTENANCE_KEY); // one-shot → a retry can succeed
+  // A real backend that refuses the create is also refusing the gate, so the next
+  // `GET /api/v2/config` must agree. Without this the mock would tell the app two
+  // different things and the page would re-open behind the notice.
+  localStorage.setItem(MINT_AVAILABLE_OVERRIDE_KEY, "false");
+  throw new ApiError(
+    503,
+    "MINT_UNDER_MAINTENANCE",
+    "Mint sementara tidak tersedia karena sedang ada pemeliharaan",
+  );
+}
+
+export async function mockGetAppConfig(): Promise<AppConfig> {
+  await delay(120);
+  const mode = mockMintMode();
+  // In PROD `mintMode` and `testContractAddress` are left off entirely: neither
+  // field exists until USDX-636 ships, and the app must behave as PROD when the
+  // backend doesn't send them. `contractAddress` is the production token in both
+  // modes — it is never swapped.
+  return {
+    minMintIdr: idr(MOCK_MIN_MINT_IDR),
+    mintFeePct: String(MOCK_MINT_FEE_PCT),
+    pgFeeVaFlat: idr(MOCK_PG_FEE_VA),
+    contractAddress: MOCK_CONTRACT_ADDRESS,
+    chain: "polygon",
+    // Absent unless deliberately armed: before USDX-636 the backend does not send
+    // this field at all, and the app has to behave exactly as it did then.
+    ...(mockMintAvailable() ? {} : { mintAvailable: false }),
+    ...(mode === "TEST"
+      ? { mintMode: "TEST" as const, testContractAddress: MOCK_TEST_CONTRACT_ADDRESS }
+      : {}),
   };
 }
 
@@ -684,6 +769,7 @@ const mintOrders = new Map<string, MockMintRecord>();
 export async function mockCreateMintOrder(req: CreateMintOrderRequest): Promise<MintOrderCreated> {
   await delay(600);
   maybeThrowRateLimited(); // 429 RATE_LIMITED seam (USDX-252)
+  maybeThrowUnderMaintenance(); // 503 MINT_UNDER_MAINTENANCE seam (USDX-640)
   const rate = mockEffectiveBuyRate();
   const amountUsdx = req.amountCurrency === "USD" ? Number(req.amount) : Number(req.amount) / rate;
   const subtotalIdr = req.amountCurrency === "IDR" ? Number(req.amount) : amountUsdx * rate;
@@ -821,6 +907,11 @@ const MOCK_PAYOUT_COMPLETE_MS = 8_500; // PROCESSING_PAYOUT → PAYOUT_COMPLETE
 // week3.md REDEEM_LATE_BURN_GRACE default (24h): a burn past expires_at within the
 // grace still auto-pays (late_burn); beyond it → stale_burn, payout held.
 const MOCK_REDEEM_LATE_BURN_GRACE_MS = 24 * 60 * 60_000;
+// Jalur CUSTODIAL (custodial-wallet.md §5.3, USDX-565): Custodial Burn Dispatcher
+// (cron JOB, default tiap 10 s di backend) meminta wallet-service menandatangani
+// burn — di mock, hash + burn_submitted_at "muncul" sekian ms setelah create,
+// terbaca saat GET berikutnya. Status tetap dihitung scanner (lifecycle di atas).
+const MOCK_CUSTODIAL_DISPATCH_MS = 1_500;
 // Test seam: a redeem to this account number fails inquiry → 422
 // INVALID_BANK_ACCOUNT (week3.md § Validasi rekening), so the FE inline-error
 // path is exercisable offline. Any other number passes (mock inquiry always valid).
@@ -834,6 +925,28 @@ const MOCK_BLACKLISTED_WALLET = MOCK_BLACKLISTED_ADDRESS;
 // INSUFFICIENT_BALANCE (the backend backstop to the client-side gate). Unarmed →
 // skipped (best-effort, like the real RPC pre-check).
 const MOCK_WALLET_BALANCE_KEY = "usdx-mock-wallet-balance";
+// Test seam (USDX-664): armed → the payout is REJECTED definitively instead of
+// completing, so the order lands on PAYOUT_FAILED (the state ops resolve by hand —
+// conventions.md § Status Enums → Redeem Order). Stands in for a business 4xx at
+// submit: there is no payout reference, because the transfer never existed. The
+// lifecycle is otherwise untouched (AWAITING_BURN → BURNED → PAYOUT_FAILED).
+const PAYOUT_FAILED_KEY = "usdx-mock-payout-failed";
+// Test seam (USDX-661): armed → the account inquiry answers with THIS holder name,
+// whatever the customer typed. The real backend overrides the name with the inquiry
+// result (week3.md § Bank Account Book — "nama di-override hasil inquiry"); the mock
+// passes the typed name through, so without a seam "the screen shows the bank's
+// answer, not your input" is not provable offline.
+const INQUIRY_NAME_KEY = "usdx-mock-inquiry-name";
+
+function mockPayoutFailed(): boolean {
+  if (typeof localStorage === "undefined") return false;
+  return localStorage.getItem(PAYOUT_FAILED_KEY) != null;
+}
+
+function mockInquiryName(): string | null {
+  if (typeof localStorage === "undefined") return null;
+  return localStorage.getItem(INQUIRY_NAME_KEY);
+}
 
 function mockWalletBalanceUsdx(): number | null {
   if (typeof localStorage === "undefined") return null;
@@ -856,6 +969,9 @@ interface MockRedeemRecord {
   burnSubmittedAtMs: number | null;
   burnTxHash: string | null;
   userAddress: string; // bound at create from the request userAddress (USDX-259)
+  // Siapa yang menandatangani (redeem.yaml § burnMode, USDX-565): snapshot saat
+  // create dari kecocokan `userAddress` dengan wallet custodial user.
+  burnMode: BurnMode;
 }
 const redeemOrders = new Map<string, MockRedeemRecord>();
 
@@ -914,6 +1030,10 @@ function seedResumableRedeemOrder() {
     bankName: getBankName("014"),
     bankAccountNumber: "1234563210",
     bankAccountName: "Demo User",
+    // `bankAccountNameVerified` sengaja TIDAK diisi (USDX-672): ini bentuk payload
+    // order lama — kolomnya NULL di DB, backend membacanya `false`. Jadi jalur resume
+    // dari /history menguji cabang `undefined` apa adanya, dan layar pra-burn di situ
+    // wajib menahan klaim "jawaban bank".
     status: "AWAITING_BURN",
     expiresAt: new Date(expiresAtMs).toISOString(),
   };
@@ -926,6 +1046,7 @@ function seedResumableRedeemOrder() {
     burnSubmittedAtMs: null,
     burnTxHash: null,
     userAddress: SEED_RESUME_USER_ADDRESS,
+    burnMode: "SELF_SIGN",
   });
 }
 seedResumableRedeemOrder();
@@ -983,6 +1104,16 @@ export async function mockCreateRedeemOrder(
   req: CreateRedeemOrderRequest,
 ): Promise<RedeemOrderCreated> {
   await delay(600);
+  // Dua jalur burn — `burnMode` ditentukan di sini, dari kecocokan `userAddress`
+  // dengan wallet custodial user (redeem.yaml § redeemV2Create). Urutan gate
+  // jalur custodial (keputusan review backend#315, sama dengan /wallet/transfer):
+  // validasi bentuk → `pin` wajib (422) → PIN diverifikasi (401/429) →
+  // 409 WALLET_NOT_ACTIVE — semuanya SEBELUM rate limit / pre-check / inquiry.
+  const burnMode: BurnMode = isMockCustodialAddress(req.userAddress) ? "CUSTODIAL" : "SELF_SIGN";
+  if (burnMode === "CUSTODIAL") {
+    requireAndVerifyMockPin(req.pin);
+    requireActiveCustodialWallet();
+  }
   maybeThrowRateLimited(); // 429 RATE_LIMITED seam (USDX-252)
   const rate = mockEffectiveSellRate();
   const b = computeRedeemBreakdown({
@@ -1007,7 +1138,9 @@ export async function mockCreateRedeemOrder(
   if (req.userAddress.toLowerCase() === MOCK_BLACKLISTED_WALLET) {
     throw new ApiError(422, "WALLET_BLACKLISTED", "Wallet ini tidak dapat melakukan burn");
   }
-  const balanceUsdx = mockWalletBalanceUsdx();
+  // Saldo: wallet eksternal dari seam wagmi; wallet custodial dari state mock-nya.
+  const balanceUsdx =
+    burnMode === "CUSTODIAL" ? mockCustodialBalanceUsdx() : mockWalletBalanceUsdx();
   if (balanceUsdx !== null && balanceUsdx < b.amountUsdx) {
     throw new ApiError(422, "INSUFFICIENT_BALANCE", "Saldo USDX tidak cukup");
   }
@@ -1034,6 +1167,7 @@ export async function mockCreateRedeemOrder(
     customerName: currentAccount()?.user.name ?? "Demo User",
     chain: req.chain || "polygon",
     userAddress: req.userAddress, // bound at create (echo) — USDX-259
+    burnMode,
     contractAddress: MOCK_USDX_CONTRACT,
     redeemId: "0x" + randomHex(32),
     amount: String(req.amountCurrency === "USD" ? Number(req.amount) : b.amountUsdx),
@@ -1050,7 +1184,16 @@ export async function mockCreateRedeemOrder(
     bankCode: dest.bankCode,
     bankName: getBankName(dest.bankCode),
     bankAccountNumber: dest.accountNumber,
-    bankAccountName: dest.accountName,
+    // Nama pemilik di order = hasil inquiry, bukan ketikan nasabah (week3.md §
+    // Validasi rekening). Mock meneruskan ketikan kecuali seam INQUIRY_NAME_KEY
+    // diarmed — jalur yang dipakai untuk membuktikan layar pra-burn membaca
+    // jawaban bank (USDX-661), bukan state form.
+    bankAccountName: mockInquiryName() ?? dest.accountName,
+    // USDX-672: `true` HANYA kalau inquiry benar-benar menjawab nama. Tanpa seam,
+    // mock meng-echo ketikan nasabah — persis seperti provider MOCK di backend —
+    // jadi nilainya `false`, dan layar pra-burn tidak boleh menyebutnya jawaban
+    // bank. Seam ber-nama-kosong (bank menjawab tanpa nama) juga `false`.
+    bankAccountNameVerified: (mockInquiryName() ?? "") !== "",
     status: "AWAITING_BURN",
     expiresAt: new Date(nowMs + MOCK_REDEEM_BURN_TTL_MS).toISOString(),
   };
@@ -1063,6 +1206,7 @@ export async function mockCreateRedeemOrder(
     burnSubmittedAtMs: null,
     burnTxHash: null,
     userAddress: req.userAddress,
+    burnMode,
   });
   return order;
 }
@@ -1112,6 +1256,11 @@ export async function mockReportBurnTx(id: string, txHash: string): Promise<Rede
   if (!/^0x[0-9a-fA-F]{64}$/.test(txHash)) {
     throw new ApiError(422, "VALIDATION_ERROR", "Hash transaksi tidak valid");
   }
+  // Hanya SELF_SIGN: di jalur custodial yang mem-broadcast adalah sistem, hash-nya
+  // sudah diketahui backend, dan klien tidak boleh menempelkan hash sembarangan.
+  if (record.burnMode === "CUSTODIAL") {
+    throw new ApiError(409, "INVALID_ORDER_STATE", "Burn order custodial dilakukan sistem");
+  }
   const status = resolveRedeemDetail(record).status;
   // Only AWAITING_BURN / EXPIRED (late burn) may report — beyond that the scanner
   // already owns the order (week3.md § burn-tx endpoint).
@@ -1128,7 +1277,22 @@ export async function mockReportBurnTx(id: string, txHash: string): Promise<Rede
 // Derives the live status + payout fields from elapsed time since the burn was
 // reported, mirroring the W3 job lifecycle (finality gate → BURNED →
 // PROCESSING_PAYOUT → PAYOUT_COMPLETE) and the late-burn / stale-burn cutoffs.
+// Custodial Burn Dispatcher (mock): order CUSTODIAL AWAITING_BURN tanpa hash,
+// belum lewat expires_at → "ditandatangani sistem" MOCK_CUSTODIAL_DISPATCH_MS
+// setelah create. Hanya hash + burn_submitted_at yang dicatat — status tetap
+// milik scanner (lifecycle di resolveRedeemDetail). Saldo wallet custodial ikut
+// turun sebesar yang dibakar, supaya layar saldo di-refresh sesudahnya.
+function dispatchCustodialBurn(record: MockRedeemRecord): void {
+  if (record.burnMode !== "CUSTODIAL" || record.burnSubmittedAtMs != null) return;
+  const dueAt = record.createdAtMs + MOCK_CUSTODIAL_DISPATCH_MS;
+  if (Date.now() < dueAt || dueAt > record.expiresAtMs) return;
+  record.burnSubmittedAtMs = dueAt;
+  record.burnTxHash = "0x" + randomHex(32);
+  debitMockCustodialBalance(Number(record.order.amount));
+}
+
 function resolveRedeemDetail(record: MockRedeemRecord): RedeemOrderDetail {
+  dispatchCustodialBurn(record);
   const { order, burnSubmittedAtMs, expiresAtMs } = record;
   const now = Date.now();
 
@@ -1158,6 +1322,10 @@ function resolveRedeemDetail(record: MockRedeemRecord): RedeemOrderDetail {
         status = "BURNED";
       } else if (elapsed < MOCK_BURNED_VISIBLE_MS) {
         status = "BURNED";
+      } else if (mockPayoutFailed()) {
+        // Ditolak definitif oleh provider (§17.3): keluar dari lifecycle otomatis
+        // dan menunggu ops. Tanpa `payoutRef` — transfernya belum pernah ada.
+        status = "PAYOUT_FAILED";
       } else if (elapsed < MOCK_PAYOUT_COMPLETE_MS) {
         status = "PROCESSING_PAYOUT";
         payoutRef = "MOCK-" + order.orderNumber;
@@ -1174,6 +1342,7 @@ function resolveRedeemDetail(record: MockRedeemRecord): RedeemOrderDetail {
     status,
     type: "REDEEM",
     userAddress: record.userAddress,
+    burnMode: record.burnMode,
     inputCurrency: record.inputCurrency,
     lateBurn,
     staleBurn,
@@ -1231,6 +1400,9 @@ function seededRedeemTransactions(): ConsumerTransaction[] {
     { usdx: 100, status: "PAYOUT_COMPLETE", burned: true },
     { usdx: 250, status: "PROCESSING_PAYOUT", burned: true },
     { usdx: 500, status: "EXPIRED", burned: false },
+    // USDX-664: riwayat harus punya satu baris PAYOUT_FAILED — badge-nya dibaca
+    // manusia, bukan kode mentah, dan itu hanya terlihat kalau barisnya ada.
+    { usdx: 75, status: "PAYOUT_FAILED", burned: true },
   ];
   return seeds.map((s, i) => {
     const gross = s.usdx * rate;

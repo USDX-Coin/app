@@ -72,11 +72,14 @@ src/
     layout/         # AuthLayout, Header, Sidebar, Logo
     mint/           # MintForm, MintReview, MintPageContent, skeletons
     redeem/         # RedeemForm, RedeemReview, RedeemPageContent, skeletons
+    wallet/         # Custodial wallet (USDX-566): offer, status panel, receive address + QR, sidebar card, onboarding step
+    settings/       # SettingsPageContent (Pengaturan — home of the custodial wallet)
+    transfer/       # Custodial transfer: TransferForm, TransferReview, TransferResult, TransferPageContent (USDX-567)
     transactions/   # TransactionList, skeletons
     profile/        # ProfileCard, skeleton
     ui/             # shadcn/ui base components (auto-generated)
-  hooks/            # Custom hooks (useAuth, useMint, useRedeem, etc.)
-  stores/           # Zustand stores (authStore, mintStore, redeemStore)
+  hooks/            # Custom hooks (useAuth, useMint, useRedeem, useCustodialWallet, useTransfer, etc.)
+  stores/           # Zustand stores (authStore, mintStore, redeemStore, transferStore)
   lib/              # Utilities, validations, constants, chains (7 EVM), mock API
   providers/
     Providers.tsx       # QueryClient + Toaster (lightweight, all pages)
@@ -144,8 +147,33 @@ module level.
 
 ### Multi-Step Forms
 Mint and Redeem keep their state in Zustand stores; the Ringkasan is a modal:
-- Mint: single form view → Ringkasan modal → cross-origin checkout handoff (USDX-201/225)
-- Redeem: `form` → `tracker`; Ringkasan modal over the form → create order → contextual wallet burn (simulated in W3) → status tracker polling (USDX-243)
+- Mint: single form view → Ringkasan modal → cross-origin checkout handoff (USDX-201/225).
+  A custodial-wallet owner gets a destination switch (`mintStore.destinationSource`):
+  "wallet custodial saya" (default — the profile address fills `userAddress`, no new
+  API field, `custodial-wallet.md` §5.2) or "alamat lain" (the unchanged manual path)
+- Redeem: `form` → `tracker`; Ringkasan modal over the form → create order → **konfirmasi
+  tujuan** → contextual wallet burn (simulated in W3) → status tracker polling (USDX-243).
+  The burn never fires from the create (USDX-661, `bni-integration.md § 17.12`): the tracker
+  states the destination the ORDER answered with — bank · nomor rekening · `bankAccountName`
+  — and the burn button stays disabled until the customer ticks the agreement. Same gate on
+  the resume-from-`/history` path; the CUSTODIAL path has no gate (the PIN was the approval).
+  The Ringkasan button therefore says "Lanjut ke Konfirmasi", not "Konfirmasi & Burn" — it
+  only creates the order.
+  Whether that holder name may be called **the bank's answer** is decided by
+  `bankAccountNameVerified` in the order response (USDX-672, `api/redeem.yaml`), never
+  assumed: the backend falls back to the name the customer typed when the provider answers
+  no name, so `false` — and a payload that does not carry the field at all — show the name
+  with no provenance claim. The agreement is required either way.
+  A custodial-wallet owner also picks the burn source (`redeemStore.source`): custodial
+  (PIN in the create body, the backend returns `burnMode: CUSTODIAL`, the system burns,
+  the tracker shows "memproses burn" and never asks for a signature or reports a burn-tx)
+  or external (the unchanged self-sign path). `burnMode` is decided by the backend, never
+  sent by the FE (`redeem.yaml`, USDX-565/567)
+- Transfer (custodial only, `/send`): `form` → Ringkasan modal → `PinConfirmDialog` →
+  `POST /api/v2/wallet/transfer` → `done` (tx hash + explorer link). 202 is proof of
+  BROADCAST, not settlement — the screen never says "berhasil" (USDX-577), and there is
+  no transfer history yet (USDX-576). `Idempotency-Key` (UUID v7) is minted once per
+  intent by `transferStore` and reused by every retry; `setTo`/`setAmount` drop it
 
 Step state lives in Zustand stores. Form data preserved when going back.
 
@@ -207,8 +235,10 @@ Test helpers in `tests/helpers/`:
 | `/redeem` | Yes | SC | Redeem USDX to bank |
 | `/history` | Yes | SC | Transaction history (mint + redeem, W3) |
 | `/profile` | Yes | SC | User info + verification badge |
+| `/settings` | Yes | SC | Pengaturan: custodial "USDX wallet" (offer / address + QR + balance / status) + link to Profile (USDX-566) |
+| `/onboarding/wallet` | Yes | SC | Optional "dikasih wallet" step — where verify-email lands a new account; "Not now" → `/mint` (USDX-566) |
 | `/bridge` | Yes | SC | ComingSoon (gated — no bridge backend yet; sidebar teaser) |
-| `/send` | Yes | SC | ComingSoon (gated — no send backend yet; sidebar teaser) |
+| `/send` | Yes | SC | Custodial transfer (`TransferPageContent`) for users with `user.custodialWallet`; ComingSoon for everyone else (no external-wallet send backend) |
 
 ## Known Limitations
 
@@ -220,18 +250,34 @@ Test helpers in `tests/helpers/`:
 - The redeem **burn is real on-chain**, but the IDR payout (disbursement) is still
   simulated even against the real backend (`redeemSimulatedPayout`, USDX-263) —
   the tracker shows a "Mode simulasi" notice
-- Bridge and Send are **ComingSoon-gated**: their old UIs faked success locally
-  (`bridge_/send_<timestamp>`, no API call), so the routes now render `ComingSoon`.
-  The sidebar **keeps both items visible** as promotion teasers (PM, 13 Aug) —
-  icon + a `nav.soon` pill ("Coming Soon" / "Segera Hadir"), clicking lands on
-  the ComingSoon page. `components/bridge/` and `components/send/` are gone —
-  they held the faked forms and had no importer left
+- Bridge is **ComingSoon-gated**, and so is Send **for users without a custodial
+  wallet**: their old UIs faked success locally (`bridge_/send_<timestamp>`, no API
+  call), so those routes render `ComingSoon`. The sidebar **keeps both items visible**
+  as promotion teasers (PM, 13 Aug) — icon + a `nav.soon` pill ("Coming Soon" /
+  "Segera Hadir"). For a **custodial-wallet owner** `/send` is the real transfer form
+  (USDX-567) and the Send pill comes off (`Sidebar.navItemsFor`). `components/bridge/`
+  and the old `components/send/` are gone; the transfer lives in `components/transfer/`
+- **Custodial money paths (USDX-567)** — transfer (`/send`), mint destination
+  "wallet custodial saya", redeem source custodial. All three read the wallet through
+  `useCustodialWallet` (566) — `isActive`, `address`, `balanceState`, `pinSet`. The PIN
+  is the backend's existing mechanism (`pin.yaml`); the app has **no set-PIN UI yet** —
+  `PIN_NOT_SET` / `user.pinSet === false` shows a "buat PIN dulu" notice and disables the
+  step. Mock: `seedMockCustodialWallet` (unit, `mock-custodial-wallet.ts`) /
+  `seedCustodialWallet(page, { status, balance, …seams })` (Playwright), mock PIN `123456`
 - The `/payment` mock gateway route was deleted (it faked "Payment Successful" with a
   `setTimeout`); the real mint flow uses the cross-origin checkout handoff
 - RainbowKit wallet connection works; the USDX balance is read **on-chain for real**
   (`balanceOf` on Polygon) via `hooks/useWalletBalance` in the sidebar. Wallets are
   never auto-reconnected, so an unconnected/loading/failed read is
   shown as "—" plus a reason, never as a number (USDX-396)
+- **Custodial wallet** (USDX-566, `wallet.yaml`): `POST/GET /api/v2/wallet` via
+  `lib/api/wallet-api.ts` + `hooks/useCustodialWallet`. Routing comes from
+  `user.custodialWallet` on `/auth/me` (never "GET then swallow 404"); the poll
+  while PROVISIONING is capped (60 s) and the retry is a repeat `POST` — the
+  only thing that refreshes the backend's working copy (`custodial-wallet.md`
+  §5.5); `balance: null` renders as "—", never 0. Transfer / mint-to-custodial /
+  redeem-from-custodial UI is USDX-567 (next bullet). In mock mode the wallet lives in
+  localStorage (`usdx-mock-custodial`) and flips to ACTIVE 1.5 s after create
 - WalletConnect SSR produces `indexedDB` warnings (harmless)
 - Solana removed — EVM chains only (7 chains)
 - Validation messages are translated in both locales (`validation.*` keys in

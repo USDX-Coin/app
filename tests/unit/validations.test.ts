@@ -105,53 +105,96 @@ describe("passwordScore", () => {
 });
 
 describe("validateAmount", () => {
+  // The mint bounds now arrive per-call (USDX-638): the minimum is a RUPIAH
+  // figure from GET /api/v2/config, judged on the order subtotal, while the
+  // ceiling stays a USDX one. `mint()` builds the pair for an amount that has
+  // already been converted both ways by the caller.
+  const MIN_IDR = 20_000;
+  const RATE = 16_400; // mock effectiveBuyRate
+
+  const mintIdr = (subtotalIdr: number) => ({
+    minIdr: MIN_IDR,
+    subtotalIdr,
+    amountUsdx: subtotalIdr / RATE,
+  });
+  const mintUsdx = (amountUsdx: number) => ({
+    minIdr: MIN_IDR,
+    subtotalIdr: amountUsdx * RATE,
+    amountUsdx,
+  });
+
   describe("positive", () => {
-    test("accepts valid mint amount", () => {
-      expect(validateAmount("100", "mint")).toBeNull();
+    test("accepts a mint whose subtotal clears the rupiah minimum", () => {
+      expect(validateAmount("20000", "mint", mintIdr(20_000))).toBeNull();
     });
     test("accepts valid redeem amount", () => {
       expect(validateAmount("500", "redeem")).toBeNull();
     });
     test("accepts amount with commas", () => {
-      expect(validateAmount("1,000", "mint")).toBeNull();
+      expect(validateAmount("1,000", "mint", mintUsdx(1_000))).toBeNull();
     });
     test("accepts decimal amount", () => {
-      expect(validateAmount("100.50", "mint")).toBeNull();
+      expect(validateAmount("100.50", "mint", mintUsdx(100.5))).toBeNull();
     });
   });
 
   describe("negative", () => {
     test("rejects empty amount", () => {
-      expect(validateAmount("", "mint")).toBe("validation.amount.required");
+      expect(validateAmount("", "mint", mintUsdx(0))).toBe("validation.amount.required");
     });
     test("rejects non-numeric string", () => {
-      expect(validateAmount("abc", "mint")).toBe("validation.amount.invalid");
+      expect(validateAmount("abc", "mint", mintUsdx(0))).toBe("validation.amount.invalid");
     });
     test("rejects zero", () => {
-      expect(validateAmount("0", "mint")).toBe("validation.amount.positive");
+      expect(validateAmount("0", "mint", mintUsdx(0))).toBe("validation.amount.positive");
     });
     test("rejects negative amount", () => {
-      expect(validateAmount("-100", "mint")).toBe("validation.amount.positive");
+      expect(validateAmount("-100", "mint", mintUsdx(-100))).toBe("validation.amount.positive");
     });
-    test("rejects amount below minimum", () => {
-      expect(validateAmount("5", "mint")).toBe("validation.amount.minMint");
+    test("rejects a subtotal below the rupiah minimum", () => {
+      expect(validateAmount("19000", "mint", mintIdr(19_000))).toBe("validation.amount.minMint");
       expect(validateAmount("5", "redeem")).toBe("validation.amount.minRedeem");
     });
+    test("rejects a USDX-denominated amount whose subtotal is below the minimum", () => {
+      // 1 USDX = Rp 16.400 — under Rp 20.000, so the same error as typing 19000
+      // on the rupiah side. The old code compared 1 against a 10-USDX floor and
+      // told the user the minimum was "10 USDX" (≈ Rp 176.182).
+      expect(validateAmount("1", "mint", mintUsdx(1))).toBe("validation.amount.minMint");
+    });
     test("rejects amount above maximum", () => {
-      expect(validateAmount("2000000", "mint")).toBe("validation.amount.maxMint");
+      expect(validateAmount("2000000", "mint", mintUsdx(2_000_000))).toBe(
+        "validation.amount.maxMint"
+      );
       expect(validateAmount("2000000", "redeem")).toBe("validation.amount.maxRedeem");
     });
   });
 
   describe("edge cases", () => {
-    test("accepts minimum boundary amount", () => {
-      expect(validateAmount("10", "mint")).toBeNull();
+    test("accepts a subtotal exactly on the rupiah minimum", () => {
+      expect(validateAmount("20000", "mint", mintIdr(20_000))).toBeNull();
     });
     test("accepts maximum boundary amount", () => {
-      expect(validateAmount("1000000", "mint")).toBeNull();
+      expect(validateAmount("1000000", "mint", mintUsdx(1_000_000))).toBeNull();
     });
     test("rejects whitespace-only string", () => {
-      expect(validateAmount("   ", "mint")).toBe("validation.amount.required");
+      expect(validateAmount("   ", "mint", mintUsdx(0))).toBe("validation.amount.required");
+    });
+    test("without bounds it still checks the shape but invents NO limit", () => {
+      // Config hasn't loaded. A guessed floor would reject a valid Rp 20.000, so
+      // there is none — the caller keeps the Mint button disabled instead.
+      expect(validateAmount("abc", "mint")).toBe("validation.amount.invalid");
+      expect(validateAmount("0", "mint")).toBe("validation.amount.positive");
+      expect(validateAmount("1", "mint")).toBeNull();
+      expect(validateAmount("99999999", "mint")).toBeNull();
+    });
+    test("the rupiah minimum moves with the config, not with a constant", () => {
+      const subtotal = 30_000;
+      expect(
+        validateAmount("30000", "mint", { minIdr: 20_000, subtotalIdr: subtotal, amountUsdx: 1.8 })
+      ).toBeNull();
+      expect(
+        validateAmount("30000", "mint", { minIdr: 50_000, subtotalIdr: subtotal, amountUsdx: 1.8 })
+      ).toBe("validation.amount.minMint");
     });
   });
 });
@@ -302,11 +345,21 @@ describe("translateValidation", () => {
     expect(translateValidation(t, validatePassword("Ab1"))).toBe(
       'validation.password.minLength|{"min":"8"}'
     );
-    expect(translateValidation(t, validateAmount("5", "mint"))).toBe(
-      'validation.amount.minMint|{"amount":"10"}'
-    );
     expect(translateValidation(t, validateAmount("2000000", "redeem"))).toBe(
       'validation.amount.maxRedeem|{"amount":"1,000,000"}'
+    );
+  });
+
+  test("a caller-supplied number wins over the static table", () => {
+    // The mint minimum is backend-owned (GET /api/v2/config) and reaches the
+    // message as `vars` — nothing in constants.ts may override it (USDX-638).
+    const key = validateAmount("19000", "mint", {
+      minIdr: 20_000,
+      subtotalIdr: 19_000,
+      amountUsdx: 1.16,
+    });
+    expect(translateValidation(t, key, { amount: "Rp 20.000" })).toBe(
+      'validation.amount.minMint|{"amount":"Rp 20.000"}'
     );
   });
 });
@@ -359,8 +412,12 @@ describe("dictionary coverage", () => {
       validateAmount("", "mint"),
       validateAmount("abc", "mint"),
       validateAmount("0", "mint"),
-      validateAmount("5", "mint"),
-      validateAmount("2000000", "mint"),
+      validateAmount("19000", "mint", { minIdr: 20_000, subtotalIdr: 19_000, amountUsdx: 1.16 }),
+      validateAmount("2000000", "mint", {
+        minIdr: 20_000,
+        subtotalIdr: 32_800_000_000,
+        amountUsdx: 2_000_000,
+      }),
       validateAmount("5", "redeem"),
       validateAmount("2000000", "redeem"),
       validateAddress(""),

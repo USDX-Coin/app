@@ -87,6 +87,16 @@ export function isMintDisabled(error: unknown): boolean {
   return isApiError(error) && error.status === 503 && error.code === "MINT_DISABLED";
 }
 
+// 503 MINT_UNDER_MAINTENANCE — this user is not on the list that may mint right
+// now (USDX-636 gates minting to testers while the test bundle runs). Distinct
+// from MINT_DISABLED, which is the whole environment being off. Reached when the
+// gate changes mid-session, after `mintAvailable` was already read as true.
+// Surface the maintenance notice — never the test mode, which is our word, not
+// something an ordinary user should have to learn.
+export function isMintUnderMaintenance(error: unknown): boolean {
+  return isApiError(error) && error.status === 503 && error.code === "MINT_UNDER_MAINTENANCE";
+}
+
 // 422 VALIDATION_ERROR — body/input validation failure on any /api/v2/* endpoint
 // (conventions.md § Validation Error (v2); USDX-213 BE / USDX-214 FE). The v2
 // global pipe emits 422 (not 400) with code VALIDATION_ERROR. We match on the SoT
@@ -155,6 +165,120 @@ export function isInvalidBankAccount(error: unknown): boolean {
 // surfaced inline rather than treated as an expired session.
 export function isInvalidCredentials(error: unknown): boolean {
   return isApiError(error) && error.status === 401 && error.code === "INVALID_CREDENTIALS";
+}
+
+// ── Wallet custodial (wallet.yaml § PETA KODE 409, USDX-566) ─────────────────
+// FE bercabang dari `code`, bukan dari status HTTP: tiga kondisi 409 beririsan.
+
+// 404 WALLET_NOT_FOUND — user belum punya wallet custodial. Keadaan NORMAL
+// (user non-custodial selalu dapat ini dari GET), bukan kegagalan: `wallet-api`
+// mengubahnya jadi `null`, jangan pernah di-toast.
+export function isWalletNotFound(error: unknown): boolean {
+  return isApiError(error) && error.status === 404 && error.code === "WALLET_NOT_FOUND";
+}
+
+// 409 WALLET_ALREADY_EXISTS — POST /wallet saat wallet sudah ACTIVE. Satu user =
+// satu wallet; FE arahkan ke GET, bukan menawarkan onboarding lagi.
+export function isWalletAlreadyExists(error: unknown): boolean {
+  return isApiError(error) && error.status === 409 && error.code === "WALLET_ALREADY_EXISTS";
+}
+
+// 409 WALLET_SUSPENDED — POST /wallet saat wallet ada tapi SUSPENDED (keputusan
+// ops/insiden). Tidak ada wallet pengganti; pemulihan lewat runbook ops.
+export function isWalletSuspended(error: unknown): boolean {
+  return isApiError(error) && error.status === 409 && error.code === "WALLET_SUSPENDED";
+}
+
+// 409 WALLET_NOT_ACTIVE — punya wallet tapi PROVISIONING / SUSPENDED, di
+// /wallet/transfer dan POST /redeem. FE tampilkan status wallet, JANGAN tawarkan
+// retry: statusnya tidak berubah karena ditekan lagi.
+export function isWalletNotActive(error: unknown): boolean {
+  return isApiError(error) && error.status === 409 && error.code === "WALLET_NOT_ACTIVE";
+}
+
+// 503 WALLET_SERVICE_UNAVAILABLE — zona kunci (wallet-service / Web3Signer /
+// Vault) tak terjangkau (common.yaml § WalletServiceUnavailable). Aman di-retry:
+// tidak ada state yang terlanjur berubah. Beda dari MINT_DISABLED (gate produk).
+export function isWalletServiceUnavailable(error: unknown): boolean {
+  return (
+    isApiError(error) && error.status === 503 && error.code === "WALLET_SERVICE_UNAVAILABLE"
+  );
+}
+
+// 401 INVALID_PIN — PIN salah (pin.yaml; attempt dihitung ke lockout scope `pin`
+// yang dibagi /auth/pin/verify, /change, /wallet/transfer, POST /redeem). Bukan
+// sesi kedaluwarsa: pemanggil WAJIB `skipUnauthorizedHandler` supaya user tidak
+// di-logout karena salah ketik PIN.
+export function isInvalidPin(error: unknown): boolean {
+  return isApiError(error) && error.status === 401 && error.code === "INVALID_PIN";
+}
+
+// 401 PIN_NOT_SET — akun belum punya PIN → arahkan ke pembuatan PIN
+// (POST /api/v2/auth/pin/set), bukan minta PIN lagi.
+export function isPinNotSet(error: unknown): boolean {
+  return isApiError(error) && error.status === 401 && error.code === "PIN_NOT_SET";
+}
+
+// 429 TOO_MANY_ATTEMPTS — lockout PIN scope `pin` (5 salah / 15 menit). Beda dari
+// RATE_LIMITED (throttle throughput, toast global): ini kesalahan user yang
+// butuh countdown inline; `getRateLimitSeconds` membaca Retry-After-nya.
+export function isTooManyAttempts(error: unknown): boolean {
+  return isApiError(error) && error.status === 429 && error.code === "TOO_MANY_ATTEMPTS";
+}
+
+// 409 IDEMPOTENCY_KEY_IN_PROGRESS — transfer dengan `Idempotency-Key` yang sama
+// MASIH berjalan. FE: tunggu, lalu retry dengan key yang SAMA — jangan kirim ulang
+// dengan key baru, karena yang pertama bisa saja sudah ter-broadcast.
+export function isIdempotencyKeyInProgress(error: unknown): boolean {
+  return (
+    isApiError(error) && error.status === 409 && error.code === "IDEMPOTENCY_KEY_IN_PROGRESS"
+  );
+}
+
+// 409 IDEMPOTENCY_KEY_REUSED — key dipakai ulang untuk body berbeda (atau key
+// milik user lain). Ini BUG FE (key tidak dibuat ulang saat tujuan/jumlah
+// berubah), bukan keadaan user — pemanggil membuang key-nya dan melapor.
+export function isIdempotencyKeyReused(error: unknown): boolean {
+  return isApiError(error) && error.status === 409 && error.code === "IDEMPOTENCY_KEY_REUSED";
+}
+
+// 422 RECIPIENT_BLACKLISTED — address tujuan ter-blacklist on-chain
+// (`isBlackListed`, pola mint week2). Tidak ada tanda tangan yang diminta.
+export function isRecipientBlacklisted(error: unknown): boolean {
+  return isApiError(error) && error.status === 422 && error.code === "RECIPIENT_BLACKLISTED";
+}
+
+// 422 TRANSFER_LIMIT_EXCEEDED — melewati plafon per-transaksi / harian (§6).
+// Angkanya BUKAN bagian kontrak: dibaca dari `details`, jangan di-hardcode.
+export function isTransferLimitExceeded(error: unknown): boolean {
+  return (
+    isApiError(error) && error.status === 422 && error.code === "TRANSFER_LIMIT_EXCEEDED"
+  );
+}
+
+export interface TransferLimitDetails {
+  limitType: "PER_TX" | "DAILY";
+  limit: string;
+  remaining: string;
+  resetAt: string | null; // null untuk PER_TX
+}
+
+// `details` dari 422 TRANSFER_LIMIT_EXCEEDED (wallet.yaml). Null kalau bentuknya
+// tidak seperti yang dijanjikan — pemanggil lalu memakai kalimat generik, bukan
+// menampilkan `undefined` di tengah pesan.
+export function getTransferLimitDetails(error: unknown): TransferLimitDetails | null {
+  if (!isTransferLimitExceeded(error)) return null;
+  const d = (error as ApiError).details;
+  if (!d || typeof d !== "object") return null;
+  const { limitType, limit, remaining, resetAt } = d as Record<string, unknown>;
+  if (limitType !== "PER_TX" && limitType !== "DAILY") return null;
+  if (typeof limit !== "string" || typeof remaining !== "string") return null;
+  return {
+    limitType,
+    limit,
+    remaining,
+    resetAt: typeof resetAt === "string" ? resetAt : null,
+  };
 }
 
 // Narrow to a specific SoT error code (e.g. PASSWORD_MISMATCH, WEAK_PASSWORD)

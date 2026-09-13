@@ -3,6 +3,7 @@ import {
   loginViaStorage,
   forceEnglish,
   forceIndonesian,
+  pickKycSelect,
   pickOccupation,
   seedKycStatus,
   TEST_PNG,
@@ -30,21 +31,27 @@ async function gotoKyc(page: Page, locale: "en" | "id" = "en") {
   ).toBeVisible({ timeout: 15000 });
 }
 
-async function fillEverything(page: Page) {
+/**
+ * Isi SELURUH form dengan jawaban sah. `skip` meninggalkan satu dropdown tak
+ * terjawab — satu-satunya cara "kosong" masih bisa dicapai sejak dropdown pindah ke
+ * Radix: tidak ada opsi kosong untuk dipilih ulang, jadi tidak ada jalan untuk
+ * mengosongkan kembali jawaban yang sudah masuk (USDX-671).
+ */
+async function fillEverything(page: Page, opts: { skip?: "gender" } = {}) {
   await page.getByLabel("First Name").fill("Budi");
   await page.getByLabel("Last Name").fill("Santoso");
   await page.getByLabel("Date of Birth").fill("1995-03-15");
   await page.getByLabel("Birth Place").fill("Jakarta");
-  await page.selectOption("#gender", "LAKI_LAKI");
-  await page.selectOption("#maritalStatus", "KAWIN");
+  if (opts.skip !== "gender") await pickKycSelect(page, "gender", "Male");
+  await pickKycSelect(page, "maritalStatus", "Married");
   await page.getByLabel("Mother's Maiden Name").fill("Siti Aminah");
   await page.getByLabel("KTP Number").fill("3171234567890123");
   await page.getByLabel("Address", { exact: true }).fill("Jl. Sudirman No. 1");
   await pickOccupation(page, "Karyawan Swasta");
-  await page.selectOption("#sourceOfFunds", "SALARY");
-  await page.selectOption("#annualIncomeRange", "FROM_100M_TO_500M");
-  await page.selectOption("#netWorthRange", "FROM_500M_TO_2B");
-  await page.selectOption("#transactionPurpose", "INVESTMENT");
+  await pickKycSelect(page, "sourceOfFunds", "Salary");
+  await pickKycSelect(page, "annualIncomeRange", "Rp 100 million - Rp 500 million");
+  await pickKycSelect(page, "netWorthRange", "Rp 500 million - Rp 2 billion");
+  await pickKycSelect(page, "transactionPurpose", "Investment");
 }
 
 async function uploadPhotos(page: Page) {
@@ -90,10 +97,17 @@ test.describe("KYC identity fields", () => {
       await expect(page.getByLabel("Jenis Kelamin")).toBeVisible();
       await expect(page.getByLabel("Status Perkawinan")).toBeVisible();
       await expect(page.getByLabel("Nama Gadis Ibu Kandung")).toBeVisible();
-      await expect(page.locator("#gender option", { hasText: "Laki-laki" })).toHaveCount(1);
-      await expect(
-        page.locator("#maritalStatus option", { hasText: "Cerai Hidup" }),
-      ).toHaveCount(1);
+      // Kosakata KTP dibuktikan dari DAFTAR PILIHANNYA, dan sejak dropdown pindah
+      // ke Radix pilihan itu hanya ada di DOM selama panelnya terbuka — tidak ada
+      // `<option>` yang bisa dibaca dari form yang tertutup (USDX-671).
+      await page.locator("#gender").click();
+      await expect(page.getByRole("option", { name: "Laki-laki", exact: true })).toHaveCount(1);
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("option")).toHaveCount(0);
+
+      await page.locator("#maritalStatus").click();
+      await expect(page.getByRole("option", { name: "Cerai Hidup", exact: true })).toHaveCount(1);
+      await page.keyboard.press("Escape");
     });
   });
 
@@ -102,8 +116,12 @@ test.describe("KYC identity fields", () => {
       page,
     }) => {
       await gotoKyc(page);
-      await fillEverything(page);
-      await page.selectOption("#gender", "");
+      // Jenis kelamin sengaja TIDAK dijawab. Dulu tesnya mengisi semuanya lalu
+      // memilih opsi kosong (`selectOption("#gender", "")`) untuk menariknya kembali;
+      // Radix tidak punya opsi kosong, dan nasabah pun tidak bisa lagi menarik
+      // jawabannya (USDX-671). Maksud tesnya tidak berubah: satu field wajib yang
+      // kosong harus disebut namanya dan submitnya tertahan.
+      await fillEverything(page, { skip: "gender" });
       await page.getByLabel("Mother's Maiden Name").fill("");
       await uploadPhotos(page);
 
@@ -136,9 +154,11 @@ test.describe("KYC identity fields", () => {
       page,
     }) => {
       await gotoKyc(page);
-      const values = await page.$$eval("#identityType option", (els) =>
-        els.map((el) => (el as HTMLOptionElement).value),
-      );
+      // Yang dibandingkan sekarang LABEL, bukan atribut `value`: Radix tidak
+      // merender `<option>` sama sekali, dan nilai enumnya tidak pernah sampai ke
+      // DOM — pilihan baru ada begitu panelnya dibuka (USDX-671).
+      await page.locator("#identityType").click();
+      const labels = (await page.getByRole("option").allInnerTexts()).map((t) => t.trim());
       // Dulu `["", "KTP", "PASSPORT"]`. Opsi kosong terdepan HILANG sejak
       // placeholder Versi 4 (papan Figma `40 · KYC` baris 9: "Select selalu punya
       // nilai, placeholder tidak pernah tampil") — `identityType` mulai di `KTP`
@@ -150,7 +170,7 @@ test.describe("KYC identity fields", () => {
       // Assertion ini TIDAK dilonggarkan: ia tetap membuktikan maksud tesnya (SIM
       // tidak ditawarkan, Pasal 26 ayat (2)) lewat perbandingan yang sama-sama
       // persis, dan sekarang sekalian membuktikan tidak ada jawaban kosong.
-      expect(values).toEqual(["KTP", "PASSPORT"]);
+      expect(labels).toEqual(["KTP (Indonesian ID card)", "Passport"]);
     });
   });
 
@@ -162,7 +182,7 @@ test.describe("KYC identity fields", () => {
       await fillEverything(page);
       await expect(page.getByLabel("KTP Number")).toBeVisible();
 
-      await page.selectOption("#identityType", "PASSPORT");
+      await pickKycSelect(page, "identityType", "Passport");
       // Label, dokumen yang diminta, dan aturan panjangnya ikut berubah.
       await expect(page.getByLabel("Passport Number")).toBeVisible();
       await expect(page.getByLabel("KTP Number")).toHaveCount(0);
@@ -187,7 +207,7 @@ test.describe("KYC identity fields", () => {
       await page.getByRole("button", { name: "Submit for Verification" }).click();
       await expect(page.getByText("KTP number must be 16 digits")).toBeVisible();
 
-      await page.selectOption("#identityType", "PASSPORT");
+      await pickKycSelect(page, "identityType", "Passport");
       await expect(page.getByText("KTP number must be 16 digits")).toBeHidden();
       await page.getByRole("button", { name: "Submit for Verification" }).click();
       await expect(page.getByText("Verification in review")).toBeVisible({ timeout: 15000 });

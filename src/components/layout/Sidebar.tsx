@@ -4,9 +4,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Coins,
-  ArrowDownToLine,
+  Banknote,
   ArrowLeftRight,
-  ArrowUp,
+  Send,
   History,
   Settings,
   ChevronDown,
@@ -19,6 +19,8 @@ import { MenuProfil } from "@/components/ui/menu-profil";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn, formatAmount } from "@/lib/utils";
 import { useWalletBalance } from "@/hooks/useWalletBalance";
+import { useCustodialWallet } from "@/hooks/useCustodialWallet";
+import { CustodialBalanceCard } from "@/components/wallet/CustodialBalanceCard";
 import { useAuthStore } from "@/stores/authStore";
 import { logout as revokeSession } from "@/lib/api/auth-api";
 import { useLang } from "@/providers/LanguageProvider";
@@ -46,11 +48,14 @@ interface NavItem {
 // The nav items stay VISIBLE on purpose (PM decision, 13 Aug): they promote the
 // upcoming features. The pill is what keeps that honest — it announces the
 // teaser before the click, so nobody lands on ComingSoon expecting a transfer.
+//
+// USDX-567: for a user WITH a custodial wallet, /send is a real transfer form,
+// so the Send pill comes off for them (`navItemsFor`). Everyone else keeps it.
 const transactionItems: NavItem[] = [
   { href: "/mint", labelKey: "nav.mint", icon: Coins },
-  { href: "/redeem", labelKey: "nav.redeem", icon: ArrowDownToLine },
+  { href: "/redeem", labelKey: "nav.redeem", icon: Banknote },
   { href: "/bridge", labelKey: "nav.bridge", icon: ArrowLeftRight, comingSoon: true },
-  { href: "/send", labelKey: "nav.send", icon: ArrowUp, comingSoon: true },
+  { href: "/send", labelKey: "nav.send", icon: Send, comingSoon: true },
 ];
 
 // /kyc is intentionally not a nav item (USDX-153): users reach it via the status
@@ -58,12 +63,18 @@ const transactionItems: NavItem[] = [
 //
 // Bantuan and Dukungan left the nav in PR 2 (F3): both routes render ComingSoon,
 // and a nav that lists four rows of which three go nowhere stops reading as
-// navigation. Pengaturan stays because the account menu links to it, so the pill
-// is the honest way to say what is behind it.
+// navigation. Pengaturan lost its pill with USDX-566: the route is a real page
+// now (the custodial wallet lives there).
 const moreItems: NavItem[] = [
   { href: "/history", labelKey: "nav.history", icon: History },
-  { href: "/settings", labelKey: "nav.settings", icon: Settings, comingSoon: true },
+  { href: "/settings", labelKey: "nav.settings", icon: Settings },
 ];
+
+// Send stops being a teaser once the user owns a custodial wallet (USDX-567).
+export function navItemsFor(items: NavItem[], hasCustodialWallet: boolean): NavItem[] {
+  if (!hasCustodialWallet) return items;
+  return items.map((item) => (item.href === "/send" ? { ...item, comingSoon: false } : item));
+}
 
 function NavLink({ item, active, onNavigate }: { item: NavItem; active: boolean; onNavigate?: () => void }) {
   const { t } = useLang();
@@ -160,6 +171,10 @@ export function Sidebar({
   // `reconnectOnMount={false}`), so "disconnected" is the normal first state —
   // the card then offers a connect action instead of printing a number.
   const balance = useWalletBalance();
+  // Send is a live transfer form for custodial-wallet owners (USDX-567); the
+  // "Coming Soon" pill only stays for users without one.
+  const custodial = useCustodialWallet();
+  const transactionNav = navItemsFor(transactionItems, custodial.hasWallet);
   // users.name is null until KYC submit auto-sets it — fall back to email (USDX-153).
   const name = user?.name ?? user?.email ?? "";
   const currentLang = LANGUAGES.find((l) => l.value === lang) ?? LANGUAGES[0];
@@ -302,9 +317,47 @@ export function Sidebar({
           </Button>
         </div>
 
+        {/* Custodial wallet (USDX-566) — a second card, not a replacement: the
+            connected-wallet card above keeps working exactly as before, and this
+            one renders nothing for a user without a custodial wallet. */}
+        <CustodialBalanceCard onNavigate={onNavigate} />
+
+        {/* Test-mint strip (USDX-640). Only while the backend reports the test
+            bundle in force, and only as a SEPARATE row: the card above keeps
+            reading the production token in every mode, because swapping it
+            globally would show someone holding real USDX a balance of 0. This
+            strip exists so a test mint is visibly received during the recorded
+            demo — its number is a different token, and it says so. */}
+        {balance.testBalance && (
+          <div
+            className="flex flex-col gap-1 rounded-xl border border-warning/40 bg-warning/10 p-3"
+            data-slot="test-mint-balance"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="rounded-full bg-warning/20 px-2 py-0.5 text-xs font-medium text-warning-text">
+                {t("balance.testMode")}
+              </span>
+              <span className="truncate text-sm font-medium tracking-tight text-sidebar-foreground">
+                {balance.testBalance.balanceUsdx != null
+                  ? formatAmount(balance.testBalance.balanceUsdx)
+                  : "—"}
+              </span>
+            </div>
+            <p className="text-xs text-sidebar-muted">
+              {balance.testBalance.state === "ready"
+                ? t("balance.testModeNote")
+                : balance.testBalance.state === "disconnected"
+                  ? t("balance.connectPrompt")
+                  : balance.testBalance.state === "loading"
+                    ? t("balance.loading")
+                    : t("balance.unavailable")}
+            </p>
+          </div>
+        )}
+
         <NavGroup
           label={t("sidebar.transaction")}
-          items={transactionItems}
+          items={transactionNav}
           pathname={pathname}
           onNavigate={onNavigate}
         />

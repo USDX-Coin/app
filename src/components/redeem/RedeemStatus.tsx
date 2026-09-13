@@ -3,23 +3,48 @@
 // Redeem status tracker (USDX-243, hardened USDX-259). Polls GET /v2/redeem/{id}
 // and walks the lifecycle AWAITING_BURN → BURNED → PROCESSING_PAYOUT →
 // PAYOUT_COMPLETE (or EXPIRED). While AWAITING_BURN it hosts the burn action —
-// for the fresh-create flow (burn auto-runs) and the resume-from-/history flow
-// (reconnect wallet, then burn). The burn is guarded against double-submit and
+// for the fresh-create flow and the resume-from-/history flow (reconnect wallet,
+// then burn). Both now start from the same explicit confirmation of the payout
+// destination (USDX-661, below). The burn is guarded against double-submit and
 // bound to the order's wallet (week3.md § Guard double-burn / Resume). Links the
 // burn tx to the explorer, counts down the burn window, surfaces the optimistic
 // "memproses burn" state + the stale-burn hold, and shows the simulation notice.
+//
+// USDX-661 (bni-integration.md § 17.12): while AWAITING_BURN on the SELF_SIGN path
+// the screen first states the destination from the ORDER RESPONSE — bank · account
+// number · holder name — and asks for an explicit agreement as a step of its own.
+// Until it is given the burn button is disabled. This is the only point where "a
+// mistyped number that happens to be valid and belongs to someone else" can still
+// be caught for free.
+//
+// USDX-672: that name is only called the BANK's answer when the order says
+// `bankAccountNameVerified: true`. The backend falls back to the name the customer
+// typed when the provider answers no name (`inquiry.accountName ??
+// bank.bankAccountName`), so captioning it "the bank's answer" unconditionally would
+// hand out false confidence exactly where the screen is supposed to catch a mistake.
+// `false` and a missing field are read the same way: show the name, claim nothing
+// about where it came from, and still require the agreement.
+//
+// USDX-664: PAYOUT_FAILED is not one of the STEPS. It gets a state of its own
+// (replacing the stepper) so the journey never renders with no step active.
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Check, ExternalLink, X } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Checkbox, CheckboxField } from "@/components/ui/checkbox";
 import { LinkInline } from "@/components/ui/link-inline";
 import { Spinner } from "@/components/ui/spinner";
 import { useRedeemStore } from "@/stores/redeemStore";
 import { useRedeemTracker } from "@/hooks/useRedeemTracker";
 import { useRedeemPreconditions } from "@/lib/redeem/wallet";
 import { useRedeemBurn } from "@/hooks/useRedeemBurn";
+import {
+  burnDisabled,
+  destinationConfirmRequired,
+  orderDestination,
+} from "@/lib/redeem/destination";
 import { useLang } from "@/providers/LanguageProvider";
 import { cn, formatAmount, formatIDR, truncateAddress } from "@/lib/utils";
 import { getChainById } from "@/lib/chains";
@@ -53,6 +78,11 @@ export function RedeemStatus() {
   const pre = useRedeemPreconditions(amountUsdx);
   const { runBurn, burnState, burnErrorKey } = useRedeemBurn();
 
+  // Persetujuan tujuan (USDX-661) disimpan sebagai id order yang disetujui, bukan
+  // boolean: order lain yang dibuka di komponen yang sama (resume dari /history)
+  // karena itu tidak pernah mewarisi persetujuan order sebelumnya.
+  const [confirmedOrderId, setConfirmedOrderId] = useState<string | null>(null);
+
   // Tick once a second so the burn-window countdown stays live.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -71,7 +101,24 @@ export function RedeemStatus() {
   }
 
   const isExpired = order.status === "EXPIRED";
+  // Pencairan ditolak provider secara definitif (USDX-664, common.yaml §
+  // RedeemStatus): keadaan tersendiri, bukan langkah keempat yang gagal.
+  const isPayoutFailed = order.status === "PAYOUT_FAILED";
+  // Jalur CUSTODIAL (redeem.yaml § burnMode, USDX-567): sistem yang membakar.
+  // Tidak ada BurnGate (connect / tanda tangan / burn-tx), dan langkah pertama
+  // berkata "sistem memproses", bukan "tanda tangani di wallet".
+  const isCustodialBurn = order.burnMode === "CUSTODIAL";
   const currentIndex = STEPS.findIndex((s) => s.key === order.status);
+  // Optimistically broadcast/reported but not yet confirmed by the scanner. Read
+  // here too (not only inside BurnGate): once a burn is in flight the destination
+  // has already been agreed to, so the confirmation step comes down.
+  const burnInFlight =
+    burnState === "submitting" || burnState === "submitted" || order.burnSubmittedAt != null;
+  // Tujuan dari RESPONSE ORDER, bukan state form (USDX-661); `accountNameVerified`
+  // menentukan apakah namanya boleh disebut jawaban bank (USDX-672).
+  const destination = orderDestination(order);
+  const confirmRequired = destinationConfirmRequired(order, burnInFlight);
+  const destinationConfirmed = confirmedOrderId === order.id;
   const remainingSec =
     order.status === "AWAITING_BURN"
       ? (new Date(order.expiresAt).getTime() - now) / 1000
@@ -102,64 +149,176 @@ export function RedeemStatus() {
         </Alert>
       )}
 
-      {/* Lifecycle stepper */}
-      <div className="flex flex-col">
-        {STEPS.map((step, i) => {
-          const done = !isExpired && (order.status === "PAYOUT_COMPLETE" || i < currentIndex);
-          const active = !isExpired && i === currentIndex && order.status !== "PAYOUT_COMPLETE";
-          const failed = isExpired && i === 0;
-          const isLast = i === STEPS.length - 1;
-          return (
-            <div key={step.key} className="flex gap-3">
-              <div className="flex flex-col items-center">
-                <span
-                  className={cn(
-                    "flex size-7 shrink-0 items-center justify-center rounded-full border",
-                    done && "border-primary bg-primary text-primary-foreground",
-                    active && "border-primary text-primary",
-                    failed && "border-destructive bg-destructive text-destructive-foreground",
-                    !done && !active && !failed && "border-border text-muted-text",
-                  )}
-                >
-                  {done ? (
-                    <Check className="size-4" />
-                  ) : active ? (
-                    <Spinner className="size-4" />
-                  ) : failed ? (
-                    <X className="size-4" />
-                  ) : (
-                    <span className="text-xs">{i + 1}</span>
-                  )}
-                </span>
-                {!isLast && (
-                  <span className={cn("w-px flex-1 grow", done ? "bg-primary" : "bg-border")} style={{ minHeight: 28 }} />
-                )}
-              </div>
-              <div className={cn("flex flex-col pb-5", isLast && "pb-0")}>
-                <span className={cn("text-sm font-medium", active || done ? "text-foreground" : "text-muted-text")}>
-                  {t(failed ? "redeem.statusExpired" : step.label)}
-                </span>
-                <span className="text-xs text-muted-text">
-                  {t(failed ? "redeem.statusExpiredDesc" : step.desc)}
-                </span>
-                {active && step.key === "AWAITING_BURN" && remainingSec > 0 && (
-                  <span className="mt-1 text-xs text-warning-text">
-                    {t("redeem.expiresIn", { time: formatMMSS(remainingSec) })}
+      {/* Pencairan bermasalah (USDX-664, § 17.2): keadaan tersendiri yang
+          MENGGANTIKAN stepper — status ini bukan salah satu STEPS, dan sebuah
+          perjalanan tanpa satu pun langkah aktif adalah layar yang diam. Nada
+          peringatan, bukan galat merah: uangnya tidak hilang, ia menunggu orang.
+          Tidak ada tombol coba lagi — nasabah tidak bisa memperbaikinya sendiri. */}
+      {isPayoutFailed ? (
+        <Alert
+          tone="warning"
+          title={t("redeem.statusPayoutFailed")}
+          data-testid="redeem-payout-failed"
+        >
+          {t("redeem.statusPayoutFailedDesc")}
+        </Alert>
+      ) : (
+        /* Lifecycle stepper (USDX-243) */
+        <div className="flex flex-col">
+          {STEPS.map((step, i) => {
+            const done = !isExpired && (order.status === "PAYOUT_COMPLETE" || i < currentIndex);
+            const active = !isExpired && i === currentIndex && order.status !== "PAYOUT_COMPLETE";
+            const failed = isExpired && i === 0;
+            const isLast = i === STEPS.length - 1;
+            return (
+              <div key={step.key} className="flex gap-3">
+                <div className="flex flex-col items-center">
+                  <span
+                    className={cn(
+                      "flex size-7 shrink-0 items-center justify-center rounded-full border",
+                      done && "border-primary bg-primary text-primary-foreground",
+                      active && "border-primary text-primary",
+                      failed && "border-destructive bg-destructive text-destructive-foreground",
+                      !done && !active && !failed && "border-border text-muted-text",
+                    )}
+                  >
+                    {done ? (
+                      <Check className="size-4" />
+                    ) : active ? (
+                      <Spinner className="size-4" />
+                    ) : failed ? (
+                      <X className="size-4" />
+                    ) : (
+                      <span className="text-xs">{i + 1}</span>
+                    )}
                   </span>
-                )}
+                  {!isLast && (
+                    <span className={cn("w-px flex-1 grow", done ? "bg-primary" : "bg-border")} style={{ minHeight: 28 }} />
+                  )}
+                </div>
+                <div className={cn("flex flex-col pb-5", isLast && "pb-0")}>
+                  <span className={cn("text-sm font-medium", active || done ? "text-foreground" : "text-muted-text")}>
+                    {t(failed ? "redeem.statusExpired" : step.label)}
+                  </span>
+                  <span className="text-xs text-muted-text">
+                    {t(
+                      failed
+                        ? "redeem.statusExpiredDesc"
+                        : isCustodialBurn && step.key === "AWAITING_BURN"
+                          ? "redeem.statusAwaitingBurnCustodialDesc"
+                          : step.desc,
+                    )}
+                  </span>
+                  {active && step.key === "AWAITING_BURN" && remainingSec > 0 && (
+                    <span className="mt-1 text-xs text-warning-text">
+                      {t("redeem.expiresIn", { time: formatMMSS(remainingSec) })}
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
-      {/* Burn action gate — only while awaiting the on-chain burn (USDX-259). */}
-      {order.status === "AWAITING_BURN" && (
+      {/* Custodial: no wallet action at all — the dispatcher signs; the tracker
+          just says so until the scanner confirms (custodial-wallet.md §5.3). */}
+      {order.status === "AWAITING_BURN" && isCustodialBurn && (
+        <p
+          className="flex items-center gap-2 rounded-lg border border-border bg-muted p-3 text-sm text-foreground"
+          data-testid="redeem-custodial-processing"
+        >
+          <Spinner className="shrink-0 text-primary" />
+          {t("redeem.custodialBurnProcessing")}
+        </p>
+      )}
+
+      {/* Konfirmasi tujuan sebelum burn (USDX-661, § 17.12). Jeda yang disengaja
+          sebelum satu-satunya aksi yang tidak bisa dibatalkan di app ini: tujuan
+          dibacakan dari response order — termasuk NAMA PEMILIK, dengan keterangan
+          apakah nama itu jawaban bank atau belum terkonfirmasi (USDX-672) — dan nama
+          itu diulang di kalimat persetujuannya, supaya centangnya tidak bisa
+          diberikan tanpa membaca ke rekening siapa rupiahnya pergi. */}
+      {confirmRequired && (
+        <div
+          className="flex flex-col gap-3 rounded-xl border border-border p-4"
+          data-testid="redeem-confirm-destination"
+        >
+          <p className="text-sm font-medium text-foreground">{t("redeem.confirmDestTitle")}</p>
+
+          <div className="flex flex-col gap-2 text-sm">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-muted-text">{t("sum.bankDestination")}</span>
+              <span className="font-medium text-foreground">{destination.bankName}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-muted-text">{t("redeem.accountNumber")}</span>
+              <span className="font-medium text-foreground">{destination.accountNumber}</span>
+            </div>
+            {/* Nama pemilik dapat satu baris penuh, bukan nilai di ujung kanan:
+                ini satu-satunya isi layar ini yang benar-benar harus dibaca. */}
+            <div className="flex flex-col gap-0.5 border-t border-border pt-2">
+              <span className="text-muted-text">{t("sum.accountName")}</span>
+              <span
+                className="text-base leading-6 font-semibold text-foreground"
+                data-testid="redeem-destination-name"
+              >
+                {destination.accountName}
+              </span>
+              {/* Keterangan asal nama (USDX-672). Klaim "jawaban bank" hanya
+                  dipasang kalau order menyatakannya terverifikasi; `false` dan field
+                  yang belum dikirim backend sama-sama jatuh ke kalimat yang tidak
+                  mengklaim apa pun — dan menyuruh nasabah memeriksa sendiri, karena
+                  di situlah satu-satunya pemeriksaan yang tersisa. */}
+              <span
+                className="text-xs text-muted-text"
+                data-testid="redeem-destination-name-note"
+              >
+                {!destination.accountNameKnown
+                  ? t("redeem.confirmDestNameMissing")
+                  : destination.accountNameVerified
+                    ? t("redeem.confirmDestNameSource")
+                    : t("redeem.confirmDestNameUnverified")}
+              </span>
+            </div>
+          </div>
+
+          <p className="flex items-start gap-2 text-sm leading-5 text-warning-text">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+            {t("redeem.confirmDestWarning")}
+          </p>
+
+          <CheckboxField
+            htmlFor="redeem-destination-confirm"
+            className="items-start gap-3 border-t border-border pt-1"
+          >
+            <Checkbox
+              id="redeem-destination-confirm"
+              className="mt-2.5"
+              checked={destinationConfirmed}
+              onCheckedChange={(checked) => setConfirmedOrderId(checked ? order.id : null)}
+            />
+            <span className="py-2 text-foreground">
+              {destination.accountNameKnown
+                ? t("redeem.confirmDestCheck", { name: destination.accountName })
+                : t("redeem.confirmDestCheckNoName")}
+            </span>
+          </CheckboxField>
+        </div>
+      )}
+
+      {/* Burn action gate — only while awaiting the on-chain burn (USDX-259),
+          and only for SELF_SIGN orders. */}
+      {order.status === "AWAITING_BURN" && !isCustodialBurn && (
         <BurnGate
           order={order}
           pre={pre}
           burnState={burnState}
           burnErrorKey={burnErrorKey}
+          burnInFlight={burnInFlight}
+          // Persetujuan tujuan hanya menggerbangi selama masih diminta (USDX-661):
+          // begitu burn berjalan, gerbangnya tidak lagi relevan.
+          destinationConfirmed={destinationConfirmed || !confirmRequired}
           onBurn={() => runBurn(order, pre.address ?? "")}
         />
       )}
@@ -170,12 +329,16 @@ export function RedeemStatus() {
           <span className="text-muted-text">{t("sum.youWillRedeem")}</span>
           <span className="font-medium text-foreground">{formatAmount(Number(order.amount))} USDX</span>
         </div>
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-muted-text">{t("sum.bankDestination")}</span>
-          <span className="font-medium text-foreground">
-            {order.bankName} · {order.bankAccountNumber}
-          </span>
-        </div>
+        {/* Tujuan disebut SEKALI per layar: selagi blok konfirmasi di atas masih
+            tampil, ia yang menyebutkannya (USDX-661). */}
+        {!confirmRequired && (
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-muted-text">{t("sum.bankDestination")}</span>
+            <span className="font-medium text-foreground">
+              {destination.bankName} · {destination.accountNumber}
+            </span>
+          </div>
+        )}
         <div className="flex items-center justify-between gap-3">
           <span className="text-muted-text">{t("redeem.netPayout")}</span>
           <span className="font-semibold text-foreground">{formatIDR(Number(order.netPayoutIdr))}</span>
@@ -216,25 +379,27 @@ export function RedeemStatus() {
 
 // Burn action while AWAITING_BURN. Resolves the precondition + guard state and
 // renders exactly one affordance: processing → connect → wallet-mismatch →
-// switch-network → insufficient → Burn (with retry on a failed/rejected tx).
+// switch-network → insufficient → Burn (with retry on a failed/rejected tx). The
+// button also waits for the destination confirmation above it (USDX-661).
 function BurnGate({
   order,
   pre,
   burnState,
   burnErrorKey,
+  burnInFlight,
+  destinationConfirmed,
   onBurn,
 }: {
   order: RedeemOrderDetail;
   pre: ReturnType<typeof useRedeemPreconditions>;
   burnState: ReturnType<typeof useRedeemBurn>["burnState"];
   burnErrorKey: string | null;
+  burnInFlight: boolean;
+  destinationConfirmed: boolean;
   onBurn: () => void;
 }) {
   const { t } = useLang();
 
-  // Optimistically broadcast/reported but not yet confirmed by the scanner.
-  const burnInFlight =
-    burnState === "submitting" || burnState === "submitted" || order.burnSubmittedAt != null;
   if (burnInFlight) {
     return (
       <p className="flex items-center gap-2 rounded-lg border border-border bg-muted p-3 text-sm text-foreground">
@@ -258,7 +423,7 @@ function BurnGate({
       size="lg"
       className="w-full"
       onClick={onBurn}
-      disabled={!pre.canBurn || !walletMatches}
+      disabled={burnDisabled({ canBurn: pre.canBurn, walletMatches, destinationConfirmed })}
     >
       {burnState === "error" ? t("redeem.retryBurn") : t("redeem.burnNow")}
     </Button>

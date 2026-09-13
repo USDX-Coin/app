@@ -21,16 +21,25 @@ import { MINT_CHAIN_ID } from "@/lib/constants";
 //                    settles back to idle the moment onSuccess returns), and it is
 //                    the marker `useMintHandoffReset` reads on a bfcache restore
 //                    to tell a post-handoff leftover from an untouched form.
+// Where the minted USDX goes (USDX-567, custodial-wallet.md §5.2). `custodial` =
+// the user's own custodial wallet (address from the profile, nothing to type);
+// `manual` = the typed / address-book / scanned address. The default is
+// `custodial` — for a user WITHOUT a custodial wallet the hook ignores it and
+// behaves exactly as before, so this default costs non-custodial users nothing.
+export type MintDestinationSource = "custodial" | "manual";
+
 interface MintState {
   chainId: string;
   amount: string;
   amountCurrency: AmountCurrency; // currency the user typed the amount in
   destinationAddress: string;
+  destinationSource: MintDestinationSource;
   reviewOpen: boolean;
   handoffPending: boolean;
   setAmount: (amount: string) => void;
   setAmountCurrency: (currency: AmountCurrency) => void;
   setDestinationAddress: (address: string) => void;
+  setDestinationSource: (source: MintDestinationSource) => void;
   setReviewOpen: (open: boolean) => void;
   beginHandoff: () => void;
   reset: () => void;
@@ -41,6 +50,7 @@ const initialState = {
   amount: "",
   amountCurrency: "USD" as AmountCurrency,
   destinationAddress: "",
+  destinationSource: "custodial" as MintDestinationSource,
   reviewOpen: false,
   handoffPending: false,
 };
@@ -50,6 +60,7 @@ export const useMintStore = create<MintState>()((set) => ({
   setAmount: (amount) => set({ amount }),
   setAmountCurrency: (amountCurrency) => set({ amountCurrency }),
   setDestinationAddress: (address) => set({ destinationAddress: address }),
+  setDestinationSource: (destinationSource) => set({ destinationSource }),
   setReviewOpen: (reviewOpen) => set({ reviewOpen }),
   beginHandoff: () => set({ handoffPending: true }),
   reset: () => set(initialState),

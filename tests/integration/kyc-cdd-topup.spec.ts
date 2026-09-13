@@ -3,6 +3,7 @@ import {
   loginViaStorage,
   forceEnglish,
   forceIndonesian,
+  pickKycSelect,
   pickOccupation,
   seedKycStatus,
   seedKycCddComplete,
@@ -37,12 +38,17 @@ async function gotoVerified(
 
 const topUp = (page: Page) => page.getByTestId("kyc-cdd-topup");
 
+/**
+ * Jawab blok CDD top-up. Dropdown dipilih lewat LABEL yang terlihat — kontrolnya
+ * Radix sejak commit 8177459, jadi nilai enumnya tidak pernah ada di DOM (USDX-671).
+ * Labelnya RegExp dua bahasa karena helper ini juga dipakai tes locale `id`.
+ */
 async function fillCdd(page: Page) {
   await pickOccupation(page, "Pegawai Negeri Sipil (PNS)");
-  await page.selectOption("#sourceOfFunds", "SALARY");
-  await page.selectOption("#annualIncomeRange", "UNDER_100M");
-  await page.selectOption("#netWorthRange", "UNDER_500M");
-  await page.selectOption("#transactionPurpose", "PAYMENT");
+  await pickKycSelect(page, "sourceOfFunds", /^(Salary|Gaji)$/);
+  await pickKycSelect(page, "annualIncomeRange", /^(Under Rp 100 million|Di bawah Rp 100 juta)$/);
+  await pickKycSelect(page, "netWorthRange", /^(Under Rp 500 million|Di bawah Rp 500 juta)$/);
+  await pickKycSelect(page, "transactionPurpose", /^(Payment|Pembayaran)$/);
 }
 
 async function dumpWebStorage(page: Page) {
@@ -246,7 +252,7 @@ test.describe("KYC CDD top-up (VERIFIED customer)", () => {
       await page.getByLabel("Relationship and office held").fill(PEP_SENTINEL);
       // Wajib begitu PEP dinyatakan (Pasal 37 (1) d) — tanpa ini submit tertahan
       // dan yang teruji tinggal separuh.
-      await page.selectOption("#sourceOfWealth", "SALARY_ACCUMULATION");
+      await pickKycSelect(page, "sourceOfWealth", "Accumulated salary");
 
       let storage = await dumpWebStorage(page);
       expect(storage).not.toContain(NPWP_SENTINEL);

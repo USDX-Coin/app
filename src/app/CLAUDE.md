@@ -3,7 +3,7 @@
 ## Route Groups
 
 - `(auth)/` — Unauthenticated pages (login, register, forgot-password). Uses `AuthLayout` (split screen).
-- `(dashboard)/` — Authenticated pages (mint, redeem, transactions, profile). Uses dashboard layout (sidebar + header). Redirects to `/login` if not authenticated.
+- `(dashboard)/` — Authenticated pages (mint, redeem, transactions, profile, settings, `onboarding/wallet`). Uses dashboard layout (sidebar + header). Redirects to `/login` if not authenticated. `onboarding/wallet` is the optional "dikasih wallet" step verify-email lands on for a new account (USDX-566) — it sits in this group because the wallet POST needs a session and the sidebar balance card fills in as soon as the wallet is ACTIVE.
 
 ## Auth Guard
 

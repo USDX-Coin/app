@@ -101,6 +101,9 @@ const redeemStatusLabelKey: Record<RedeemStatus, string> = {
   BURNED: "redeem.statusBurned",
   PROCESSING_PAYOUT: "redeem.statusProcessing",
   PAYOUT_COMPLETE: "tx.st.completed",
+  // USDX-664: a human-readable label, never the raw code. `Record<RedeemStatus, …>`
+  // is what makes a new status enum value a compile error instead of a grey pill.
+  PAYOUT_FAILED: "redeem.statusPayoutFailed",
   EXPIRED: "redeem.statusExpired",
 };
 

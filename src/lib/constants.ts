@@ -1,5 +1,8 @@
 export const EXCHANGE_RATE = 1; // 1 USDX = 1 USD
-export const MIN_MINT_AMOUNT = 10;
+// No MIN_MINT_AMOUNT here on purpose (USDX-638): the mint minimum is a RUPIAH
+// figure that ops can move from the back office, and it arrives at runtime from
+// GET /api/v2/config (`minMintIdr`). The constant it replaced was 10 USDX — a
+// bound whose rupiah value changed with the rate every day.
 export const MAX_MINT_AMOUNT = 1_000_000;
 export const MIN_REDEEM_AMOUNT = 10;
 export const MAX_REDEEM_AMOUNT = 1_000_000;
@@ -10,6 +13,10 @@ export const MINT_CHAIN_ID = "polygon";
 // Redeem is Polygon-only too (week3.md § Chain). Hardcoded in the create request;
 // there's no chain picker in the redeem form.
 export const REDEEM_CHAIN_ID = "polygon";
+// Wallet custodial hanya ada di satu chain di gelombang 1 (custodial-wallet.md
+// §1/§4): transfer tidak mengirim `chain` ke backend, konstanta ini dipakai FE
+// untuk ikon jaringan + tautan explorer (USDX-567).
+export const CUSTODIAL_CHAIN_ID = "polygon";
 // Numeric EIP-155 id for the redeem chain — Polygon mainnet (137). The
 // precondition gate enforces the connected wallet is on this network before the
 // burn (week3.md § Week 3 Addendum, USDX-259); mismatch → prompt switch.

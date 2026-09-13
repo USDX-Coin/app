@@ -4,16 +4,19 @@
 // sell rate (GET /v2/rate `effectiveSellRate`) + fee breakdown + validation + the
 // contextual wallet connect & precondition gate (network/balance/gas) + the
 // create-order mutation (POST /v2/redeem, sending the connected `userAddress`),
-// then hands the created order to the status tracker and runs the guarded burn.
-// The on-chain burn is real via wagmi when env.useMock is off (USDX-263); the
-// mock layer simulates it offline (lib/redeem/burn.ts).
+// then hands the created order to the status tracker. The burn itself is run by the
+// tracker, after the customer has explicitly agreed to the payout destination the
+// order came back with (USDX-661) — the on-chain burn is real via wagmi when
+// env.useMock is off (USDX-263); the mock layer simulates it offline.
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useRedeemStore } from "@/stores/redeemStore";
 import { useConsumerRate } from "@/hooks/useConsumerRate";
+import { useCustodialWallet } from "@/hooks/useCustodialWallet";
+import { useCooldown, DEFAULT_COOLDOWN_SECONDS } from "@/hooks/useCooldown";
+import { walletStatusKey } from "@/hooks/useTransfer";
 import { useRedeemPreconditions } from "@/lib/redeem/wallet";
-import { useRedeemBurn } from "@/hooks/useRedeemBurn";
 import { createRedeemOrder } from "@/lib/api/redeem-api";
 import { computeRedeemBreakdown } from "@/lib/redeem/fees";
 import {
@@ -38,17 +41,29 @@ import {
   isWalletBlacklisted,
   isInvalidBankAccount,
   isRedeemDisabled,
+  isInvalidPin,
+  isPinNotSet,
+  isTooManyAttempts,
+  isWalletNotActive,
+  getRateLimitSeconds,
 } from "@/lib/api/errors";
 
 // Maps a create-order failure to an i18n key the review modal renders inline
-// (week3.md § Endpoints Redeem error codes).
-function redeemErrorKey(error: unknown): string | null {
+// (week3.md § Endpoints Redeem error codes). PIN failures on the custodial path
+// (401 INVALID_PIN / PIN_NOT_SET, 429 TOO_MANY_ATTEMPTS — redeem.yaml, USDX-565)
+// are NOT mapped here: they belong in the PIN dialog (`pinErrorKey` below), so
+// the user retypes where the mistake was made.
+export function redeemErrorKey(error: unknown): string | null {
   if (!error) return null;
   // 429 RATE_LIMITED is surfaced globally as a toast (Providers query/mutation
   // cache, USDX-252) — suppress the inline modal error so it isn't a misleading
   // generic message, and let the user retry after the throttle clears.
   if (isRateLimited(error)) return null;
+  if (isInvalidPin(error) || isPinNotSet(error) || isTooManyAttempts(error)) return null;
   if (isApiError(error)) {
+    // Custodial wallet PROVISIONING/SUSPENDED — rejected before any order exists.
+    // The status does not change by pressing again (wallet.yaml § 409).
+    if (isWalletNotActive(error)) return "redeem.errWalletNotActive";
     // Wallet pre-check failures (USDX-259) — the precondition gate normally blocks
     // these before create, but surface the backend backstop inline too.
     if (isInsufficientBalance(error)) return "redeem.errInsufficientBalance";
@@ -64,6 +79,17 @@ function redeemErrorKey(error: unknown): string | null {
 export function useRedeem() {
   const store = useRedeemStore();
   const rateQuery = useConsumerRate();
+  // Sumber burn (USDX-567, custodial-wallet.md §5.3): wallet custodial user
+  // (sistem yang menandatangani setelah PIN) atau wallet eksternal ter-connect
+  // (self-sign, jalur existing). Pilihan hanya ada untuk pemilik wallet ACTIVE;
+  // selain itu `source` dipaksa `external` dan hook ini berperilaku persis
+  // seperti sebelumnya.
+  const custodial = useCustodialWallet();
+  const custodialAvailable = custodial.isActive && !!custodial.address;
+  const source = custodialAvailable ? store.source : "external";
+  const isCustodialSource = source === "custodial";
+  const pinCooldown = useCooldown();
+  const [pinNotSet, setPinNotSet] = useState(false);
 
   const effectiveSellRate = rateQuery.data ? Number(rateQuery.data.effectiveSellRate) : null;
   const enteredAmount = parseAmount(store.amount);
@@ -82,9 +108,20 @@ export function useRedeem() {
     [enteredAmount, store.amountCurrency, effectiveSellRate],
   );
 
-  // Wallet precondition gate against the burn amount (network/balance/gas).
+  // Wallet precondition gate against the burn amount (network/balance/gas) —
+  // external wallet only. Always called (rules of hooks); ignored on the
+  // custodial path, which has no network to switch and no gas to hold.
   const preconditions = useRedeemPreconditions(breakdown.amountUsdx);
-  const { runBurn } = useRedeemBurn();
+
+  // What burns and what it holds, per source. The custodial balance comes from
+  // GET /api/v2/wallet (null = unknown, never 0); the external one from the
+  // on-chain read. Shortfall is only asserted against a KNOWN balance.
+  const burnAddress = isCustodialSource ? custodial.address : preconditions.address;
+  const balanceUsdx = isCustodialSource ? custodial.balanceUsdx : preconditions.balanceUsdx;
+  const insufficientBalance = isCustodialSource
+    ? breakdown.amountUsdx > 0 && balanceUsdx != null && balanceUsdx < breakdown.amountUsdx
+    : preconditions.insufficientBalance;
+  const canBurn = isCustodialSource ? !insufficientBalance : preconditions.canBurn;
 
   // Validate the USDX amount against the redeem min/max. A USD input is itself
   // the USDX amount; an IDR input needs the rate to convert first (skip until loaded).
@@ -146,12 +183,17 @@ export function useRedeem() {
       };
 
   const createMutation = useMutation({
-    mutationFn: () =>
+    // `pin` only travels on the custodial path (redeem.yaml § CreateRedeemOrder.pin):
+    // the backend ignores it on SELF_SIGN, and the FE does not send it there.
+    mutationFn: (pin?: string) =>
       createRedeemOrder({
         amount: store.amount.trim(),
         amountCurrency: store.amountCurrency,
         chain: REDEEM_CHAIN_ID,
-        userAddress: preconditions.address ?? "", // connected burn wallet (USDX-259)
+        // Custodial: the user's custodial address (backend derives burnMode from
+        // it); external: the connected burn wallet (USDX-259).
+        userAddress: burnAddress ?? "",
+        ...(isCustodialSource && pin ? { pin } : {}),
         // Two-path bank destination (USDX-267): saved → only `bankAccountId` (the
         // backend resolves the number/name from the entry); manual → the trio.
         // Omitted fields drop from the JSON body.
@@ -163,7 +205,24 @@ export function useRedeem() {
               bankAccountName: store.bankAccountName.trim(),
             }),
       }),
+    onError: (error) => {
+      if (isPinNotSet(error)) setPinNotSet(true);
+      if (isTooManyAttempts(error)) {
+        pinCooldown.start(getRateLimitSeconds(error) || DEFAULT_COOLDOWN_SECONDS);
+      }
+      // Backend says the wallet is not ACTIVE while the profile copy said it was →
+      // the copy is stale; refetch so the message + the disabled button follow reality.
+      if (isWalletNotActive(error)) custodial.invalidate();
+      // Non-PIN failures show in the Ringkasan: close the PIN dialog so they are seen.
+      if (!isInvalidPin(error) && !isPinNotSet(error) && !isTooManyAttempts(error)) {
+        store.setPinOpen(false);
+      }
+    },
   });
+
+  // 409 WALLET_NOT_ACTIVE: "tampilkan status wallet, jangan tawarkan retry"
+  // (wallet.yaml § 409) — the status does not change by pressing again.
+  const walletBlocked = isWalletNotActive(createMutation.error);
 
   function toggleCurrency() {
     store.setAmountCurrency(store.amountCurrency === "USD" ? "IDR" : "USD");
@@ -173,7 +232,7 @@ export function useRedeem() {
   // max). The amount field follows the active denomination: USD = USDX directly,
   // IDR = gross sale value (balance × sell rate, floored to whole rupiah).
   function setMaxAmount() {
-    const balance = preconditions.balanceUsdx;
+    const balance = balanceUsdx;
     if (balance == null || balance <= 0) return;
     const maxUsdx = Math.min(balance, MAX_REDEEM_AMOUNT);
     if (store.amountCurrency === "USD") {
@@ -183,15 +242,28 @@ export function useRedeem() {
     }
   }
 
-  // Create the order → navigate to the tracker → sign + broadcast the burn (with
-  // the guard double-burn state machine). The burn is fired (not awaited) so the
-  // modal closes as soon as the order exists; the tracker polls and reflects
-  // AWAITING_BURN → … → PAYOUT_COMPLETE and the burn state.
-  async function submitRedeem() {
-    const order = await createMutation.mutateAsync();
+  // Create the order → navigate to the tracker. The burn is NOT fired from here
+  // (USDX-661, bni-integration.md § 17.12): the tracker first states the payout
+  // destination as the ORDER answered it — bank · nomor rekening · nama pemilik, and
+  // whether that name is the bank's answer at all (USDX-672, `bankAccountNameVerified`)
+  // — and waits for an explicit agreement. Until then the burn button
+  // is disabled, and pressing it is what runs `runBurn` (the same guarded path the
+  // resume-from-/history flow already used). Mengonfirmasi ketikan sendiri di
+  // Ringkasan bukan verifikasi apa pun: nama dari inquiry baru ada setelah order
+  // terbit, jadi jedanya memang harus di sini.
+  //
+  // Custodial (`burnMode: CUSTODIAL` — decided by the BACKEND in the create
+  // response, not by the FE): nothing to sign and nothing to confirm. The PIN sent
+  // with the create was the approval; the system dispatches the burn and the tracker
+  // shows "memproses burn" until the scanner confirms.
+  async function submitRedeem(pin?: string) {
+    const order = await createMutation.mutateAsync(pin);
+    setPinNotSet(false);
     store.setOrderId(order.id);
     store.setStep("tracker");
-    void runBurn(order, preconditions.address ?? "");
+    if (order.burnMode === "CUSTODIAL") {
+      custodial.invalidate(); // saldo turun begitu burn masuk blok
+    }
     return order;
   }
 
@@ -227,21 +299,48 @@ export function useRedeem() {
     accountNameError,
     belowMinPayout,
     isFormValid,
-    // wallet + preconditions (contextual connect — redeem-only, no global button)
-    isWalletConnected: preconditions.isConnected,
-    walletAddress: preconditions.address,
+    // burn source (USDX-567): custodial wallet (PIN, system signs) or external
+    // wallet (connect + self-sign). The switch only exists for custodial owners.
+    source,
+    setSource: store.setSource,
+    custodialAvailable,
+    isCustodialSource,
+    custodialAddress: custodialAvailable ? custodial.address : null,
+    custodialBalanceState: custodial.balanceState,
+    // wallet + preconditions (contextual connect — redeem-only, no global button).
+    // On the custodial path there is no wallet to connect, no network to switch
+    // and no gas to warn about: the gate collapses to the balance check.
+    isWalletConnected: isCustodialSource ? true : preconditions.isConnected,
+    walletAddress: burnAddress,
     connectWallet: preconditions.connect,
-    chainOk: preconditions.chainOk,
+    chainOk: isCustodialSource ? true : preconditions.chainOk,
     switchNetwork: preconditions.switchNetwork,
-    isSwitchingNetwork: preconditions.isSwitchingNetwork,
-    balanceUsdx: preconditions.balanceUsdx,
-    insufficientBalance: preconditions.insufficientBalance,
-    lowGasWarning: preconditions.lowGasWarning,
-    canBurn: preconditions.canBurn,
-    // submit (create order → tracker → guarded burn)
+    isSwitchingNetwork: isCustodialSource ? false : preconditions.isSwitchingNetwork,
+    balanceUsdx,
+    insufficientBalance,
+    lowGasWarning: isCustodialSource ? false : preconditions.lowGasWarning,
+    canBurn,
+    // PIN dialog (custodial path) — store-owned so a create success closes it.
+    pinOpen: store.pinOpen,
+    setPinOpen: store.setPinOpen,
+    openPin: () => {
+      createMutation.reset();
+      store.setPinOpen(true);
+    },
+    pinErrorKey: isInvalidPin(createMutation.error)
+      ? "pin.errInvalid"
+      : isPinNotSet(createMutation.error)
+        ? "pin.errNotSet"
+        : null,
+    pinNotSet: pinNotSet || custodial.pinSet === false,
+    pinCooldownSeconds: pinCooldown.remaining,
+    // submit (create order → tracker → guarded burn / system-dispatched burn)
     submitRedeem,
     isCreating: createMutation.isPending,
     createErrorKey: redeemErrorKey(createMutation.error),
+    // `{status}` for redeem.errWalletNotActive — an i18n key the component translates.
+    createErrorStatusKey: walletBlocked ? walletStatusKey(custodial.status) : null,
+    walletBlocked,
     resetCreateError: createMutation.reset,
   };
 }

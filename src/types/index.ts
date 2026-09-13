@@ -15,7 +15,74 @@ export interface User {
   emailVerifiedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  // Akun sudah punya PIN 6-digit (`users.pin_hash` terisi — users.yaml § User
+  // `pinSet`, pola pin.yaml). Transfer & redeem custodial memakai PIN itu; `false`
+  // → arahkan user membuat PIN dulu, jangan buka dialog PIN yang pasti gagal.
+  // Opsional: sesi yang di-persist sebelum field ini ada tidak membawanya.
+  pinSet?: boolean;
+  // Wallet custodial user (users.yaml § User → `custodialWallet`, USDX-607/566).
+  // `null` = user tidak punya (mayoritas non-custodial). Ini yang menentukan
+  // routing: tawarkan "dikasih wallet" atau tampilkan saldo — TANPA memanggil
+  // `GET /api/v2/wallet` lalu menelan 404 di setiap cold start.
+  //
+  // Opsional karena `user` di-persist ke localStorage: sesi yang disimpan sebelum
+  // field ini ada tidak membawanya sama sekali. `undefined` dibaca seperti `null`
+  // (tidak ada penawaran yang salah), dan refresh `/auth/me` (useSession) yang
+  // mengisinya.
+  custodialWallet?: CustodialWalletSummary | null;
 }
+
+// ── Wallet custodial (wallet.yaml, Gelombang 1 USDX-551 · FE USDX-566) ────────
+// Kunci dipegang sistem (wallet-service → Web3Signer → Vault); yang dibaca app
+// hanya salinan kerja backend. Status = `common.yaml § CustodialWalletStatus`.
+// TIDAK ada nilai gagal: provisioning yang gagal tetap PROVISIONING dan di-retry
+// wallet-service — karena itu FE membatasi poll + menyediakan "coba lagi"
+// (`custodial-wallet.md` §5.5).
+export type CustodialWalletStatus = "PROVISIONING" | "ACTIVE" | "SUSPENDED";
+
+// Bentuk ringkas yang menempel di profil (`User.custodialWallet`). Sengaja tanpa
+// saldo: profil tidak boleh menahan responsnya menunggu pembacaan RPC.
+export interface CustodialWalletSummary {
+  // Null selama PROVISIONING — address baru ada setelah kunci masuk Vault dan
+  // terverifikasi di `eth_accounts`.
+  address: string | null;
+  status: CustodialWalletStatus;
+}
+
+// GET/POST /api/v2/wallet (wallet.yaml § CustodialWallet). Satu tipe untuk
+// keduanya; field yang belum berlaku bernilai null.
+export interface CustodialWallet extends CustodialWalletSummary {
+  chain: string; // "polygon" — gelombang 1 Polygon-only
+  contractAddress: string; // kontrak USDX proxy di chain ini — asal angka `balance`
+  // Saldo USDX desimal, dibaca LIVE dari chain. **Null = tidak terbaca** (RPC tak
+  // terjangkau / masih PROVISIONING), BUKAN nol — UI merender "—", jangan 0:
+  // saldo nol palsu terbaca user sebagai dana hilang.
+  balance: string | null;
+  balanceWei: string | null; // uint256 string; null bersama `balance`
+  balanceAt: string | null; // waktu pembacaan; null bersama `balance`
+  createdAt: string; // permintaan diterima, bukan waktu ACTIVE
+}
+
+// POST /api/v2/wallet/transfer → 202 (wallet.yaml § TransferAccepted). **Bukti
+// BROADCAST, bukan bukti settle**: tx sudah di mempool, konfirmasi on-chain terjadi
+// setelahnya dan belum ada endpoint pemantaunya di gelombang 1 (USDX-577). UI
+// menampilkan tx hash + tautan explorer, tidak boleh mengklaim "berhasil".
+export interface TransferAccepted {
+  txHash: string; // 0x-prefixed, 66 chars
+  from: string; // address custodial pengirim (echo)
+  to: string;
+  amount: string; // decimal USDX
+  amountWei: string; // uint256 string
+  chain: string;
+  // Waktu broadcast. Pada replay idempotency ini tetap waktu broadcast ASLI.
+  submittedAt: string;
+}
+
+// Siapa yang menandatangani burn sebuah redeem order (common.yaml § BurnMode).
+// Ditentukan BACKEND saat create dari salinan kerja wallet custodial — FE tidak
+// mengirimkannya. CUSTODIAL → FE tidak menampilkan layar tanda tangan wallet dan
+// tidak memanggil `POST /redeem/{id}/burn-tx` (→ 409 INVALID_ORDER_STATE).
+export type BurnMode = "SELF_SIGN" | "CUSTODIAL";
 
 // Own KYC status (consumer) — openapi KycMyStatus (kyc.yaml). No PII payload.
 // Fields besides `status` are absent when the user has never submitted KYC —
@@ -184,6 +251,49 @@ export interface ConsumerRate {
   updatedAt: string;
 }
 
+// GET /api/v2/config — the app's single source of runtime configuration
+// (app-config.yaml, USDX-635; `mintMode` added by USDX-636). Needs a consumer
+// session (401 without one). Everything here used to be a build-time constant or
+// a copy of the backend's `fee_configs`, which is how the mint minimum ended up
+// denominated in USDX and the contract address ended up baked into a bundle.
+//
+// All money fields are decimal STRINGS, same convention as ConsumerRate — the FE
+// converts once, at the edge, and never re-floats them afterwards.
+export interface AppConfig {
+  /** Minimum mint value in IDR, compared against the order subtotal (not the total pay). */
+  minMintIdr: string;
+  /** Mint fee, PERCENT of the subtotal (fee.yaml `mintFeePct`, e.g. "1.0" = 1%). */
+  mintFeePct: string;
+  /** Payment-gateway VA fee, flat IDR (fee.yaml `pgFeeVaFlat`, e.g. "4000.00"). */
+  pgFeeVaFlat: string;
+  /**
+   * USDX token address on `chain`. This ALWAYS means the production token — it
+   * is never swapped for the test one, in any mode. null when the chain isn't
+   * configured backend-side.
+   */
+  contractAddress: string | null;
+  /**
+   * Test-mint token address, non-null ONLY while `mintMode === "TEST"`
+   * (USDX-636). OPTIONAL: the field does not exist until that ships, and its
+   * absence must read exactly like `null` — no test-mint strip.
+   */
+  testContractAddress?: string | null;
+  /**
+   * Whether THIS user may mint right now. While the test bundle runs, minting is
+   * open only to a list of testers (USDX-636), so everyone else gets `false`.
+   * OPTIONAL: absent means yes — an app that cannot see the field must behave
+   * exactly as it did before the field existed.
+   */
+  mintAvailable?: boolean;
+  /** Chain the address belongs to — "polygon" in Phase 2. */
+  chain: string;
+  /**
+   * Mint bundle currently in force (USDX-636). OPTIONAL: the field only exists
+   * once USDX-636 ships, and its absence means the normal production bundle.
+   */
+  mintMode?: "PROD" | "TEST";
+}
+
 // address-book.yaml AddressBookEntry — a saved mint destination wallet.
 export interface AddressBookEntry {
   id: string;
@@ -259,6 +369,14 @@ export type RedeemStatus =
   | "BURNED" // Redeem event detected (amount matched)
   | "PROCESSING_PAYOUT" // disbursement created with the provider
   | "PAYOUT_COMPLETE" // payout confirmed
+  // Payout rejected DEFINITIVELY by the provider (business 4xx on submit, or
+  // checkStatus/webhook answering FAILED) — common.yaml § RedeemStatus rev
+  // 2026-09-12, D22, backend#320 (USDX-471). Not a dead end: it means "waiting
+  // for ops", who resolve it via RESEND (→ PROCESSING_PAYOUT), SETTLED_MANUAL
+  // (→ PAYOUT_COMPLETE) or CLOSED (stays PAYOUT_FAILED). Transport failures never
+  // reach it. The contract says clients MUST render it (USDX-664), so it stays out
+  // of the tracker's STEPS and gets a state of its own.
+  | "PAYOUT_FAILED"
   | "EXPIRED"; // AWAITING_BURN passed expires_at without a burn (late burn → BURNED)
 
 // POST /api/v2/redeem response (redeem.yaml RedeemOrderCreated). Carries the
@@ -271,6 +389,10 @@ export interface RedeemOrderCreated {
   // Burn wallet bound at create (echo of the request `userAddress`, USDX-259);
   // the scanner only accepts a Redeem event from it.
   userAddress: string;
+  // Jalur burn (redeem.yaml § RedeemOrderCreated.burnMode, USDX-565). Snapshot saat
+  // create. Opsional di tipe: payload backend sebelum USDX-565 tidak membawanya,
+  // dan yang tidak membawa dibaca SELF_SIGN — alur existing, bukan alur baru.
+  burnMode?: BurnMode;
   contractAddress: string; // USDX proxy address on this chain
   redeemId: string; // bytes32 hex (0x-prefixed) — `id` arg for redeem(id, amount)
   amount: string; // decimal USDX
@@ -288,6 +410,18 @@ export interface RedeemOrderCreated {
   bankName: string; // resolved from bankCode (un-mask 2026-06-25, USDX-269/270)
   bankAccountNumber: string; // full number — owner sees their own data (un-mask 2026-06-25)
   bankAccountName: string; // user sees their own data
+  // Apakah nama di `bankAccountName` datang dari JAWABAN inquiry provider atas nomor
+  // rekening ini (redeem.yaml § RedeemOrderCreated / § RedeemOrder, sot#38, USDX-672).
+  // `false` = itu nama yang diketik/disimpan nasabah, dipakai apa adanya karena
+  // provider tidak menjawab nama (backend: `inquiry.accountName ?? bank.bankAccountName`
+  // — provider MOCK meng-echo ketikan nasabah; adapter SNAP menjawab `null` kalau bank
+  // tidak mengirim `beneficiaryAccountName`).
+  //
+  // Opsional di tipe: payload backend sebelum USDX-672 tidak membawanya. Yang tidak
+  // membawa WAJIB dibaca seperti `false` — klaim "jawaban bank" hanya boleh dipasang
+  // kalau response benar-benar mengatakannya, dan menahan klaim saat tidak tahu adalah
+  // satu-satunya arah yang aman di layar yang seharusnya menangkap salah rekening.
+  bankAccountNameVerified?: boolean;
   status: RedeemStatus;
   expiresAt: string;
 }

@@ -9,6 +9,7 @@ A USD-backed stablecoin web application for minting and redeeming USDX tokens ac
 - **Transaction History** — View all mint and redeem transactions with status tracking
 - **Multi-Chain Support** — Base, Polygon, BSC, Lisk, Etherlink, Kaia, Monad
 - **Wallet Connection** — RainbowKit integration for wallet management
+- **USDX Wallet (custodial)** — "Belum punya wallet? Kami buatkan": a wallet managed by USDX, tied to the account; receive USDX with an address or QR, balance on the dashboard — beside, not instead of, your own wallet
 - **Responsive Design** — Optimized for mobile, tablet, and desktop
 
 ## Quick Start

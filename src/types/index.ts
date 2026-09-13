@@ -262,6 +262,17 @@ export interface ConsumerRate {
 export interface AppConfig {
   /** Minimum mint value in IDR, compared against the order subtotal (not the total pay). */
   minMintIdr: string;
+  /**
+   * Minimum redeem value in IDR (`fee_configs.min_redeem_idr`), compared against
+   * the NET payout — the rupiah the customer really receives after fees, not the
+   * gross (app-config.yaml § AppConfig.minRedeemIdr, USDX-682).
+   *
+   * OPTIONAL, and it has to be: the backend field ships AFTER this app does
+   * (merge order sot -> backend -> app), so for the whole rollout window the
+   * response will not carry it. Absent means "the app asserts no minimum of its
+   * own" — never a guessed number. See `useAppConfig` / `useRedeem`.
+   */
+  minRedeemIdr?: string;
   /** Mint fee, PERCENT of the subtotal (fee.yaml `mintFeePct`, e.g. "1.0" = 1%). */
   mintFeePct: string;
   /** Payment-gateway VA fee, flat IDR (fee.yaml `pgFeeVaFlat`, e.g. "4000.00"). */

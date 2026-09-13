@@ -257,6 +257,27 @@ export async function seedBurnReject(page: import("@playwright/test").Page) {
 }
 
 /**
+ * Arm the payout-rejection seam (mock-api PAYOUT_FAILED_KEY, USDX-664): the mock
+ * payout is refused definitively, so the order lands on `PAYOUT_FAILED` a few
+ * seconds after the burn instead of completing. The state ops resolve by hand — the
+ * only way to reach it offline. Call before the first page.goto().
+ */
+export async function seedPayoutFailed(page: import("@playwright/test").Page) {
+  await page.addInitScript(() => localStorage.setItem("usdx-mock-payout-failed", "1"));
+}
+
+/**
+ * Arm the account-inquiry seam (mock-api INQUIRY_NAME_KEY, USDX-661): the created
+ * order comes back with THIS holder name, whatever the customer typed — the real
+ * backend overrides the name with the inquiry result. Lets a spec prove the pre-burn
+ * screen states the BANK's answer and not the form input. Call before the first
+ * page.goto().
+ */
+export async function seedInquiryName(page: import("@playwright/test").Page, name: string) {
+  await page.addInitScript((n) => localStorage.setItem("usdx-mock-inquiry-name", n), name);
+}
+
+/**
  * Arm the mint/redeem throughput-throttle seam (mock-api RATE_LIMIT_OVERRIDE_KEY,
  * USDX-252): every mint/redeem create + status poll returns 429 RATE_LIMITED with
  * this Retry-After, so the central throttle toast + poll backoff are testable

@@ -262,7 +262,7 @@ export interface RedeemPreconditions {
   insufficientBalance: boolean;
   // gas (native POL) — non-blocking warning when likely too low to pay the tx fee.
   lowGasWarning: boolean;
-  // overall: safe to enable "Konfirmasi & Burn" (gas is intentionally excluded —
+  // overall: safe to enable the Ringkasan confirm button (gas is intentionally excluded —
   // it's a warning, not a block).
   canBurn: boolean;
 }

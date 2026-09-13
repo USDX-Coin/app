@@ -48,7 +48,7 @@ test.describe("Redeem Flow (custodial)", () => {
       await expect(summary.getByText("My custodial wallet")).toBeVisible();
       await expect(summary.getByText(/no wallet signature needed/)).toBeVisible();
 
-      await summary.getByRole("button", { name: "Confirm & Burn" }).click();
+      await summary.getByRole("button", { name: "Continue to Confirmation" }).click();
       const pin = page.getByRole("dialog").filter({ hasText: "Confirm with PIN" });
       await expect(pin).toBeVisible();
       await pin.getByLabel("6-digit PIN").fill(MOCK_PIN);
@@ -82,7 +82,7 @@ test.describe("Redeem Flow (custodial)", () => {
       await page.getByPlaceholder("0", { exact: true }).fill("100");
       await fillBank(page);
       await page.getByRole("button", { name: "Redeem", exact: true }).click();
-      await page.getByRole("button", { name: "Confirm & Burn" }).click();
+      await page.getByRole("button", { name: "Continue to Confirmation" }).click();
       const pin = page.getByRole("dialog").filter({ hasText: "Confirm with PIN" });
       await pin.getByLabel("6-digit PIN").fill("000000");
       await pin.getByRole("button", { name: "Confirm & Burn" }).click();

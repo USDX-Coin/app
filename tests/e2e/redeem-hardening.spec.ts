@@ -20,6 +20,15 @@ async function fillForm(page: Page, amount = "100") {
   await page.getByPlaceholder("As printed on the passbook").fill("SINGGIH BRILIAN TARA");
 }
 
+// Pre-burn destination agreement (USDX-661): the tracker asks for it before the
+// burn button works, on the create path as well as on resume. Covered on its own in
+// redeem-confirm-destination.spec.ts.
+async function confirmDestination(page: Page) {
+  const block = page.getByTestId("redeem-confirm-destination");
+  await expect(block).toBeVisible({ timeout: 15000 });
+  await block.getByRole("checkbox").click();
+}
+
 // Open the Ringkasan: the CTA is always "Redeem" — first click connects (seam),
 // second click (now connected) opens the modal.
 async function openRingkasan(page: Page) {
@@ -43,7 +52,7 @@ test.describe("Redeem hardening — precondition gate", () => {
       await openRingkasan(page);
 
       await expect(page.getByRole("button", { name: "Switch to Polygon" })).toBeVisible();
-      await expect(page.getByRole("button", { name: "Confirm & Burn" })).toBeDisabled();
+      await expect(page.getByRole("button", { name: "Continue to Confirmation" })).toBeDisabled();
     });
 
     test("insufficient USDX balance → message + burn disabled", async ({ page }) => {
@@ -58,7 +67,7 @@ test.describe("Redeem hardening — precondition gate", () => {
       await openRingkasan(page);
 
       await expect(page.getByText("Insufficient USDX balance.")).toBeVisible();
-      await expect(page.getByRole("button", { name: "Confirm & Burn" })).toBeDisabled();
+      await expect(page.getByRole("button", { name: "Continue to Confirmation" })).toBeDisabled();
     });
   });
 
@@ -75,7 +84,7 @@ test.describe("Redeem hardening — precondition gate", () => {
       await openRingkasan(page);
 
       await expect(page.getByText(/enough POL/)).toBeVisible();
-      await expect(page.getByRole("button", { name: "Confirm & Burn" })).toBeEnabled();
+      await expect(page.getByRole("button", { name: "Continue to Confirmation" })).toBeEnabled();
     });
   });
 });
@@ -91,7 +100,9 @@ test.describe("Redeem hardening — burn-tx report + guard", () => {
 
       await fillForm(page);
       await openRingkasan(page);
-      await page.getByRole("button", { name: "Confirm & Burn" }).click();
+      await page.getByRole("button", { name: "Continue to Confirmation" }).click();
+      await confirmDestination(page);
+      await page.getByRole("button", { name: "Burn USDX" }).click();
 
       // Optimistic burn-tx report stamps the order → "processing burn" before the
       // scanner confirms (status still AWAITING_BURN).
@@ -113,7 +124,9 @@ test.describe("Redeem hardening — burn-tx report + guard", () => {
 
       await fillForm(page);
       await openRingkasan(page);
-      await page.getByRole("button", { name: "Confirm & Burn" }).click();
+      await page.getByRole("button", { name: "Continue to Confirmation" }).click();
+      await confirmDestination(page);
+      await page.getByRole("button", { name: "Burn USDX" }).click();
 
       // The burn was rejected in the wallet — the order stays AWAITING_BURN and a
       // retry is offered (guard double-burn: no second tx auto-fired).
@@ -162,6 +175,9 @@ test.describe("Redeem hardening — resume from history", () => {
       await resumeSeededOrder(page);
 
       const burn = page.getByRole("button", { name: "Burn USDX" });
+      // Gerbang persetujuan tujuan berlaku di jalur resume juga (USDX-661).
+      await expect(burn).toBeDisabled();
+      await confirmDestination(page);
       await expect(burn).toBeEnabled();
       await burn.click();
 

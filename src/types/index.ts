@@ -369,6 +369,14 @@ export type RedeemStatus =
   | "BURNED" // Redeem event detected (amount matched)
   | "PROCESSING_PAYOUT" // disbursement created with the provider
   | "PAYOUT_COMPLETE" // payout confirmed
+  // Payout rejected DEFINITIVELY by the provider (business 4xx on submit, or
+  // checkStatus/webhook answering FAILED) — common.yaml § RedeemStatus rev
+  // 2026-09-12, D22, backend#320 (USDX-471). Not a dead end: it means "waiting
+  // for ops", who resolve it via RESEND (→ PROCESSING_PAYOUT), SETTLED_MANUAL
+  // (→ PAYOUT_COMPLETE) or CLOSED (stays PAYOUT_FAILED). Transport failures never
+  // reach it. The contract says clients MUST render it (USDX-664), so it stays out
+  // of the tracker's STEPS and gets a state of its own.
+  | "PAYOUT_FAILED"
   | "EXPIRED"; // AWAITING_BURN passed expires_at without a burn (late burn → BURNED)
 
 // POST /api/v2/redeem response (redeem.yaml RedeemOrderCreated). Carries the
@@ -402,6 +410,18 @@ export interface RedeemOrderCreated {
   bankName: string; // resolved from bankCode (un-mask 2026-06-25, USDX-269/270)
   bankAccountNumber: string; // full number — owner sees their own data (un-mask 2026-06-25)
   bankAccountName: string; // user sees their own data
+  // Apakah nama di `bankAccountName` datang dari JAWABAN inquiry provider atas nomor
+  // rekening ini (redeem.yaml § RedeemOrderCreated / § RedeemOrder, sot#38, USDX-672).
+  // `false` = itu nama yang diketik/disimpan nasabah, dipakai apa adanya karena
+  // provider tidak menjawab nama (backend: `inquiry.accountName ?? bank.bankAccountName`
+  // — provider MOCK meng-echo ketikan nasabah; adapter SNAP menjawab `null` kalau bank
+  // tidak mengirim `beneficiaryAccountName`).
+  //
+  // Opsional di tipe: payload backend sebelum USDX-672 tidak membawanya. Yang tidak
+  // membawa WAJIB dibaca seperti `false` — klaim "jawaban bank" hanya boleh dipasang
+  // kalau response benar-benar mengatakannya, dan menahan klaim saat tidak tahu adalah
+  // satu-satunya arah yang aman di layar yang seharusnya menangkap salah rekening.
+  bankAccountNameVerified?: boolean;
   status: RedeemStatus;
   expiresAt: string;
 }

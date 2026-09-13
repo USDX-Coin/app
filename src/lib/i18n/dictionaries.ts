@@ -286,6 +286,18 @@ const en: Dict = {
   "redeem.statusProcessingDesc": "Sending IDR to your bank account.",
   "redeem.statusCompleteDesc": "IDR has been disbursed to your bank account.",
   "redeem.statusExpiredDesc": "The burn window passed without an on-chain burn.",
+  // redeem — payout rejected definitively (USDX-664, common.yaml § RedeemStatus).
+  // A warning, not an error: the money is waiting for a person. No promise of a
+  // refund or a re-mint — there is no such policy — and nothing for the customer
+  // to retry, because they cannot fix this themselves.
+  //
+  // It also must not promise the payout will happen: ops can resolve this order
+  // CLOSED (= it will NOT be paid), and the FE has no resolution field to tell that
+  // apart from RESEND / SETTLED_MANUAL. So the copy says the team is handling it,
+  // which is true of every resolution, and stops there.
+  "redeem.statusPayoutFailed": "Payout needs attention",
+  "redeem.statusPayoutFailedDesc":
+    "Your USDX is already burned and the transfer to your bank has not gone through. Our team is handling it — there is nothing you need to do right now.",
   "redeem.burnTx": "Burn transaction",
   "redeem.viewOnExplorer": "View on explorer",
   "redeem.expiresIn": "Burn window expires in {time}",
@@ -327,10 +339,38 @@ const en: Dict = {
   "redeem.resume": "Continue",
   "redeem.walletMismatch": "This order is bound to another wallet ({address}). Connect that wallet to burn.",
   "redeem.connectToBurn": "Connect your wallet to burn.",
+  // redeem — destination confirmation before the burn (USDX-661, § 17.12). The
+  // holder name is the BANK's answer for that account number, which is the whole
+  // point: a mistyped number that happens to belong to someone else is invisible
+  // everywhere else in the flow. The name is repeated inside the checkbox sentence
+  // so the tick cannot be given without reading where the money goes.
+  "redeem.accountNumber": "Account number",
+  "redeem.confirmDestTitle": "Check the destination account",
+  "redeem.confirmDestNameSource": "The bank's answer for this account number.",
+  // USDX-672: the order response can carry the name the customer typed instead of
+  // the bank's answer, and only `bankAccountNameVerified` tells them apart. When it
+  // is false — or absent — the screen shows the name and claims nothing about where
+  // it came from. Honest without frightening: no provider talk, no accusation that
+  // anything is wrong, just the one thing the customer can act on — this name is not
+  // the bank's confirmation, so read it yourself.
+  "redeem.confirmDestNameUnverified":
+    "This name has not been confirmed by the bank — check it carefully yourself before you agree.",
+  "redeem.confirmDestNameMissing": "The bank did not return a holder name for this account.",
+  "redeem.confirmDestWarning":
+    "Once you burn, your USDX is gone permanently and the transfer to this account cannot be reversed.",
+  "redeem.confirmDestCheck": "I have checked it — the IDR goes to {name}.",
+  "redeem.confirmDestCheckNoName": "I have checked the destination account above.",
   "sum.sourceWallet": "Source wallet",
   "sum.bankDestination": "Destination bank",
   "sum.accountName": "Account holder",
   "btn.connectWallet": "Connect Wallet",
+  // The Ringkasan button only CREATES the order (USDX-661): the burn moved to the
+  // tracker, behind the destination agreement. So it names the step it actually
+  // reaches — the confirmation screen (self-sign) or the PIN dialog (custodial) —
+  // instead of claiming to burn.
+  "btn.continueToConfirm": "Continue to Confirmation",
+  // Still honest where it stayed: the custodial PIN dialog, where confirming does
+  // create the order AND have the system burn it.
   "btn.confirmBurn": "Confirm & Burn",
   // PIN confirmation (pin.yaml, USDX-567) — the single approval step for the
   // custodial transfer and the custodial redeem: after it there is no wallet
@@ -1258,6 +1298,18 @@ const id: Dict = {
   "redeem.statusProcessingDesc": "Mengirim IDR ke rekening bank Anda.",
   "redeem.statusCompleteDesc": "IDR telah dicairkan ke rekening bank Anda.",
   "redeem.statusExpiredDesc": "Jendela burn berakhir tanpa burn on-chain.",
+  // redeem — pencairan ditolak definitif (USDX-664, common.yaml § RedeemStatus).
+  // Peringatan, bukan galat: uangnya menunggu orang. Tidak menjanjikan refund atau
+  // mint ulang — kebijakannya tidak ada — dan tidak ada yang bisa nasabah coba
+  // lagi, karena ini bukan sesuatu yang bisa ia perbaiki sendiri.
+  //
+  // Juga tidak menjanjikan pembayarannya jadi: ops bisa me-resolve order ini CLOSED
+  // (= tidak akan dibayar), dan FE tidak punya field resolusi untuk membedakannya
+  // dari RESEND / SETTLED_MANUAL. Jadi teksnya berkata tim sedang menanganinya —
+  // benar untuk semua resolusi — lalu berhenti di situ.
+  "redeem.statusPayoutFailed": "Pencairan bermasalah",
+  "redeem.statusPayoutFailedDesc":
+    "USDX Anda sudah terbakar dan transfer ke rekening Anda belum berhasil. Tim kami sedang menanganinya — tidak ada yang perlu Anda lakukan sekarang.",
   "redeem.burnTx": "Transaksi burn",
   "redeem.viewOnExplorer": "Lihat di explorer",
   "redeem.expiresIn": "Jendela burn berakhir dalam {time}",
@@ -1299,10 +1351,37 @@ const id: Dict = {
   "redeem.resume": "Lanjutkan",
   "redeem.walletMismatch": "Order ini terikat ke wallet lain ({address}). Hubungkan wallet itu untuk burn.",
   "redeem.connectToBurn": "Hubungkan wallet Anda untuk burn.",
+  // redeem — konfirmasi tujuan sebelum burn (USDX-661, § 17.12). Nama pemilik
+  // adalah JAWABAN BANK atas nomor rekening itu, dan justru itu intinya: nomor
+  // salah ketik yang kebetulan milik orang lain tidak terlihat di mana pun lagi
+  // sepanjang alur. Namanya diulang di kalimat centangnya supaya persetujuan tidak
+  // bisa diberikan tanpa membaca ke mana uangnya pergi.
+  "redeem.accountNumber": "Nomor rekening",
+  "redeem.confirmDestTitle": "Periksa rekening tujuan",
+  "redeem.confirmDestNameSource": "Jawaban bank atas nomor rekening ini.",
+  // USDX-672: response order bisa membawa nama ketikan nasabah, bukan jawaban bank,
+  // dan hanya `bankAccountNameVerified` yang membedakannya. Saat false — atau belum
+  // dikirim — namanya tetap tampil tanpa klaim asal-usul. Jujur tanpa menakuti: tidak
+  // menyebut provider, tidak menuduh ada yang salah, hanya satu hal yang bisa
+  // nasabah lakukan — nama ini bukan konfirmasi bank, jadi baca sendiri.
+  "redeem.confirmDestNameUnverified":
+    "Nama ini belum dikonfirmasi bank — periksa sendiri dengan teliti sebelum menyetujui.",
+  "redeem.confirmDestNameMissing": "Bank tidak mengembalikan nama pemilik untuk rekening ini.",
+  "redeem.confirmDestWarning":
+    "Begitu Anda burn, USDX hangus permanen dan transfer ke rekening ini tidak bisa dibatalkan.",
+  "redeem.confirmDestCheck": "Saya sudah memeriksa — rupiahnya dikirim ke {name}.",
+  "redeem.confirmDestCheckNoName": "Saya sudah memeriksa rekening tujuan di atas.",
   "sum.sourceWallet": "Wallet sumber",
   "sum.bankDestination": "Bank tujuan",
   "sum.accountName": "Atas nama",
   "btn.connectWallet": "Hubungkan Wallet",
+  // Tombol Ringkasan hanya MEMBUAT order (USDX-661): burn-nya pindah ke tracker, di
+  // belakang persetujuan tujuan. Jadi labelnya menyebut langkah yang benar-benar
+  // dicapai — layar konfirmasi (self-sign) atau dialog PIN (custodial) — bukan
+  // mengaku membakar.
+  "btn.continueToConfirm": "Lanjut ke Konfirmasi",
+  // Masih jujur di tempat ia bertahan: dialog PIN custodial, di mana konfirmasinya
+  // memang membuat order SEKALIGUS menyuruh sistem membakarnya.
   "btn.confirmBurn": "Konfirmasi & Burn",
   // Konfirmasi PIN (pin.yaml, USDX-567) — satu-satunya langkah persetujuan untuk
   // transfer custodial dan redeem custodial: setelahnya tidak ada layar tanda

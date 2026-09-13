@@ -35,6 +35,9 @@ const STATUS_TONE: Record<string, BadgeTone> = {
   BURNED: "info",
   PROCESSING_PAYOUT: "info",
   PAYOUT_COMPLETE: "success",
+  // Payout rejected definitively (USDX-664): warning, not danger — the money is
+  // not lost, it is waiting for ops, like HELD on the mint side.
+  PAYOUT_FAILED: "warning",
   // Safe / approval (MintSafeStatus)
   NONE: "neutral",
   PENDING_APPROVAL: "info",

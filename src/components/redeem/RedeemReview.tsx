@@ -1,13 +1,21 @@
 "use client";
 
 // Ringkasan Transaksi modal (USDX-243, hardened USDX-259, week3.md § Ringkasan
-// Transaksi). Final confirmation before the burn. The precondition gate
+// Transaksi). The last screen before the order is created. The precondition gate
 // (network = Polygon, USDX balance ≥ amount, POL gas warning) must pass before
-// "Konfirmasi & Burn" enables. Confirm calls POST /v2/redeem (sending the
-// connected userAddress), then the hook navigates to the status tracker and signs
-// + broadcasts the burn (real on-chain via wagmi, USDX-263; simulated on the mock
-// layer). Create errors (422 INVALID_BANK_ACCOUNT / INSUFFICIENT_BALANCE /
+// "Lanjut ke Konfirmasi" enables. Confirm calls POST /v2/redeem (sending the
+// connected userAddress), then the hook navigates to the status tracker — which
+// states the destination the ORDER answered with and asks the customer to agree to
+// it before the burn can run (USDX-661). The names/numbers shown HERE are still the
+// customer's own input: the order does not exist yet, so nothing on this screen is
+// the bank's answer. Create errors (422 INVALID_BANK_ACCOUNT / INSUFFICIENT_BALANCE /
 // WALLET_BLACKLISTED / VALIDATION_ERROR, 503 REDEEM_DISABLED) surface inline.
+//
+// The button used to read "Konfirmasi & Burn" while its handler only created the
+// order — the burn moved to the tracker with USDX-661, so the label was promising an
+// action it no longer performed. It now names the step it actually reaches: the
+// destination confirmation (SELF_SIGN) or the PIN dialog (CUSTODIAL). The PIN dialog's
+// own confirm button keeps "Konfirmasi & Burn", because there it is true.
 
 import {
   Dialog,
@@ -79,7 +87,7 @@ export function RedeemReview({ open, onOpenChange }: RedeemReviewProps) {
 
   function handleConfirm() {
     // Custodial (USDX-567): the PIN is the approval and travels with the create,
-    // so "Konfirmasi & Burn" opens the PIN dialog; the create fires from there.
+    // so this button opens the PIN dialog; the create fires from there.
     if (isCustodialSource) {
       openPin();
       return;
@@ -104,7 +112,7 @@ export function RedeemReview({ open, onOpenChange }: RedeemReviewProps) {
 
         {/* Six rows, a fee block and up to three alerts: this is the tallest
             modal on the money path, so the body scrolls and the footer stays put
-            instead of pushing "Konfirmasi & Burn" past the fold (finding A8). */}
+            instead of pushing the confirm button past the fold (finding A8). */}
         <DialogBody>
           <div className="flex flex-col gap-3">
             <Row label={t("sum.youWillRedeem")}>
@@ -218,7 +226,7 @@ export function RedeemReview({ open, onOpenChange }: RedeemReviewProps) {
             loading={isCreating}
             loadingLabel={t("common.processing")}
           >
-            {t("btn.confirmBurn")}
+            {t("btn.continueToConfirm")}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -151,7 +151,19 @@ Mint and Redeem keep their state in Zustand stores; the Ringkasan is a modal:
   A custodial-wallet owner gets a destination switch (`mintStore.destinationSource`):
   "wallet custodial saya" (default — the profile address fills `userAddress`, no new
   API field, `custodial-wallet.md` §5.2) or "alamat lain" (the unchanged manual path)
-- Redeem: `form` → `tracker`; Ringkasan modal over the form → create order → contextual wallet burn (simulated in W3) → status tracker polling (USDX-243).
+- Redeem: `form` → `tracker`; Ringkasan modal over the form → create order → **konfirmasi
+  tujuan** → contextual wallet burn (simulated in W3) → status tracker polling (USDX-243).
+  The burn never fires from the create (USDX-661, `bni-integration.md § 17.12`): the tracker
+  states the destination the ORDER answered with — bank · nomor rekening · `bankAccountName`
+  — and the burn button stays disabled until the customer ticks the agreement. Same gate on
+  the resume-from-`/history` path; the CUSTODIAL path has no gate (the PIN was the approval).
+  The Ringkasan button therefore says "Lanjut ke Konfirmasi", not "Konfirmasi & Burn" — it
+  only creates the order.
+  Whether that holder name may be called **the bank's answer** is decided by
+  `bankAccountNameVerified` in the order response (USDX-672, `api/redeem.yaml`), never
+  assumed: the backend falls back to the name the customer typed when the provider answers
+  no name, so `false` — and a payload that does not carry the field at all — show the name
+  with no provenance claim. The agreement is required either way.
   A custodial-wallet owner also picks the burn source (`redeemStore.source`): custodial
   (PIN in the create body, the backend returns `burnMode: CUSTODIAL`, the system burns,
   the tracker shows "memproses burn" and never asks for a signature or reports a burn-tx)

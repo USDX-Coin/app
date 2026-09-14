@@ -262,6 +262,31 @@ export interface ConsumerRate {
 export interface AppConfig {
   /** Minimum mint value in IDR, compared against the order subtotal (not the total pay). */
   minMintIdr: string;
+  /**
+   * Minimum redeem value in IDR (`fee_configs.min_redeem_idr`), compared against
+   * the NET payout — the rupiah the customer really receives after fees, not the
+   * gross (app-config.yaml § AppConfig.minRedeemIdr, USDX-682).
+   *
+   * OPTIONAL, and it has to be: the backend field ships AFTER this app does
+   * (merge order sot -> backend -> app), so for the whole rollout window the
+   * response will not carry it. Absent means "the app asserts no minimum of its
+   * own" — never a guessed number. See `useAppConfig` / `useRedeem`.
+   */
+  minRedeemIdr?: string;
+  /**
+   * Whether the IDR payout of a redeem is still SIMULATED in this environment
+   * (`DISBURSEMENT_PROVIDER_KIND=MOCK`), or really sent through a provider
+   * (app-config.yaml § AppConfig.redeemPayoutSimulated, USDX-683). Only the
+   * backend knows which adapter is live: the app used to infer it from a
+   * build-time flag that defaulted to ON, which is how the redeem tracker kept
+   * captioning "payout simulated" after the real DurianPay payout shipped — a
+   * lie on the very screen used to prove the payout was real.
+   *
+   * OPTIONAL, and it has to be: the backend field ships AFTER this app does
+   * (merge order sot -> backend -> app). Absent means UNKNOWN, and unknown
+   * shows NO notice — silence claims nothing, the banner claims something false.
+   */
+  redeemPayoutSimulated?: boolean;
   /** Mint fee, PERCENT of the subtotal (fee.yaml `mintFeePct`, e.g. "1.0" = 1%). */
   mintFeePct: string;
   /** Payment-gateway VA fee, flat IDR (fee.yaml `pgFeeVaFlat`, e.g. "4000.00"). */

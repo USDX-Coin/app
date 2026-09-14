@@ -130,6 +130,15 @@ describe("validateAmount", () => {
     test("accepts valid redeem amount", () => {
       expect(validateAmount("500", "redeem")).toBeNull();
     });
+    test("accepts a small redeem — the minimum is not a USDX bound (USDX-682)", () => {
+      // This validator answered "validation.amount.minRedeem" ("Redeem minimal
+      // 10 USDX") for all three of these. That bound was worth Rp 162.500 at a
+      // 16.250 sell rate. The redeem minimum is rupiah now, judged on the net
+      // payout, and `useRedeem` owns it — see `belowMinPayout`.
+      expect(validateAmount("9", "redeem")).toBeNull();
+      expect(validateAmount("2", "redeem")).toBeNull();
+      expect(validateAmount("0.5", "redeem")).toBeNull();
+    });
     test("accepts amount with commas", () => {
       expect(validateAmount("1,000", "mint", mintUsdx(1_000))).toBeNull();
     });
@@ -153,7 +162,6 @@ describe("validateAmount", () => {
     });
     test("rejects a subtotal below the rupiah minimum", () => {
       expect(validateAmount("19000", "mint", mintIdr(19_000))).toBe("validation.amount.minMint");
-      expect(validateAmount("5", "redeem")).toBe("validation.amount.minRedeem");
     });
     test("rejects a USDX-denominated amount whose subtotal is below the minimum", () => {
       // 1 USDX = Rp 16.400 — under Rp 20.000, so the same error as typing 19000
@@ -396,6 +404,42 @@ describe("parseScannedAddress", () => {
   });
 });
 
+// USDX-682 AC: "Nol `MIN_REDEEM_AMOUNT` tersisa di repo app." The constant is not
+// merely unused — it is gone, and so is every reference to it. A comment naming it
+// is how the reason survives for the next reader, so comments are allowed; a live
+// reference is not, which is what this scan actually looks for.
+describe("MIN_REDEEM_AMOUNT is gone (USDX-682)", () => {
+  test("nothing in src/ references the constant outside a comment", async () => {
+    const { readdirSync, readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+
+    const sources = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) return sources(full);
+        return /\.tsx?$/.test(entry.name) ? [full] : [];
+      });
+
+    const files = sources("src");
+    expect(files.length).toBeGreaterThan(50); // the scan actually walked the tree
+
+    const offenders: string[] = [];
+    for (const file of files) {
+      readFileSync(file, "utf8")
+        .split("\n")
+        .forEach((line, index) => {
+          const at = line.indexOf("MIN_REDEEM_AMOUNT");
+          if (at === -1) return;
+          const comment = line.indexOf("//");
+          if (comment !== -1 && comment < at) return;
+          offenders.push(`${file}:${index + 1}: ${line.trim()}`);
+        });
+    }
+
+    expect(offenders).toEqual([]);
+  });
+});
+
 describe("dictionary coverage", () => {
   test("every key a validator can return exists in both languages", async () => {
     const { dictionaries } = await import("@/lib/i18n/dictionaries");
@@ -418,7 +462,6 @@ describe("dictionary coverage", () => {
         subtotalIdr: 32_800_000_000,
         amountUsdx: 2_000_000,
       }),
-      validateAmount("5", "redeem"),
       validateAmount("2000000", "redeem"),
       validateAddress(""),
       validateAddress("0x1234"),

@@ -8,7 +8,7 @@ Significant reusable hooks that orchestrate state, validation, calculations, and
 |------|-------|---------------|---------|
 | `useAuth` | `authStore` | `useMutation` (login, register) | Auth flow + router redirect |
 | `useMint` | `mintStore` | `useMutation` (createMint) | Mint form logic, rupiah-based minimum, fee calc |
-| `useAppConfig` | — | `useQuery` (`GET /api/v2/config`) | Runtime config: mint minimum (IDR), fee rates, token address, mint mode. Numbers are `null` — never a guessed default — until it loads (USDX-635/638) |
+| `useAppConfig` | — | `useQuery` (`GET /api/v2/config`) | Runtime config: mint minimum (IDR), fee rates, token address, mint mode, and whether the redeem payout is simulated (`redeemPayoutSimulated`, tri-state `true/false/null` — USDX-683). Numbers are `null` — never a guessed default — until it loads (USDX-635/638) |
 | `useMintHandoffReset` | `mintStore` | — | Wipes the mint form + Ringkasan when /mint comes back from the cross-origin checkout handoff (bfcache restore or fresh load) |
 | `useRedeem` | `redeemStore` | `useMutation` (createRedeem) | Redeem form logic, validation. Burn source (USDX-567): `custodial` (PIN in the body, `burnMode` from the backend, no client burn) or `external` (unchanged self-sign gate) |
 | `useTransfer` | `transferStore` | `useMutation` (`POST /api/v2/wallet/transfer`) | Custodial transfer: validation, `Idempotency-Key` once per intent, same-key retry on `409 IDEMPOTENCY_KEY_IN_PROGRESS`, error routing to the PIN dialog vs the Ringkasan (USDX-567). Takes `t` so `mapTransferError` can fill vars |

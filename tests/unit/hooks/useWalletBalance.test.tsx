@@ -45,10 +45,13 @@ function setConfig(
   useAppConfigMock.mockReturnValue({
     config: null,
     minMintIdr: 20_000,
+    minRedeemIdr: 20_000,
     mintFeePct: 1,
     pgFeeVaFlat: 4_000,
     contractAddress,
     testContractAddress,
+    // Tidak relevan untuk saldo — spanduk redeem yang membacanya (USDX-683).
+    redeemPayoutSimulated: null,
     mintAvailable: true,
     mintMode,
     isReady: true,
@@ -252,10 +255,12 @@ describe("useWalletBalance", () => {
       useAppConfigMock.mockReturnValue({
         config: null,
         minMintIdr: null,
+        minRedeemIdr: null,
         mintFeePct: null,
         pgFeeVaFlat: null,
         contractAddress: null,
         testContractAddress: null,
+        redeemPayoutSimulated: null,
         mintAvailable: true,
         mintMode: "PROD",
         isReady: false,

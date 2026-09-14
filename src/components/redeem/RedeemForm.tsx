@@ -127,6 +127,7 @@ export function RedeemForm() {
     accountNumberError,
     accountNameError,
     belowMinPayout,
+    minPayoutVars,
     isFormValid,
     isWalletConnected,
     walletAddress,
@@ -444,8 +445,13 @@ export function RedeemForm() {
             <BreakdownRow label={t("redeem.disbursementFee")} value={`− ${formatIDR(disbursementFeeIdr)}`} />
             <div className="my-1 border-t border-border" />
             <BreakdownRow label={t("redeem.netPayout")} value={formatIDR(netPayoutIdr)} strong />
+            {/* One minimum, stated in rupiah, about the line right above it —
+                the net payout (USDX-682). The figure comes from
+                GET /api/v2/config, not from a constant in this bundle. */}
             {belowMinPayout && (
-              <p role="alert" className="text-sm leading-5 text-destructive-text">{t("redeem.minPayout")}</p>
+              <p role="alert" className="text-sm leading-5 text-destructive-text">
+                {t("redeem.minPayout", minPayoutVars)}
+              </p>
             )}
           </div>
         )}

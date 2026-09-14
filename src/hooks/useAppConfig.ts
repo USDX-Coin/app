@@ -1,9 +1,9 @@
 "use client";
 
 // Runtime config for the consumer app (USDX-635). GET /api/v2/config
-// (app-config.yaml) — the mint minimum in rupiah, the fee rates shown before
-// checkout, the token address the balance is read from, and the mint bundle in
-// force. Same shape and caching as `useConsumerRate`.
+// (app-config.yaml) — the mint and redeem minimums in rupiah, the fee rates shown
+// before checkout, the token address the balance is read from, and the mint bundle
+// in force. Same shape and caching as `useConsumerRate`.
 //
 // The numbers arrive as decimal strings and are parsed ONCE here, at the edge.
 // They are `null` — never a guessed default — until the response lands: a made-up
@@ -30,6 +30,29 @@ export interface AppConfigRead {
   config: AppConfig | null;
   /** Minimum mint value in IDR (`minMintIdr`), compared against the subtotal. */
   minMintIdr: number | null;
+  /**
+   * Minimum redeem value in IDR (`minRedeemIdr`, USDX-682), compared against the
+   * NET payout. `null` while the field is absent — the backend ships it after the
+   * app does — and `null` means the redeem screen asserts NO minimum of its own
+   * and leaves the judgement to `POST /api/v2/redeem`. Deliberately not folded
+   * into `isReady`: redeem does not need the config to show honest numbers (its
+   * fee rates are its own), so a missing field must not close the screen.
+   */
+  minRedeemIdr: number | null;
+  /**
+   * Whether the redeem IDR payout is still simulated backend-side
+   * (`redeemPayoutSimulated`, USDX-683). Tri-state on purpose:
+   *
+   *   true  → this environment simulates the payout
+   *   false → a real provider sends it
+   *   null  → NOT KNOWN: still loading, the load failed, or the backend has not
+   *            shipped the field yet (it merges after this app)
+   *
+   * Unlike `mintAvailable`, neither boolean is a safe default here, because both
+   * make a claim about where the customer's rupiah actually goes. Callers show
+   * nothing while it is `null`.
+   */
+  redeemPayoutSimulated: boolean | null;
   /** Mint fee as a percentage of the subtotal (`mintFeePct`, "1.0" → 1). */
   mintFeePct: number | null;
   /** Flat VA fee in IDR (`pgFeeVaFlat`). */
@@ -50,7 +73,11 @@ export interface AppConfigRead {
    * a test one.
    */
   mintMode: "PROD" | "TEST";
-  /** The three numbers the mint screen needs are all present. */
+  /**
+   * The three numbers the MINT screen needs are all present. `minRedeemIdr` is
+   * not among them on purpose (USDX-682): it does not exist backend-side yet, and
+   * gating this flag on it would switch the mint screen off.
+   */
   isReady: boolean;
   isLoading: boolean;
   isError: boolean;
@@ -68,16 +95,21 @@ export function useAppConfig(): AppConfigRead {
 
   const config = query.data ?? null;
   const minMintIdr = toNumber(config?.minMintIdr);
+  const minRedeemIdr = toNumber(config?.minRedeemIdr);
   const mintFeePct = toNumber(config?.mintFeePct);
   const pgFeeVaFlat = toNumber(config?.pgFeeVaFlat);
 
   return {
     config,
     minMintIdr,
+    minRedeemIdr,
     mintFeePct,
     pgFeeVaFlat,
     contractAddress: config?.contractAddress ?? null,
     testContractAddress: config?.testContractAddress ?? null,
+    // Absent / not-yet-loaded stays null — never coerced to a boolean, because
+    // both booleans assert something about the payout (USDX-683).
+    redeemPayoutSimulated: config?.redeemPayoutSimulated ?? null,
     mintAvailable: config?.mintAvailable !== false,
     mintMode: config?.mintMode === "TEST" ? "TEST" : "PROD",
     isReady: minMintIdr != null && mintFeePct != null && pgFeeVaFlat != null,

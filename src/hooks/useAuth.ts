@@ -19,16 +19,10 @@ import type {
 // their email first, so it routes to /register/check-email. Login / verify-email /
 // reset-password issue a session and land on the dashboard.
 //
-// Verify-email is the one exception (USDX-566): it is the first session a NEW
-// account ever gets, so it lands on the optional "dikasih wallet" step first.
-// The decision is read from `user.custodialWallet` in the session response
-// (users.yaml § User, the `pinSet` pattern) — an account that somehow already
-// has one skips straight to the dashboard. Login and reset-password are not
-// onboarding and keep landing on /mint; an existing user finds the same offer
-// under Settings.
-export function afterVerifyEmailPath(user: { custodialWallet?: unknown } | null | undefined): string {
-  return user?.custodialWallet ? "/mint" : "/onboarding/wallet";
-}
+// Verify-email used to land a new account on the "dikasih wallet" step
+// (/onboarding/wallet, USDX-566). That redirect is switched off in every
+// environment (custodial-wallet.md §1, amandemen 14 Sep 2026): verify-email lands
+// on /mint like login and reset-password.
 
 export function useAuth() {
   const router = useRouter();
@@ -53,7 +47,7 @@ export function useAuth() {
     mutationFn: (req: VerifyEmailRequest) => authApi.verifyEmail(req),
     onSuccess: (data) => {
       setAuth(data.user, data.token);
-      router.push(afterVerifyEmailPath(data.user));
+      router.push("/mint");
     },
   });
 

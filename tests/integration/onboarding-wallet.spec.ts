@@ -6,16 +6,17 @@ import {
   MOCK_CUSTODIAL_ADDRESS,
 } from "../helpers/playwright-utils";
 
-// /onboarding/wallet (USDX-566): the optional step a new account lands on after
-// verify-email. Three exits, one per AC: accept → PROVISIONING → ACTIVE →
-// continue; decline → the app exactly as before (no custodial card anywhere);
-// already has one → no offer, straight to the wallet.
+// /onboarding/wallet (USDX-566). Verify-email no longer lands here — that redirect
+// is off in every environment (custodial-wallet.md §1, amandemen 14 Sep 2026) —
+// so only a direct URL opens the step. What it still must do: show the offer
+// with a "Coming Soon" pill instead of a create button; decline → the app exactly
+// as before; already has a wallet → no offer, straight to the wallet.
 
 const offer = "No wallet yet? We'll make you one.";
 
 test.describe("Wallet onboarding step", () => {
   test.describe("positive", () => {
-    test("accept → wallet becomes ACTIVE on the same screen → continue lands on the dashboard with the balance card", async ({
+    test("opened directly, the step shows the offer with a Coming Soon pill and no create button", async ({
       page,
     }) => {
       await forceEnglish(page);
@@ -24,25 +25,12 @@ test.describe("Wallet onboarding step", () => {
       await page.goto("/onboarding/wallet");
       await expect(page.getByRole("heading", { name: offer })).toBeVisible({ timeout: 15000 });
 
-      await page.getByRole("button", { name: "Create my wallet" }).click();
-      await expect(page.getByText("Your wallet is being set up")).toBeVisible({ timeout: 10000 });
-      await expect(page.getByRole("heading", { name: "Your wallet is ready" })).toBeVisible({
-        timeout: 20000,
-      });
-      await expect(page.getByRole("main").getByText("0 USDX", { exact: true })).toBeVisible();
-
-      // The sidebar card fills in as soon as the wallet is ACTIVE — beside the
-      // connected-wallet card, which still says what it always said.
-      const custodial = page.locator('[data-slot="custodial-balance"]');
-      await expect(custodial).toBeVisible();
-      await expect(custodial).toHaveAttribute("data-status", "ACTIVE");
-      await expect(page.getByRole("complementary").getByText("Total balance")).toBeVisible();
-      await expect(page.getByRole("complementary").getByText("Connect a wallet to see your balance")).toBeVisible();
-
-      await page.getByRole("link", { name: "Continue to the app" }).click();
-      await expect(page).toHaveURL(/\/mint$/);
-      await expect(page.getByText("You will mint")).toBeVisible({ timeout: 15000 });
-      await expect(page.locator('[data-slot="custodial-balance"]')).toBeVisible();
+      await expect(page.locator('[data-slot="wallet-offer-soon"]')).toHaveText("Coming Soon");
+      await expect(page.getByRole("button", { name: "Create my wallet" })).toHaveCount(0);
+      // "Not now" is the only way on from here.
+      await expect(page.locator('[data-slot="wallet-offer"]').getByRole("button")).toHaveCount(1);
+      await expect(page.getByRole("button", { name: "Not now" })).toBeVisible();
+      await expect(page.locator('[data-slot="custodial-balance"]')).toHaveCount(0);
     });
   });
 

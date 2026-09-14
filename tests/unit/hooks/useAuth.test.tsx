@@ -1,7 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { createWrapper } from "../../helpers/test-utils";
-import { afterVerifyEmailPath, useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { useAuthStore } from "@/stores/authStore";
 
 vi.mock("next/navigation", () => ({
@@ -90,36 +90,6 @@ describe("useAuth", () => {
         // No auto-login on register — user stays unauthenticated until verify-email.
         expect(useAuthStore.getState().user).toBeNull();
         expect(useAuthStore.getState().isAuthenticated).toBe(false);
-      });
-    });
-  });
-
-  // USDX-566: verify-email is the first session a new account gets, so it lands
-  // on the optional "dikasih wallet" step — unless the profile already carries
-  // a custodial wallet (users.yaml § User.custodialWallet, the pinSet pattern).
-  describe("afterVerifyEmailPath", () => {
-    describe("positive", () => {
-      test("a new account without a wallet lands on the onboarding step", () => {
-        expect(afterVerifyEmailPath({ custodialWallet: null })).toBe("/onboarding/wallet");
-      });
-
-      test("an account that already has a wallet goes straight to the dashboard", () => {
-        expect(
-          afterVerifyEmailPath({ custodialWallet: { address: null, status: "PROVISIONING" } }),
-        ).toBe("/mint");
-      });
-    });
-
-    describe("negative", () => {
-      test("no user at all (fallback link before the session lands) → onboarding", () => {
-        expect(afterVerifyEmailPath(null)).toBe("/onboarding/wallet");
-        expect(afterVerifyEmailPath(undefined)).toBe("/onboarding/wallet");
-      });
-    });
-
-    describe("edge case", () => {
-      test("a user object from before the field existed reads like 'no wallet'", () => {
-        expect(afterVerifyEmailPath({})).toBe("/onboarding/wallet");
       });
     });
   });

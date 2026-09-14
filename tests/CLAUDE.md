@@ -28,7 +28,7 @@ tests/
     auth-flow.spec.ts   # Register -> logout -> login
     mint-flow.spec.ts   # Login -> mint -> review -> cross-origin checkout handoff
     redeem-flow.spec.ts # Login -> redeem -> connect wallet prompt
-    custodial-wallet-flow.spec.ts # Register -> verify -> "dikasih wallet" -> ACTIVE -> receive -> balance (USDX-566)
+    custodial-wallet-flow.spec.ts # Register -> verify -> /mint (no wallet step); offer = "Segera hadir"; existing wallet receives USDX -> balance (USDX-566, amandemen 14 Sep)
     transfer-flow.spec.ts         # Custodial transfer: form -> Ringkasan -> PIN -> tx hash (USDX-567)
     redeem-custodial-flow.spec.ts # Custodial redeem: PIN, no wallet dialog, tracker to payout (USDX-567)
   audit-ui/             # node + Playwright — measurement, NOT assertions

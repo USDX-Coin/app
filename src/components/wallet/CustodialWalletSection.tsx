@@ -33,14 +33,7 @@ export function CustodialWalletSection({ variant, onSkip, continueHref }: Custod
   const wallet = useCustodialWallet({ poll: true });
 
   if (wallet.status === "none") {
-    return (
-      <CustodialWalletOffer
-        onCreate={wallet.create}
-        pending={wallet.createPending}
-        error={wallet.createError}
-        onSkip={variant === "onboarding" ? onSkip : undefined}
-      />
-    );
+    return <CustodialWalletOffer onSkip={variant === "onboarding" ? onSkip : undefined} />;
   }
 
   return (

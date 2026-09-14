@@ -56,6 +56,18 @@ vi.mock("@/hooks/useRedeemBurn", () => ({
   useRedeemBurn: () => ({ runBurn, burnState: "idle", burnErrorKey: null }),
 }));
 
+// USDX-683: spanduk "mode simulasi" punya DUA pemicu yang berdiri sendiri —
+// `redeemPayoutSimulated` dari GET /api/v2/config (jawaban backend soal adapter
+// disbursement) dan `env.useMock` (lapisan mock klien). Keduanya distub sebagai
+// objek yang bisa diubah per test, karena yang diuji justru kombinasinya.
+const { envStub, configStub } = vi.hoisted(() => ({
+  envStub: { useMock: false },
+  configStub: { redeemPayoutSimulated: null as boolean | null },
+}));
+vi.mock("@/lib/env", () => ({ env: envStub }));
+// Hook aslinya react-query; di sini yang diuji nilai yang dibacanya, bukan fetch-nya.
+vi.mock("@/hooks/useAppConfig", () => ({ useAppConfig: () => configStub }));
+
 function order(overrides: Partial<RedeemOrderDetail> = {}): RedeemOrderDetail {
   return {
     id: "order-a",
@@ -116,6 +128,10 @@ beforeEach(() => {
   cleanup();
   runBurn.mockClear();
   useRedeemStore.getState().reset();
+  // Default tiap test = keadaan nyata sekarang: bukan mock klien, dan backend
+  // belum menjawab (field-nya merge setelah app ini).
+  envStub.useMock = false;
+  configStub.redeemPayoutSimulated = null;
 });
 
 describe("RedeemStatus — pre-burn destination block", () => {
@@ -244,6 +260,60 @@ describe("RedeemStatus — the agreement belongs to one order", () => {
       expect(runBurn).toHaveBeenCalledTimes(1);
       // Yang dibakar order yang sedang tampil, bukan yang disetujui sebelumnya.
       expect(runBurn.mock.calls[0][0]).toMatchObject({ id: "order-b" });
+    });
+  });
+});
+
+// Spanduk "mode simulasi" (USDX-683). Dulu dipasang dari flag build-time klien yang
+// default menyala, jadi ia tetap berkata "pencairan IDR disimulasikan" setelah
+// pencairan DurianPay nyata menyala pada 14 Sep 2026 — berbohong tepat di layar yang
+// dipakai membuktikan pencairannya nyata. Sekarang backend yang menjawab, dan saat
+// jawabannya belum ada layar ini diam.
+describe("RedeemStatus — spanduk mode simulasi", () => {
+  const notice = () => screen.queryByTestId("redeem-simulation-notice");
+
+  describe("positive", () => {
+    test("backend bilang pencairan disimulasikan → spanduk tampil", () => {
+      configStub.redeemPayoutSimulated = true;
+      renderTracker(order());
+      expect(notice()).toBeInTheDocument();
+      expect(notice()).toHaveTextContent(/[Mm]ode simulasi/);
+    });
+
+    test("env.useMock tetap pemicu terpisah, walau backend bilang pencairannya nyata", () => {
+      // Lapisan mock KLIEN: tidak ada permintaan yang sampai ke backend sama
+      // sekali, jadi jawaban backend soal adapternya tidak membatalkan spanduk.
+      envStub.useMock = true;
+      configStub.redeemPayoutSimulated = false;
+      renderTracker(order());
+      expect(notice()).toBeInTheDocument();
+    });
+  });
+
+  describe("negative", () => {
+    test("backend bilang pencairan nyata → spanduk TIDAK tampil", () => {
+      configStub.redeemPayoutSimulated = false;
+      renderTracker(order());
+      expect(notice()).not.toBeInTheDocument();
+      expect(screen.queryByText(/disimulasikan/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe("edge cases", () => {
+    test("nilainya belum diketahui → spanduk TIDAK tampil", () => {
+      // Config masih dimuat, gagal, atau backend belum mengirim field-nya (ia
+      // merge setelah app ini). Menyatakan "disimulasikan" tanpa tahu lebih buruk
+      // daripada diam: diam tidak mengklaim apa pun.
+      configStub.redeemPayoutSimulated = null;
+      renderTracker(order());
+      expect(notice()).not.toBeInTheDocument();
+    });
+
+    test("mock klien tetap menampilkannya walau nilainya belum diketahui", () => {
+      envStub.useMock = true;
+      configStub.redeemPayoutSimulated = null;
+      renderTracker(order());
+      expect(notice()).toBeInTheDocument();
     });
   });
 });

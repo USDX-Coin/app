@@ -25,6 +25,11 @@
 // `false` and a missing field are read the same way: show the name, claim nothing
 // about where it came from, and still require the agreement.
 //
+// USDX-683: the "simulation mode" notice is no longer a build-time guess. It is
+// posted from `redeemPayoutSimulated` in GET /api/v2/config — the backend is the
+// only party that knows whether the IDR payout really leaves through a provider.
+// Not known yet (loading / failed / field not shipped) shows NOTHING.
+//
 // USDX-664: PAYOUT_FAILED is not one of the STEPS. It gets a state of its own
 // (replacing the stepper) so the journey never renders with no step active.
 
@@ -37,6 +42,7 @@ import { Checkbox, CheckboxField } from "@/components/ui/checkbox";
 import { LinkInline } from "@/components/ui/link-inline";
 import { Spinner } from "@/components/ui/spinner";
 import { useRedeemStore } from "@/stores/redeemStore";
+import { useAppConfig } from "@/hooks/useAppConfig";
 import { useRedeemTracker } from "@/hooks/useRedeemTracker";
 import { useRedeemPreconditions } from "@/lib/redeem/wallet";
 import { useRedeemBurn } from "@/hooks/useRedeemBurn";
@@ -71,6 +77,9 @@ export function RedeemStatus() {
   const orderId = useRedeemStore((s) => s.orderId);
   const reset = useRedeemStore((s) => s.reset);
   const { data: order, isLoading } = useRedeemTracker(orderId);
+  // Apakah pencairan rupiah di lingkungan ini disimulasikan — dijawab BACKEND
+  // (USDX-683). `null` = belum diketahui; lihat spanduknya di bawah.
+  const { redeemPayoutSimulated } = useAppConfig();
 
   // Preconditions + burn action (hooks must run before any early return). The
   // amount is 0 until the order loads — preconditions stay inert until then.
@@ -133,10 +142,19 @@ export function RedeemStatus() {
         </p>
       </div>
 
-      {/* Payout is simulated in W3 even against the real backend (USDX-263), so
-          the notice tracks env.redeemSimulatedPayout, not just the mock layer. */}
-      {(env.useMock || env.redeemSimulatedPayout) && (
-        <Alert tone="info" shape="strip">
+      {/* Spanduk "mode simulasi" (USDX-683, app-config.yaml §
+          AppConfig.redeemPayoutSimulated). Yang menjawab BACKEND — hanya ia yang
+          tahu adapter disbursement mana yang hidup. Sebelumnya klien menebaknya
+          dari flag build-time yang default menyala, jadi spanduk ini tetap
+          terpasang setelah pencairan DurianPay nyata menyala: berbohong tepat di
+          layar yang dipakai membuktikan pencairannya nyata.
+          `null` (config masih dimuat, gagal, atau backend belum mengirim
+          field-nya) → TIDAK menampilkan apa pun: menyatakan "disimulasikan"
+          tanpa tahu lebih buruk daripada diam, karena diam tidak mengklaim apa
+          pun. `env.useMock` tetap pemicu TERPISAH — itu soal lapisan mock klien,
+          bukan adapter backend; keduanya cuma berbagi kalimat. */}
+      {(env.useMock || redeemPayoutSimulated === true) && (
+        <Alert tone="info" shape="strip" data-testid="redeem-simulation-notice">
           {t("redeem.simulationNotice")}
         </Alert>
       )}

@@ -247,9 +247,14 @@ Test helpers in `tests/helpers/`:
   `NEXT_PUBLIC_USE_MOCK=true` forces it (local demo mode, see `src/lib/env.ts`)
 - Mint and redeem are gated by a backend **503** until the payment-provider env is
   configured on the target environment
-- The redeem **burn is real on-chain**, but the IDR payout (disbursement) is still
-  simulated even against the real backend (`redeemSimulatedPayout`, USDX-263) —
-  the tracker shows a "Mode simulasi" notice
+- The redeem **burn is real on-chain**; whether the IDR payout (disbursement) is
+  simulated is answered by the **backend**, via `redeemPayoutSimulated` in
+  `GET /api/v2/config` (USDX-683) — the tracker posts the "Mode simulasi" notice on
+  `true` only. `false`, and the whole window before the backend ships the field,
+  show nothing: an unknown value must not claim the payout is fake. The old
+  build-time client flag that used to decide this is gone. `env.useMock`
+  remains a separate trigger for the same sentence (client mock layer, not the
+  backend adapter)
 - Bridge is **ComingSoon-gated**, and so is Send **for users without a custodial
   wallet**: their old UIs faked success locally (`bridge_/send_<timestamp>`, no API
   call), so those routes render `ComingSoon`. The sidebar **keeps both items visible**

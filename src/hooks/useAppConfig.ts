@@ -39,6 +39,20 @@ export interface AppConfigRead {
    * fee rates are its own), so a missing field must not close the screen.
    */
   minRedeemIdr: number | null;
+  /**
+   * Whether the redeem IDR payout is still simulated backend-side
+   * (`redeemPayoutSimulated`, USDX-683). Tri-state on purpose:
+   *
+   *   true  → this environment simulates the payout
+   *   false → a real provider sends it
+   *   null  → NOT KNOWN: still loading, the load failed, or the backend has not
+   *            shipped the field yet (it merges after this app)
+   *
+   * Unlike `mintAvailable`, neither boolean is a safe default here, because both
+   * make a claim about where the customer's rupiah actually goes. Callers show
+   * nothing while it is `null`.
+   */
+  redeemPayoutSimulated: boolean | null;
   /** Mint fee as a percentage of the subtotal (`mintFeePct`, "1.0" → 1). */
   mintFeePct: number | null;
   /** Flat VA fee in IDR (`pgFeeVaFlat`). */
@@ -93,6 +107,9 @@ export function useAppConfig(): AppConfigRead {
     pgFeeVaFlat,
     contractAddress: config?.contractAddress ?? null,
     testContractAddress: config?.testContractAddress ?? null,
+    // Absent / not-yet-loaded stays null — never coerced to a boolean, because
+    // both booleans assert something about the payout (USDX-683).
+    redeemPayoutSimulated: config?.redeemPayoutSimulated ?? null,
     mintAvailable: config?.mintAvailable !== false,
     mintMode: config?.mintMode === "TEST" ? "TEST" : "PROD",
     isReady: minMintIdr != null && mintFeePct != null && pgFeeVaFlat != null,

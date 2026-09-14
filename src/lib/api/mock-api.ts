@@ -600,6 +600,10 @@ export async function mockGetAppConfig(): Promise<AppConfig> {
     // Absent unless deliberately armed: before USDX-636 the backend does not send
     // this field at all, and the app has to behave exactly as it did then.
     ...(mockMintAvailable() ? {} : { mintAvailable: false }),
+    // `redeemPayoutSimulated` (USDX-683) is deliberately NOT sent: the backend
+    // half ships after this app, so "field absent" is the real state of every
+    // response for now. Mock mode still shows the simulation notice, through its
+    // own trigger (`env.useMock`) — a client mock layer, not a backend adapter.
     ...(mode === "TEST"
       ? { mintMode: "TEST" as const, testContractAddress: MOCK_TEST_CONTRACT_ADDRESS }
       : {}),

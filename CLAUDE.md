@@ -235,8 +235,8 @@ Test helpers in `tests/helpers/`:
 | `/redeem` | Yes | SC | Redeem USDX to bank |
 | `/history` | Yes | SC | Transaction history (mint + redeem, W3) |
 | `/profile` | Yes | SC | User info + verification badge |
-| `/settings` | Yes | SC | Pengaturan: custodial "USDX wallet" (offer / address + QR + balance / status) + link to Profile (USDX-566) |
-| `/onboarding/wallet` | Yes | SC | Optional "dikasih wallet" step — where verify-email lands a new account; "Not now" → `/mint` (USDX-566) |
+| `/settings` | Yes | SC | Pengaturan: custodial "USDX wallet" (offer with a "Segera hadir" pill instead of a create button / address + QR + balance / status) + link to Profile (USDX-566; pill: `custodial-wallet.md` §1 amandemen 14 Sep 2026) |
+| `/onboarding/wallet` | Yes | SC | "Dikasih wallet" step (USDX-566). **No longer reached from verify-email** — that redirect is off in every environment (verify-email lands on `/mint`, `custodial-wallet.md` §1 amandemen 14 Sep 2026); only a direct URL opens it. "Not now" → `/mint` |
 | `/bridge` | Yes | SC | ComingSoon (gated — no bridge backend yet; sidebar teaser) |
 | `/send` | Yes | SC | Custodial transfer (`TransferPageContent`) for users with `user.custodialWallet`; ComingSoon for everyone else (no external-wallet send backend) |
 

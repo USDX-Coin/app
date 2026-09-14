@@ -3,14 +3,16 @@ import {
   clearAuth,
   forceEnglish,
   loginViaStorage,
+  MOCK_CUSTODIAL_WALLET_SUMMARY,
   seedCustodialWallet,
 } from "../helpers/playwright-utils";
 
-// The three E2E acceptance criteria of USDX-566, end to end against the mock:
-//   1. new user registers → verifies → picks "dikasih wallet" → ACTIVE, balance 0
-//      → receives USDX → the balance shows the real number
-//   2. an existing user activates from Settings → the same result
-//   3. a user who declines → the app works exactly as before
+// The custodial wallet end to end against the mock (USDX-566), as it stands after
+// custodial-wallet.md §1, amandemen 14 Sep 2026:
+//   1. a new user registers → verifies → lands on /mint (no wallet step), and
+//      Settings carries the offer with a "Coming Soon" pill
+//   2. a user who already has a wallet receives USDX → the balance shows the real number
+//   3. nowhere in the app can a user without a wallet create one
 // "Receiving USDX" is played by moving the mock's stored balance (the number
 // GET /api/v2/wallet reads live from chain in production) and refreshing.
 
@@ -24,7 +26,7 @@ async function receiveUsdx(page: Page, balance: string) {
 
 test.describe("Custodial wallet flow", () => {
   test.describe("positive", () => {
-    test("register → verify → dikasih wallet → ACTIVE with 0 → receives USDX → balance shows", async ({
+    test("register → verify → lands on /mint → Settings shows the offer as Coming Soon", async ({
       page,
     }) => {
       await forceEnglish(page);
@@ -45,42 +47,30 @@ test.describe("Custodial wallet flow", () => {
       await page.getByRole("button", { name: "Create account" }).click();
       await page.waitForURL(/\/register\/check-email/, { timeout: 30000 });
 
-      // The activation link: the first session of the account lands on the
-      // optional wallet step, not on /mint.
+      // The activation link lands on the dashboard, like login — not on the
+      // wallet step.
       await page.goto("/verify-email?token=valid-token");
-      await page.waitForURL(/\/onboarding\/wallet/, { timeout: 30000 });
-      await page.getByRole("button", { name: "Create my wallet" }).click();
-      await expect(page.getByText("Your wallet is being set up")).toBeVisible({ timeout: 10000 });
-      await expect(page.getByRole("heading", { name: "Your wallet is ready" })).toBeVisible({
-        timeout: 20000,
-      });
-      const balance = page.locator('[data-slot="wallet-balance"]');
-      await expect(balance).toHaveText("0 USDX");
+      await page.waitForURL(/\/mint$/, { timeout: 30000 });
+      await expect(page.getByText("You will mint")).toBeVisible({ timeout: 15000 });
+      await expect(page.locator('[data-slot="custodial-balance"]')).toHaveCount(0);
 
-      // USDX arrives (a mint to this address in dev) → refresh reads it.
-      await receiveUsdx(page, "125.50");
-      await page.getByRole("button", { name: "Refresh" }).click();
-      await expect(balance).toHaveText("125.5 USDX", { timeout: 15000 });
-      await expect(page.locator('[data-slot="custodial-balance"]').getByText("125.5 USDX")).toBeVisible();
-
-      await page.getByRole("link", { name: "Continue to the app" }).click();
-      await expect(page).toHaveURL(/\/mint$/);
-      await expect(page.locator('[data-slot="custodial-balance"]').getByText("125.5 USDX")).toBeVisible({
+      await page.goto("/settings");
+      const card = page.locator('[data-slot="settings-wallet"]');
+      await expect(card.getByText("No wallet yet? We'll make you one.")).toBeVisible({
         timeout: 15000,
       });
+      await expect(card.locator('[data-slot="wallet-offer-soon"]')).toHaveText("Coming Soon");
     });
 
-    test("existing user activates from Settings → the same result", async ({ page }) => {
+    test("a user who already has a wallet receives USDX → the balance shows", async ({ page }) => {
       await forceEnglish(page);
-      await seedCustodialWallet(page, null);
-      await loginViaStorage(page);
+      await seedCustodialWallet(page, { status: "ACTIVE", balance: "0.00" });
+      await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
       await page.goto("/settings");
       await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible({ timeout: 15000 });
 
-      await page.getByRole("button", { name: "Create my wallet" }).click();
-      await expect(page.getByText("Your wallet is being set up")).toBeVisible({ timeout: 10000 });
       const balance = page.locator('[data-slot="wallet-balance"]');
-      await expect(balance).toHaveText("0 USDX", { timeout: 20000 });
+      await expect(balance).toHaveText("0 USDX", { timeout: 15000 });
       await expect(page.getByText("Receiving address")).toBeVisible();
 
       await receiveUsdx(page, "42.00");
@@ -96,47 +86,41 @@ test.describe("Custodial wallet flow", () => {
   });
 
   test.describe("negative", () => {
-    test("a user who declines gets the app exactly as before", async ({ page }) => {
-      await forceEnglish(page);
-      await seedCustodialWallet(page, null);
-      await page.goto("/login");
-      await clearAuth(page);
-      await page.goto("/verify-email?token=valid-token");
-      await page.waitForURL(/\/onboarding\/wallet/, { timeout: 30000 });
-
-      await page.getByRole("button", { name: "Not now" }).click();
-      await expect(page).toHaveURL(/\/mint$/);
-      await expect(page.getByText("You will mint")).toBeVisible({ timeout: 15000 });
-      await expect(page.locator('[data-slot="custodial-balance"]')).toHaveCount(0);
-
-      // Login afterwards still lands on /mint (login is not onboarding), and
-      // Settings still carries the offer for whenever they change their mind.
-      await page.goto("/settings");
-      await expect(page.getByRole("button", { name: "Create my wallet" })).toBeVisible({
-        timeout: 15000,
-      });
-    });
-  });
-
-  test.describe("edge case", () => {
-    test("pressing create twice does not error and does not make a second wallet", async ({
+    test("a user without a wallet finds no create button in Settings or on the onboarding step", async ({
       page,
     }) => {
       await forceEnglish(page);
       await seedCustodialWallet(page, null);
       await loginViaStorage(page);
-      await page.goto("/settings");
-      await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible({ timeout: 15000 });
 
-      const create = page.getByRole("button", { name: "Create my wallet" });
-      await create.click();
-      // While PROVISIONING the offer is gone; any repeat POST is a 202, so
-      // there is no error state to land in and exactly one address at the end.
-      await expect(page.getByText("Your wallet is being set up")).toBeVisible({ timeout: 10000 });
-      await expect(page.getByText("Receiving address")).toBeVisible({ timeout: 20000 });
-      await expect(page.locator('[data-slot="receive-address-value"]')).toHaveCount(1);
-      // Scoped to main: Next's route announcer outside it also has role=alert.
-      await expect(page.getByRole("main").getByRole("alert")).toHaveCount(0);
+      await page.goto("/settings");
+      await expect(page.getByText("No wallet yet? We'll make you one.")).toBeVisible({
+        timeout: 15000,
+      });
+      await expect(page.getByRole("button", { name: "Create my wallet" })).toHaveCount(0);
+
+      await page.goto("/onboarding/wallet");
+      await expect(page.getByRole("heading", { name: "No wallet yet? We'll make you one." })).toBeVisible({
+        timeout: 15000,
+      });
+      await expect(page.getByRole("button", { name: "Create my wallet" })).toHaveCount(0);
+    });
+  });
+
+  test.describe("edge case", () => {
+    test("leaving the onboarding step with Not now leaves no wallet behind", async ({ page }) => {
+      await forceEnglish(page);
+      await seedCustodialWallet(page, null);
+      await loginViaStorage(page);
+      await page.goto("/onboarding/wallet");
+      await expect(page.locator('[data-slot="wallet-offer-soon"]')).toBeVisible({ timeout: 15000 });
+
+      await page.getByRole("button", { name: "Not now" }).click();
+      await expect(page).toHaveURL(/\/mint$/);
+      await expect(page.getByText("You will mint")).toBeVisible({ timeout: 15000 });
+      // The mock writes this key on POST /api/v2/wallet; it must still be absent.
+      expect(await page.evaluate(() => localStorage.getItem("usdx-mock-custodial"))).toBeNull();
+      await expect(page.locator('[data-slot="custodial-balance"]')).toHaveCount(0);
     });
   });
 });

@@ -1,27 +1,13 @@
 "use client";
 
 import { Check, Wallet } from "lucide-react";
-import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { getFailureKey, isWalletServiceUnavailable } from "@/lib/api/errors";
 import { useLang } from "@/providers/LanguageProvider";
 
 interface CustodialWalletOfferProps {
-  onCreate: () => void;
-  pending: boolean;
-  /** `createError` from `useCustodialWallet` — rendered as a sentence, never raw. */
-  error: unknown;
   /** Onboarding only: the way past the offer. Settings has no "skip". */
   onSkip?: () => void;
-}
-
-// Which sentence a failed POST /wallet gets. 503 has its own line because it
-// carries the one reassurance that matters ("nothing was changed"); a dead
-// network / 500 keeps the shared error copy; everything else says "try again".
-function createErrorKey(error: unknown): string | null {
-  if (!error) return null;
-  if (isWalletServiceUnavailable(error)) return "wallet.error.unavailable";
-  return getFailureKey(error) ?? "wallet.error.create";
 }
 
 /**
@@ -30,10 +16,14 @@ function createErrorKey(error: unknown): string | null {
  * It promises what the user gets, in their words: nothing to install, an
  * address or QR to receive with, and their own wallet untouched (§0
  * "berdampingan"). The word "custodial" is deliberately absent.
+ *
+ * Creating a wallet is not offered yet (custodial-wallet.md §1, amandemen
+ * 14 Sep 2026): where the "Buatkan saya wallet" button stood there is the same
+ * "Segera hadir" pill the sidebar puts on Bridge and Send, so this screen never
+ * sends POST /api/v2/wallet.
  */
-export function CustodialWalletOffer({ onCreate, pending, error, onSkip }: CustodialWalletOfferProps) {
+export function CustodialWalletOffer({ onSkip }: CustodialWalletOfferProps) {
   const { t } = useLang();
-  const errorKey = createErrorKey(error);
 
   return (
     <div data-slot="wallet-offer" className="flex flex-col gap-5">
@@ -58,21 +48,12 @@ export function CustodialWalletOffer({ onCreate, pending, error, onSkip }: Custo
         ))}
       </ul>
 
-      {errorKey && <Alert tone="danger">{t(errorKey)}</Alert>}
-
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <Button
-          variant="brand"
-          size="lg"
-          onClick={onCreate}
-          loading={pending}
-          loadingLabel={t("wallet.offer.creating")}
-          className="w-full sm:w-auto"
-        >
-          {t("wallet.offer.create")}
-        </Button>
+        <Badge tone="coming-soon" data-slot="wallet-offer-soon">
+          {t("nav.soon")}
+        </Badge>
         {onSkip && (
-          <Button variant="ghost" size="lg" onClick={onSkip} disabled={pending} className="w-full sm:w-auto">
+          <Button variant="ghost" size="lg" onClick={onSkip} className="w-full sm:w-auto">
             {t("wallet.offer.skip")}
           </Button>
         )}

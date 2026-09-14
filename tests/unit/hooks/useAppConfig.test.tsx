@@ -41,6 +41,25 @@ describe("useAppConfig", () => {
       );
     });
 
+    // USDX-683: the payout-simulated answer belongs to the backend. Tri-state, so
+    // all three readings are pinned here — the redeem tracker shows its banner on
+    // `true` alone.
+    test("reports the payout as simulated when the backend says so", async () => {
+      getAppConfigMock.mockResolvedValue(config({ redeemPayoutSimulated: true }));
+      const { result } = renderHook(() => useAppConfig(), { wrapper: createWrapper() });
+
+      await waitFor(() => expect(result.current.isReady).toBe(true));
+      expect(result.current.redeemPayoutSimulated).toBe(true);
+    });
+
+    test("reports the payout as real when the backend says so", async () => {
+      getAppConfigMock.mockResolvedValue(config({ redeemPayoutSimulated: false }));
+      const { result } = renderHook(() => useAppConfig(), { wrapper: createWrapper() });
+
+      await waitFor(() => expect(result.current.isReady).toBe(true));
+      expect(result.current.redeemPayoutSimulated).toBe(false);
+    });
+
     test("reports TEST and the test token when the test bundle is in force", async () => {
       getAppConfigMock.mockResolvedValue(
         config({
@@ -75,6 +94,9 @@ describe("useAppConfig", () => {
       expect(result.current.contractAddress).toBeNull();
       // An unknown mode must never read as a test one.
       expect(result.current.mintMode).toBe("PROD");
+      // A failed load knows nothing about the payout adapter either — and "nothing
+      // known" must not become a claim in either direction (USDX-683).
+      expect(result.current.redeemPayoutSimulated).toBeNull();
     });
   });
 
@@ -136,6 +158,17 @@ describe("useAppConfig", () => {
       const { result } = renderHook(() => useAppConfig(), { wrapper: createWrapper() });
 
       await waitFor(() => expect(result.current.isReady).toBe(true));
+    });
+
+    test("an absent redeemPayoutSimulated is null — NOT KNOWN, not false", async () => {
+      // The backend half of USDX-683 merges after this app, so for the whole
+      // rollout window the field is simply missing. `false` would be a claim the
+      // app cannot back up; `null` is the honest reading and shows no banner.
+      const { result } = renderHook(() => useAppConfig(), { wrapper: createWrapper() });
+
+      await waitFor(() => expect(result.current.isReady).toBe(true));
+      expect(result.current.config?.redeemPayoutSimulated).toBeUndefined();
+      expect(result.current.redeemPayoutSimulated).toBeNull();
     });
 
     test("an absent testContractAddress reads exactly like null", async () => {

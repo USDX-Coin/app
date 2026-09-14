@@ -50,6 +50,8 @@ function setConfig(
     pgFeeVaFlat: 4_000,
     contractAddress,
     testContractAddress,
+    // Tidak relevan untuk saldo — spanduk redeem yang membacanya (USDX-683).
+    redeemPayoutSimulated: null,
     mintAvailable: true,
     mintMode,
     isReady: true,
@@ -258,6 +260,7 @@ describe("useWalletBalance", () => {
         pgFeeVaFlat: null,
         contractAddress: null,
         testContractAddress: null,
+        redeemPayoutSimulated: null,
         mintAvailable: true,
         mintMode: "PROD",
         isReady: false,

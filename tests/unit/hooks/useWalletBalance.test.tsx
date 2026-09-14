@@ -93,19 +93,56 @@ describe("resolveBalanceTokens", () => {
 
   describe("positive", () => {
     test("PROD reads the config's address — that is the point of the ticket", () => {
-      expect(resolveBalanceTokens(PROD, null, "PROD", ENV)).toEqual({ main: PROD, test: null });
+      expect(resolveBalanceTokens(PROD, null, "PROD", ENV)).toEqual({
+        main: PROD,
+        test: null,
+        redeem: PROD,
+      });
     });
 
     test("TEST reads the production token for the balance and the test one for the strip", () => {
       // `contractAddress` never changes meaning; the strip has its own field.
-      expect(resolveBalanceTokens(PROD, TEST, "TEST", ENV)).toEqual({ main: PROD, test: TEST });
+      expect(resolveBalanceTokens(PROD, TEST, "TEST", ENV)).toEqual({
+        main: PROD,
+        test: TEST,
+        // Yang dibakar redeem = token UJI. Inilah bedanya dengan `main` (USDX-686).
+        redeem: TEST,
+      });
     });
   });
 
   describe("negative", () => {
     test("config not loaded → the env address, and no strip", () => {
-      expect(resolveBalanceTokens(null, null, "PROD", ENV)).toEqual({ main: ENV, test: null });
-      expect(resolveBalanceTokens(null, null, "TEST", ENV)).toEqual({ main: ENV, test: null });
+      expect(resolveBalanceTokens(null, null, "PROD", ENV)).toEqual({
+        main: ENV,
+        test: null,
+        redeem: ENV,
+      });
+      expect(resolveBalanceTokens(null, null, "TEST", ENV)).toEqual({
+        main: ENV,
+        test: null,
+        // Mode TEST tapi alamat ujinya belum ada: redeem TIDAK boleh memagari dengan
+        // token uji yang tidak diketahui — ia jatuh ke token asli, sama seperti strip
+        // yang juga tidak muncul.
+        redeem: ENV,
+      });
+    });
+
+    test("mode uji: redeem dipagari token UJI, bukan token produksi (USDX-686)", () => {
+      // Regresi nyata 14 Sep 2026 di production: mode uji menyala, nasabah memegang
+      // 2,27 token uji dan 0 USDX produksi, dan layar redeem menolaknya "Saldo USDX
+      // tidak cukup" — memagari dengan saldo token yang justru BUKAN yang dibakar.
+      const tokens = resolveBalanceTokens(PROD, TEST, "TEST", ENV);
+      expect(tokens.redeem).toBe(TEST);
+      expect(tokens.redeem).not.toBe(tokens.main);
+    });
+
+    test("alamat uji cacat saat mode TEST: redeem jatuh ke token asli, tidak ke alamat sampah", () => {
+      // `test` null berarti tidak ada strip; redeem harus ikut, kalau tidak ia memagari
+      // dengan alamat yang tidak pernah dibaca siapa pun.
+      const tokens = resolveBalanceTokens(PROD, "0x1234", "TEST", ENV);
+      expect(tokens.test).toBeNull();
+      expect(tokens.redeem).toBe(PROD);
     });
 
     test("a malformed address is ignored rather than passed to an RPC call", () => {
@@ -116,7 +153,11 @@ describe("resolveBalanceTokens", () => {
     test("a test address that arrives in PROD mode is still not shown", () => {
       // The field is documented as non-null only in TEST, but a test strip on a
       // production session is the exact failure this hook exists to prevent.
-      expect(resolveBalanceTokens(PROD, TEST, "PROD", ENV)).toEqual({ main: PROD, test: null });
+      expect(resolveBalanceTokens(PROD, TEST, "PROD", ENV)).toEqual({
+        main: PROD,
+        test: null,
+        redeem: PROD,
+      });
     });
   });
 
@@ -125,6 +166,8 @@ describe("resolveBalanceTokens", () => {
       expect(resolveBalanceTokens(PROD, undefined, "TEST", ENV)).toEqual({
         main: PROD,
         test: null,
+        // Tidak ada token uji yang diketahui → redeem memagari dengan token asli.
+        redeem: PROD,
       });
     });
 

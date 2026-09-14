@@ -47,6 +47,8 @@ import {
   USDX_CONTRACT_ADDRESS,
   USDX_DECIMALS,
 } from "@/lib/constants";
+import { resolveBalanceTokens } from "@/lib/balance-tokens";
+import { useAppConfig } from "@/hooks/useAppConfig";
 
 // E2E seam (mock-only): Playwright has no wallet extension, so when this
 // localStorage key is armed connect() flips to a deterministic mock wallet
@@ -278,7 +280,25 @@ export function useRedeemPreconditions(amountUsdx: number): RedeemPreconditions 
 
   // Connection + USDX balance come from the shared on-chain read (USDX-396) so
   // redeem and every other balance surface can never disagree.
-  const { isConnected, address, connect, balanceUsdx } = useUsdxBalance();
+  // USDX-686 — token yang dipagari HARUS token yang akan dibakar. Sebelum ini baris
+  // ini memanggil `useUsdxBalance()` tanpa argumen, artinya alamat produksi dari build:
+  // selama mode uji nasabah dipagari dengan saldo token PRODUKSI (nol) padahal yang
+  // akan dibakar token UJI yang ia punya — redeem ditolak "saldo tidak cukup" untuk
+  // token yang justru jadi seluruh alasan mode uji ada. Aturannya sama dengan mint dan
+  // sama dengan snapshot `contract_address` di backend: mode uji → token uji, selain
+  // itu → token asli.
+  const config = useAppConfig();
+  const tokens = resolveBalanceTokens(
+    config.contractAddress,
+    config.testContractAddress,
+    config.mintMode,
+  );
+  // `seamRole` hanya dipakai jalur mock E2E, yang tidak punya chain untuk membedakan
+  // dua alamat — ia harus DIBERI TAHU saldo mana yang sedang diwakili.
+  const { isConnected, address, connect, balanceUsdx } = useUsdxBalance(
+    tokens.redeem,
+    tokens.test ? "test" : "main",
+  );
 
   const realAddress = account.address;
   const gasRead = useBalance({

@@ -17,9 +17,21 @@ import { loginViaStorage, forceIndonesian, seedKycStatus } from "../helpers/play
 // overflow-hidden`, jadi dokumen tidak boleh punya scroll sendiri sama sekali.
 const DASHBOARD_ROUTES = ["/kyc", "/redeem", "/mint", "/history"];
 
+// Dua ukuran layar, dan alasannya bukan kelengkapan: bug ini DILAPORKAN dari
+// jendela lebar (~2000px), sementara viewport bawaan Playwright 1280×720. Tinggi
+// dokumen yang melar bergantung pada posisi statis elemen absolutnya, dan posisi
+// itu bergeser mengikuti lebar layar — menguji satu ukuran saja berarti menebak
+// bahwa ukuran itulah yang mewakili.
+const VIEWPORTS = [
+  { name: "laptop 1280×720", size: { width: 1280, height: 720 } },
+  { name: "layar lebar 2000×1200", size: { width: 2000, height: 1200 } },
+];
+
 test.describe("Dashboard shell — dokumen tidak boleh menggulung sendiri", () => {
   for (const route of DASHBOARD_ROUTES) {
-    test(`positive: ${route} tidak melar melewati viewport`, async ({ page }) => {
+    for (const vp of VIEWPORTS) {
+    test(`positive: ${route} tidak melar melewati viewport (${vp.name})`, async ({ page }) => {
+      await page.setViewportSize(vp.size);
       await forceIndonesian(page);
       await seedKycStatus(page, "PENDING");
       await loginViaStorage(page, { kycStatus: "PENDING" });
@@ -38,6 +50,7 @@ test.describe("Dashboard shell — dokumen tidak boleh menggulung sendiri", () =
           "ada elemen absolut yang lolos dari containing block halaman",
       ).toBeLessThanOrEqual(innerHeight + 2);
     });
+    }
   }
 
   test("negative: area konten yang PANJANG tetap menggulung di dalam kartunya sendiri", async ({

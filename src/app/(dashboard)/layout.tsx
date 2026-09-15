@@ -150,7 +150,25 @@ export default function DashboardLayout({
           */}
           <main className="flex-1 overflow-hidden p-3 md:p-5">
             <div className="h-full overflow-y-auto rounded-2xl bg-card">
-              <div className="flex min-h-full flex-col px-5 pt-5 pb-8 md:px-6 md:pt-6 md:pb-10">
+              {/*
+                `relative` MENAHAN seluruh keturunan yang diposisikan absolut di
+                dalam kotak halaman ini.
+
+                Tanpa itu, containing block mereka jatuh ke <body>. Elemen absolut
+                lalu ditempatkan pada posisi statisnya DIUKUR DARI BODY — dan karena
+                posisi statis itu berada jauh di dalam area yang men-scroll sendiri,
+                tinggi dokumen ikut melar (terukur ~1962px di /kyc) dan SELURUH
+                halaman jadi bisa di-scroll menembus app shell: sidebar ikut
+                menggulung, lalu berhenti di tengah menyisakan area kosong besar.
+
+                Penambalan sebelumnya memberi `relative` pada SATU komponen yang
+                kebetulan ketahuan (kartu unggah di KYC). Itu menyembuhkan satu
+                gejala, bukan kelasnya: `sr-only` milik shadcn sendiri berposisi
+                absolut, jadi komponen mana pun yang memakainya — sekarang atau
+                nanti — bisa mengulang bug yang sama. Penahannya ditaruh di sini,
+                satu kali, di tempat yang dilewati SEMUA halaman dashboard.
+              */}
+              <div className="relative flex min-h-full flex-col px-5 pt-5 pb-8 md:px-6 md:pt-6 md:pb-10">
                 {children}
               </div>
             </div>

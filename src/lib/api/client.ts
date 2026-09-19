@@ -5,8 +5,8 @@
 // - Primary auth is the httpOnly session cookie (`credentials: "include"`, sent
 //   cross-subdomain on `.usdx.co.id`); the `Authorization: Bearer <token>` header
 //   (openapi global `security: [bearerAuth]`) is an in-memory fallback for
-//   cross-site previews (`*.netlify.app`) where the cookie isn't delivered
-//   (USDX-357/CLNT-12). The own-hosted checkout (`mint.usdx.co.id`) gets its own
+//   cross-site contexts where the cookie isn't delivered (USDX-357/CLNT-12).
+//   The own-hosted checkout (`mint.usdx.co.id`) gets its own
 //   session via a one-time-code URL-hash handoff (`#code=`), not this client
 //   (USDX-378; supersede the cross-subdomain cookie USDX-222/226).
 // - Unwraps the SoT `{ status, metadata, data }` envelope and returns `data`
@@ -131,8 +131,8 @@ async function request(path: string, options: ApiFetchOptions = {}): Promise<unk
     headers: finalHeaders,
     // USDX-357 (CLNT-12): primary auth is the httpOnly session cookie — `credentials:
     // "include"` sends it cross-subdomain (`.usdx.co.id`). The Bearer header above is a
-    // fallback for cross-site previews (`*.netlify.app`) where the cookie isn't delivered;
-    // that token lives in-memory only, never in localStorage.
+    // fallback for cross-site contexts where the cookie isn't delivered; that token
+    // lives in-memory only, never in localStorage.
     credentials: "include",
     body: body === undefined ? undefined : JSON.stringify(body),
   });

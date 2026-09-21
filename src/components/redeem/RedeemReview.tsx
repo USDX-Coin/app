@@ -28,6 +28,7 @@ import {
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { PinConfirmDialog } from "@/components/shared/PinConfirmDialog";
+import { PinNotSetNotice } from "@/components/shared/PinNotSetNotice";
 import { useRedeem } from "@/hooks/useRedeem";
 import { formatAmount, formatIDR, truncateAddress } from "@/lib/utils";
 import { getChainById } from "@/lib/chains";
@@ -156,13 +157,10 @@ export function RedeemReview({ open, onOpenChange }: RedeemReviewProps) {
           </Alert>
 
           {/* Custodial + no PIN on the account: nothing can be approved on this
-              path (redeem.yaml 401 PIN_NOT_SET). The app has no set-PIN screen
-              yet — say so and do not open a dialog that must fail. */}
-          {isCustodialSource && pinNotSet && (
-            <Alert tone="warning" data-testid="redeem-pin-not-set">
-              {t("pin.errNotSet")}
-            </Alert>
-          )}
+              path (redeem.yaml 401 PIN_NOT_SET). The notice carries "Create PIN"
+              and opens the set-PIN dialog right here (USDX-651); until then the
+              PIN dialog that must fail is not opened. */}
+          {isCustodialSource && pinNotSet && <PinNotSetNotice data-testid="redeem-pin-not-set" />}
 
           {/* Precondition gate (week3.md § Precondition connect-wallet, USDX-259):
               wrong network blocks with a switch prompt; insufficient USDX blocks;

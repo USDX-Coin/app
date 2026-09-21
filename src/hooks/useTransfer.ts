@@ -22,10 +22,16 @@
 // `pinCooldownSeconds`) tetap di dialog PIN supaya user mengetik ulang di situ;
 // yang lain (`errorKey`) menutup dialog PIN dan tampil di Ringkasan, di samping
 // angka yang menghasilkannya. 429 RATE_LIMITED dibiarkan ke toast global.
+//
+// `pinNotSet` dibaca dari salinan profil `user.pinSet` saja (USDX-651): 401
+// PIN_NOT_SET mengoreksi salinan itu ke `false`, dan PinSetupDialog (dibuka dari
+// notice) mengembalikannya ke `true` — dialog PIN lalu terbuka lagi tanpa
+// state lokal yang harus disinkronkan.
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useTransferStore } from "@/stores/transferStore";
+import { usePinSetCorrection } from "@/hooks/usePinSetCorrection";
 import { useCustodialWallet } from "@/hooks/useCustodialWallet";
 import { useCooldown, DEFAULT_COOLDOWN_SECONDS } from "@/hooks/useCooldown";
 import { transferCustodial } from "@/lib/api/wallet-api";
@@ -138,9 +144,7 @@ export function useTransfer(
   const store = useTransferStore();
   const wallet = useCustodialWallet();
   const pinCooldown = useCooldown();
-  // Dipisah dari state mutasi: `mutation.error` ikut hilang saat `reset()`, tapi
-  // "PIN belum diset" adalah fakta akun yang harus tetap tampil di dialog.
-  const [pinNotSet, setPinNotSet] = useState(false);
+  const setPinSet = usePinSetCorrection();
 
   const parsedAmount = parseAmount(store.amount);
   const addressError = store.to ? validateTransferAddress(store.to, wallet.address) : null;
@@ -176,13 +180,14 @@ export function useTransfer(
       }
     },
     onSuccess: (accepted) => {
-      setPinNotSet(false);
       store.setResult(accepted);
       // Saldo turun begitu tx masuk blok; segarkan di latar.
       wallet.invalidate();
     },
     onError: (error) => {
-      if (isPinNotSet(error)) setPinNotSet(true);
+      // Fakta akun, bukan state mutasi: salinan profil yang dikoreksi, supaya tetap
+      // tampil setelah `reset()` dan hilang begitu PIN dibuat.
+      if (isPinNotSet(error)) setPinSet(false);
       if (isTooManyAttempts(error)) {
         pinCooldown.start(getRateLimitSeconds(error) || DEFAULT_COOLDOWN_SECONDS);
       }
@@ -248,7 +253,6 @@ export function useTransfer(
     setPinOpen: store.setPinOpen,
     reset: () => {
       mutation.reset();
-      setPinNotSet(false);
       store.reset();
     },
     // submit
@@ -257,8 +261,13 @@ export function useTransfer(
     // errors — PIN-related stay in the PIN dialog, the rest go to the Ringkasan
     formErrorKey: error?.where === "form" ? error.key : null,
     formErrorVars: error?.where === "form" ? error.vars : undefined,
-    pinErrorKey: error?.where === "pin" && error.key !== "pin.errLocked" ? error.key : null,
-    pinNotSet: pinNotSet || wallet.pinSet === false,
+    // errLocked → `pinCooldownSeconds`, errNotSet → `pinNotSet`: keduanya punya
+    // tampilan sendiri di dialog, bukan kalimat error di bawah kolom.
+    pinErrorKey:
+      error?.where === "pin" && error.key !== "pin.errLocked" && error.key !== "pin.errNotSet"
+        ? error.key
+        : null,
+    pinNotSet: wallet.pinSet === false,
     pinCooldownSeconds: pinCooldown.remaining,
   };
 }

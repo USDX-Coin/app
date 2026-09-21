@@ -7,13 +7,13 @@ components/
   ui/          # Design system. OURS — hand-written wrappers, meant to be edited.
   animate-ui/  # Animate UI primitives (motion + Radix). Registry files, edit sparingly.
   layout/      # App layout: AuthLayout, Sidebar, Logo, ThemeToggle
-  shared/      # Cross-feature: PageHeader, ComingSoonPage, RouteErrorState, PinConfirmDialog (USDX-567)
+  shared/      # Cross-feature: PageHeader, ComingSoonPage, RouteErrorState, PinConfirmDialog (USDX-567), PinField + PinSetupDialog + PinChangeDialog + PinNotSetNotice (USDX-651)
   auth/        # Login, Register, Forgot/Reset password, CheckEmail, VerifyEmail
   kyc/         # KYC form: identity + CDD blocks, document dropzones
   mint/        # Mint flow: MintForm, MintReview, ChainSelector
   redeem/      # Redeem flow: RedeemForm, RedeemReview, RedeemStatus (tracker), BankSelect, BankAccountPicker + AddBankAccountModal (bank book, USDX-261). Custodial source switch + PIN dialog in the review (USDX-567)
   wallet/      # Custodial wallet (USDX-566): CustodialWalletOffer, CustodialWalletPanel, ReceiveAddress (QR + copy), CustodialWalletSection (offer-or-panel), CustodialBalanceCard (sidebar), WalletOnboardingContent
-  settings/    # SettingsPageContent — Pengaturan is a real page since USDX-566
+  settings/    # SettingsPageContent — Pengaturan is a real page since USDX-566; PinSection = the transaction PIN row in the Account card (USDX-651)
   transfer/    # Custodial transfer (USDX-567): TransferPageContent (custodial owner → form, else ComingSoon), TransferForm, TransferReview, TransferResult
   transactions/ profile/ system/
 ```
@@ -78,6 +78,15 @@ components/
   `401 INVALID_PIN` / `PIN_NOT_SET` / `429 TOO_MANY_ATTEMPTS` into `errorKey` /
   `pinNotSet` / `cooldownSeconds`. Non-PIN failures close the dialog and show in the
   Ringkasan next to the figures.
+- **PIN create / change (USDX-651)** — `PinSetupDialog` (new PIN + repeat, `POST
+  /auth/pin/set`) and `PinChangeDialog` (current + new + repeat, `POST /auth/pin/change`)
+  own their calls through `hooks/usePin`; both share `PinField` (password + one-time-code
+  + numeric, letters dropped, 6 max) with `PinConfirmDialog`. `PinNotSetNotice` is the
+  "no PIN yet" alert with a Create PIN button that opens `PinSetupDialog` in place — used
+  by `TransferReview`, `RedeemReview` and `PinConfirmDialog`, so the user never leaves
+  the transfer/redeem to get a PIN. The submit handlers of both dialogs
+  `stopPropagation()`: a portal's submit still bubbles through the React tree into
+  `PinConfirmDialog`'s `<form>`.
 - `mint/MintForm` shows a destination switch (custodial default · another address) only
   when `useMint().custodialAvailable`; `MintReview` marks the recipient "wallet custodial
   saya" by a byte-identical address match — there is no flag on the order.

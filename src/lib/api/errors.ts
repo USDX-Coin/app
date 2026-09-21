@@ -219,6 +219,22 @@ export function isPinNotSet(error: unknown): boolean {
   return isApiError(error) && error.status === 401 && error.code === "PIN_NOT_SET";
 }
 
+// 401 REAUTH_REQUIRED — POST /auth/pin/set untuk MENIMPA PIN yang sudah ada tanpa
+// sesi segar dan tanpa `currentPin` (pin.yaml § set, USDX-328). Bagi FE artinya
+// salinan profil basi (`pinSet` dibaca false padahal akun sudah punya PIN) →
+// arahkan ke "ubah PIN", bukan logout: sesinya masih valid.
+export function isReauthRequired(error: unknown): boolean {
+  return isApiError(error) && error.status === 401 && error.code === "REAUTH_REQUIRED";
+}
+
+// 422 PIN_UNCHANGED — POST /auth/pin/change dengan `newPin` sama dengan
+// `currentPin` (pin.yaml § change). Hanya keluar sesudah `currentPin` terbukti
+// BENAR; PIN lama salah + PIN baru sama = 401 INVALID_PIN (attempt terbakar).
+// FE menolak `newPin == currentPin` sebelum berangkat.
+export function isPinUnchanged(error: unknown): boolean {
+  return isApiError(error) && error.status === 422 && error.code === "PIN_UNCHANGED";
+}
+
 // 429 TOO_MANY_ATTEMPTS — lockout PIN scope `pin` (5 salah / 15 menit). Beda dari
 // RATE_LIMITED (throttle throughput, toast global): ini kesalahan user yang
 // butuh countdown inline; `getRateLimitSeconds` membaca Retry-After-nya.

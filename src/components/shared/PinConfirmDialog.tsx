@@ -15,8 +15,7 @@
 //
 // PIN 6 digit dicek bentuknya di sini sebelum dikirim: bentuk salah ditolak
 // backend dengan 422 tanpa membakar attempt, tapi lebih baik tidak berangkat.
-// `type="password"` + `autoComplete="one-time-code"`: angka tidak tampil di layar
-// dan tidak masuk saran isi-otomatis kata sandi.
+// Kolomnya `PinField` (bersama layar buat/ubah PIN, USDX-651).
 
 import { useState } from "react";
 import { KeyRound } from "lucide-react";
@@ -29,15 +28,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Field, FieldHelp, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { PinField, isPinShape } from "@/components/shared/PinField";
+import { PinNotSetNotice } from "@/components/shared/PinNotSetNotice";
 import { formatDuration } from "@/lib/utils";
 import { useLang } from "@/providers/LanguageProvider";
-
-export const PIN_LENGTH = 6;
-const PIN_REGEX = /^[0-9]{6}$/;
 
 export interface PinConfirmDialogProps {
   open: boolean;
@@ -51,7 +46,7 @@ export interface PinConfirmDialogProps {
   errorKey?: string | null;
   /** Sisa detik lockout `pin` (429 TOO_MANY_ATTEMPTS). > 0 → tombol terkunci. */
   cooldownSeconds?: number;
-  /** Akun belum punya PIN (401 PIN_NOT_SET / `user.pinSet === false`). */
+  /** Akun belum punya PIN (401 PIN_NOT_SET / `user.pinSet === false`) → notice + tombol Buat PIN (USDX-651). */
   pinNotSet?: boolean;
   confirmLabel?: React.ReactNode;
 }
@@ -72,10 +67,10 @@ export function PinConfirmDialog({
   const [touched, setTouched] = useState(false);
 
   const locked = cooldownSeconds > 0;
-  const formatError = touched && !PIN_REGEX.test(pin) ? t("pin.errFormat") : null;
+  const formatError = touched && !isPinShape(pin) ? t("pin.errFormat") : null;
   const serverError = errorKey ? t(errorKey) : null;
   const inlineError = formatError ?? serverError;
-  const canSubmit = PIN_REGEX.test(pin) && !isSubmitting && !locked && !pinNotSet;
+  const canSubmit = isPinShape(pin) && !isSubmitting && !locked && !pinNotSet;
 
   function handleOpenChange(next: boolean) {
     // Jangan bisa ditutup di tengah permintaan: PIN sudah berangkat bersama body,
@@ -111,35 +106,22 @@ export function PinConfirmDialog({
 
           <DialogBody>
             {pinNotSet ? (
-              <Alert tone="warning">{t("pin.errNotSet")}</Alert>
+              <PinNotSetNotice data-testid="pin-confirm-not-set" />
             ) : (
-              <Field>
-                <FieldLabel htmlFor="pin-confirm">{t("pin.label")}</FieldLabel>
-                <Input
-                  id="pin-confirm"
-                  type="password"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  autoFocus
-                  maxLength={PIN_LENGTH}
-                  placeholder="••••••"
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value.replace(/[^0-9]/g, "").slice(0, PIN_LENGTH))}
-                  disabled={isSubmitting || locked}
-                  aria-invalid={!!inlineError}
-                  aria-describedby="pin-confirm-error"
-                  className="text-center text-2xl tracking-[0.5em] md:text-2xl"
-                />
-                <FieldHelp
-                  id="pin-confirm"
-                  hint={t("pin.hint")}
-                  error={
-                    locked
-                      ? t("pin.errLocked", { time: formatDuration(cooldownSeconds, lang) })
-                      : inlineError
-                  }
-                />
-              </Field>
+              <PinField
+                id="pin-confirm"
+                label={t("pin.label")}
+                value={pin}
+                onChange={setPin}
+                autoFocus
+                disabled={isSubmitting || locked}
+                hint={t("pin.hint")}
+                error={
+                  locked
+                    ? t("pin.errLocked", { time: formatDuration(cooldownSeconds, lang) })
+                    : inlineError
+                }
+              />
             )}
           </DialogBody>
 

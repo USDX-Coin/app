@@ -6,14 +6,17 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { CustodialWalletSection } from "@/components/wallet/CustodialWalletSection";
+import { PinSection } from "@/components/settings/PinSection";
 import { useLang } from "@/providers/LanguageProvider";
 
 /**
  * Pengaturan — a real page since USDX-566. Its first tenant is the custodial
  * wallet: an existing user without one sees the same "dikasih wallet" offer as
  * onboarding, one who has it sees the receiving address (copy + QR), status
- * and balance. Password, language and theme still live on /profile, and the
- * second card says so instead of duplicating them.
+ * and balance. The Account card holds the transaction PIN (create / change,
+ * USDX-651) — the approval every custodial transfer and redeem needs. Password,
+ * language and theme still live on /profile, and the card says so instead of
+ * duplicating them.
  */
 export function SettingsPageContent() {
   const { t } = useLang();
@@ -42,6 +45,7 @@ export function SettingsPageContent() {
               <Link href="/profile">{t("soon.toProfile")}</Link>
             </Button>
           </div>
+          <PinSection />
         </Card>
       </div>
     </div>

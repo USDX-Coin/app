@@ -13,6 +13,8 @@ import type {
   ForgotPasswordRequest,
   ResetPasswordRequest,
   ChangePasswordRequest,
+  SetPinRequest,
+  ChangePinRequest,
 } from "./types";
 import {
   mockLogin,
@@ -26,6 +28,7 @@ import {
   mockLogout,
   mockMintCheckoutCode,
 } from "./mock-api";
+import { mockSetPin, mockChangePin } from "./mock-pin";
 
 // openapi AuthTokenV2 — Better Auth issues a session via cookie or access token.
 interface AuthTokenV2 {
@@ -111,6 +114,35 @@ export async function getMe(): Promise<User> {
 export async function changePassword(req: ChangePasswordRequest): Promise<void> {
   if (env.useMock) return mockChangePassword(req);
   await apiFetch<void>("/api/v2/auth/change-password", {
+    method: "POST",
+    body: req,
+    skipUnauthorizedHandler: true,
+  });
+}
+
+// PIN akun (pin.yaml § set / change, USDX-651) — PIN 6 digit yang menyetujui
+// transfer & redeem custodial. Keduanya session-gated; sukses = envelope dengan
+// data null. `skipUnauthorizedHandler` di keduanya: 401 di sini adalah
+// INVALID_PIN / REAUTH_REQUIRED / PIN_NOT_SET — jawaban di dalam form, bukan
+// sesi mati (pola `changePassword`); salah ketik PIN tidak boleh berakhir logout.
+//
+// `setPin` dipakai FE HANYA untuk first-time set (`user.pinSet === false`). Kalau
+// backend menjawab 401 REAUTH_REQUIRED, akun ternyata sudah punya PIN (salinan
+// profil basi) — pemanggil mengarahkan ke `changePin`.
+export async function setPin(req: SetPinRequest): Promise<void> {
+  if (env.useMock) return mockSetPin(req);
+  await apiFetch<void>("/api/v2/auth/pin/set", {
+    method: "POST",
+    body: req,
+    skipUnauthorizedHandler: true,
+  });
+}
+
+// Rotasi PIN dengan PIN lama; PIN lama salah dihitung ke lockout scope `pin` yang
+// dibagi dengan transfer/redeem (429 TOO_MANY_ATTEMPTS + Retry-After).
+export async function changePin(req: ChangePinRequest): Promise<void> {
+  if (env.useMock) return mockChangePin(req);
+  await apiFetch<void>("/api/v2/auth/pin/change", {
     method: "POST",
     body: req,
     skipUnauthorizedHandler: true,

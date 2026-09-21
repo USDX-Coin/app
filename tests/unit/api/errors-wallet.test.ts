@@ -7,6 +7,8 @@ import {
   isInvalidPin,
   isPinNotSet,
   isTooManyAttempts,
+  isReauthRequired,
+  isPinUnchanged,
   isIdempotencyKeyInProgress,
   isIdempotencyKeyReused,
   isRecipientBlacklisted,
@@ -39,6 +41,14 @@ describe("errors helpers — wallet custodial", () => {
       expect(isTooManyAttempts(new ApiError(429, "TOO_MANY_ATTEMPTS", "x"))).toBe(true);
       expect(isInvalidPin(new ApiError(401, "PIN_NOT_SET", "x"))).toBe(false);
       expect(isPinNotSet(new ApiError(401, "INVALID_PIN", "x"))).toBe(false);
+    });
+
+    test("PIN set/change helpers (USDX-651): REAUTH_REQUIRED is a 401 that is not a dead session; PIN_UNCHANGED is a 422 that is not VALIDATION_ERROR", () => {
+      expect(isReauthRequired(new ApiError(401, "REAUTH_REQUIRED", "x"))).toBe(true);
+      expect(isReauthRequired(new ApiError(401, "INVALID_PIN", "x"))).toBe(false);
+      expect(isReauthRequired(new ApiError(401, "UNAUTHORIZED", "x"))).toBe(false);
+      expect(isPinUnchanged(new ApiError(422, "PIN_UNCHANGED", "x"))).toBe(true);
+      expect(isPinUnchanged(new ApiError(422, "VALIDATION_ERROR", "x"))).toBe(false);
     });
 
     test("idempotency helpers branch on code, not status", () => {

@@ -1,10 +1,12 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
-import { createWrapper } from "../../helpers/test-utils";
+import { createWrapper, createCachingWrapper } from "../../helpers/test-utils";
 import { useTransfer, mapTransferError } from "@/hooks/useTransfer";
+import { useSession } from "@/hooks/useSession";
 import { useTransferStore } from "@/stores/transferStore";
 import { useAuthStore } from "@/stores/authStore";
 import { getCustodialWallet, transferCustodial } from "@/lib/api/wallet-api";
+import { getMe } from "@/lib/api/auth-api";
 import { ApiError } from "@/lib/api/client";
 import type { CustodialWallet, TransferAccepted, User } from "@/types";
 
@@ -15,6 +17,11 @@ vi.mock("@/lib/api/wallet-api", () => ({
 }));
 const getWalletMock = vi.mocked(getCustodialWallet);
 const transferMock = vi.mocked(transferCustodial);
+vi.mock("@/lib/api/auth-api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/auth-api")>()),
+  getMe: vi.fn(),
+}));
+const getMeMock = vi.mocked(getMe);
 
 const OWN = "0x000000C528aE908fB929a0898B65e913623c9aFf";
 const TO = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed";
@@ -74,6 +81,7 @@ beforeEach(() => {
   getWalletMock.mockResolvedValue(WALLET);
   transferMock.mockReset();
   transferMock.mockResolvedValue(ACCEPTED);
+  getMeMock.mockReset();
 });
 
 describe("useTransfer", () => {
@@ -225,6 +233,30 @@ describe("useTransfer", () => {
           await result.current.submitWithPin("123456");
         });
         await waitFor(() => expect(result.current.pinNotSet).toBe(true));
+      });
+
+      test("PIN_NOT_SET → a cached /auth/me saying true does not bring the PIN back when Settings reopens", async () => {
+        // Settings (useSession) cached /auth/me with pinSet true, then the user left
+        // for /send, which does not mount useSession (custodial-wallet.md §5.1).
+        const wrapper = createCachingWrapper();
+        getMeMock.mockResolvedValueOnce(USER);
+        const settings = renderHook(() => useSession(), { wrapper });
+        await waitFor(() => expect(settings.result.current.data).toBeTruthy());
+        settings.unmount();
+
+        fillValidForm();
+        transferMock.mockRejectedValueOnce(new ApiError(401, "PIN_NOT_SET", "x"));
+        const { result } = renderHook(() => useTransfer(t), { wrapper });
+        await waitFor(() => expect(result.current.balanceUsdx).toBe(100));
+        await act(async () => {
+          await result.current.submitWithPin("123456");
+        });
+        await waitFor(() => expect(useAuthStore.getState().user?.pinSet).toBe(false));
+
+        getMeMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+        const again = renderHook(() => useSession(), { wrapper });
+        await waitFor(() => expect(again.result.current.isFetching).toBe(false));
+        expect(useAuthStore.getState().user?.pinSet).toBe(false);
       });
     });
 

@@ -51,6 +51,28 @@ export interface ChangePasswordRequest {
   confirmNewPassword: string;
 }
 
+// ── PIN akun (openapi pin.yaml — set / change, USDX-651) ───────────────────
+// Keduanya session-gated; body hanya PIN, user diambil dari sesi. PIN 6 digit
+// numerik (`^[0-9]{6}$`); bentuk salah → 422 VALIDATION_ERROR tanpa membakar
+// attempt lockout `pin`.
+
+// POST /api/v2/auth/pin/set. First-time set (akun belum punya PIN) cukup sesi
+// valid dan `currentPin` diabaikan. Menimpa PIN yang sudah ada butuh re-auth:
+// sesi password-auth segar ATAU `currentPin` benar; keduanya absen → 401
+// REAUTH_REQUIRED. FE memakai endpoint ini hanya untuk first-time set — rotasi
+// PIN lewat `ChangePinRequest`.
+export interface SetPinRequest {
+  pin: string;
+  currentPin?: string;
+}
+
+// POST /api/v2/auth/pin/change — rotasi PIN, gated PIN lama (lockout scope `pin`
+// bersama transfer/redeem). `newPin` WAJIB beda dari `currentPin` (422 PIN_UNCHANGED).
+export interface ChangePinRequest {
+  currentPin: string;
+  newPin: string;
+}
+
 // ── KYC (openapi kyc.yaml — consumer) ──────────────────────────────────────
 // `IdentityType` hidup di `@/lib/kyc/identity` bersama daftar nilai + validasinya,
 // dan di-re-export di sini supaya modul yang hanya bicara soal bentuk wire tidak

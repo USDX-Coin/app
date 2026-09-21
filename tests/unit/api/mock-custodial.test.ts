@@ -6,8 +6,8 @@ import {
   seedMockCustodialWallet,
   resetMockCustodialWallet,
   MOCK_CUSTODIAL_ADDRESS,
-  MOCK_PIN,
 } from "@/lib/api/mock-custodial-wallet";
+import { MOCK_PIN, seedMockPin } from "@/lib/api/mock-pin";
 
 // Mock layer for the custodial wallet (wallet.yaml, USDX-567): GET /api/v2/wallet
 // + POST /api/v2/wallet/transfer with the contract's idempotency semantics. The
@@ -129,7 +129,8 @@ describe("mockTransferCustodial", () => {
     });
 
     test("PIN not set → 401 PIN_NOT_SET", async () => {
-      seedMockCustodialWallet({ pinSet: false });
+      seedMockCustodialWallet();
+      seedMockPin(null);
       await expect(mockTransferCustodial(req, KEY)).rejects.toMatchObject({
         status: 401,
         code: "PIN_NOT_SET",

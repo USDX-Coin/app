@@ -52,7 +52,7 @@ Auth + KYC now route through real-or-mock dispatchers; mint/redeem/transactions 
 
 | File | Purpose |
 |------|---------|
-| `env.ts` | `NEXT_PUBLIC_API_BASE_URL` + `useMock` flag (mock when no base URL) |
+| `env.ts` | `NEXT_PUBLIC_API_BASE_URL` + `useMock` flag (mock when no base URL) + `walletCreateEnabled` (the "Buatkan saya wallet" button: explicit `NEXT_PUBLIC_WALLET_CREATE_ENABLED` wins, otherwise ON only in mock or on `https://api-dev.usdx.co.id` — allowlist, fails closed; USDX-699) |
 | `api/client.ts` | `apiFetch` — Bearer auth, SoT envelope unwrap, `ApiError`, 401 → `onUnauthorized` |
 | `api/errors.ts` | `ApiError` helpers (`isEmailNotVerified`, `getRateLimitSeconds`, …) |
 | `api/auth-api.ts` | `login/register/verifyEmail/resend/forgot/reset/getMe/changePassword` → `/api/v2/auth/*` or mock; `setPin/changePin` → `/api/v2/auth/pin/set`, `/change` with `skipUnauthorizedHandler` (401 here is `INVALID_PIN` / `REAUTH_REQUIRED` / `PIN_NOT_SET`, not a dead session) (USDX-651) |

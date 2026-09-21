@@ -4,15 +4,19 @@ import { LanguageProvider } from "@/providers/LanguageProvider";
 import { createWrapper } from "../../helpers/test-utils";
 import { PinSetupDialog } from "@/components/shared/PinSetupDialog";
 import { useAuthStore } from "@/stores/authStore";
-import { setPin } from "@/lib/api/auth-api";
+import { setPin, logout as revokeSession } from "@/lib/api/auth-api";
 import { ApiError } from "@/lib/api/client";
+import { reloginLanding } from "@/lib/auth/relogin-intent";
 import type { User } from "@/types";
 
 vi.mock("@/lib/api/auth-api", () => ({
   setPin: vi.fn(),
   changePin: vi.fn(),
   getMe: vi.fn(),
+  logout: vi.fn(),
 }));
+const push = vi.hoisted(() => vi.fn());
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push, replace: vi.fn() }) }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 const setPinMock = vi.mocked(setPin);
 
@@ -55,6 +59,9 @@ function fill(pin: string, confirm: string) {
 
 beforeEach(() => {
   setPinMock.mockReset();
+  vi.mocked(revokeSession).mockReset().mockResolvedValue(undefined);
+  push.mockReset();
+  sessionStorage.clear();
   useAuthStore.getState().setAuth(USER, "token");
 });
 
@@ -105,6 +112,32 @@ describe("PinSetupDialog", () => {
       expect(onOpenChange).not.toHaveBeenCalledWith(false);
       // The profile copy follows the backend: this account has a PIN.
       expect(useAuthStore.getState().user?.pinSet).toBe(true);
+      // Changing PIN is the way out here — no re-login button.
+      expect(screen.queryByRole("button", { name: "Login ulang" })).not.toBeInTheDocument();
+    });
+
+    // pin.yaml § set, keputusan PM 21 Sep 2026 (USDX-697): akun ber-wallet
+    // custodial tanpa PIN + sesi tidak segar. Jalan keluarnya login ulang, lalu
+    // user kembali ke dialog ini lewat penanda tujuan.
+    test("401 REAUTH_REQUIRED + details.pinSet false → log-in-again sentence and button; the copy stays false", async () => {
+      setPinMock.mockRejectedValueOnce(new ApiError(401, "REAUTH_REQUIRED", "x", { pinSet: false }));
+      renderDialog();
+      fill("654321", "654321");
+      fireEvent.click(screen.getByRole("button", { name: "Buat PIN" }));
+
+      await waitFor(() =>
+        expect(screen.getByTestId("pin-setup-error")).toHaveTextContent(
+          "Demi keamanan, login ulang dulu, lalu buat PIN dalam 5 menit.",
+        ),
+      );
+      expect(screen.getByTestId("pin-setup-error")).not.toHaveTextContent("Ubah PIN");
+      expect(useAuthStore.getState().user?.pinSet).toBe(false);
+
+      fireEvent.click(screen.getByRole("button", { name: "Login ulang" }));
+      expect(reloginLanding()).toBe("/settings");
+      expect(revokeSession).toHaveBeenCalledTimes(1);
+      expect(useAuthStore.getState().isAuthenticated).toBe(false);
+      expect(push).toHaveBeenCalledWith("/login");
     });
   });
 

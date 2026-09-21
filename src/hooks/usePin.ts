@@ -46,6 +46,9 @@ export function mapPinError(error: unknown): PinError | null {
   if (isTooManyAttempts(error)) return null;
   if (isInvalidPin(error)) return { where: "current", key: "pin.errInvalid" };
   if (isPinNotSet(error)) return { where: "form", key: "pin.errNotSet" };
+  // Pemetaan ini milik jalur first-time set saja ("akun sudah punya PIN").
+  // Di jalur lupa-PIN (USDX-696) REAUTH_REQUIRED berarti jendela sesi segar
+  // 5 menit lewat → login ulang (custodial-wallet.md §5.1).
   if (isReauthRequired(error)) return { where: "form", key: "pin.errAlreadySet" };
   if (isPinUnchanged(error)) return { where: "new", key: "pin.errUnchanged" };
   if (isValidationError(error)) return { where: "new", key: "pin.errFormat" };

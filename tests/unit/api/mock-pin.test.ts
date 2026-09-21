@@ -6,6 +6,9 @@ import {
   isMockPinSet,
   seedMockPin,
   resetMockPin,
+  seedMockStrictPinSet,
+  seedMockSessionFresh,
+  markMockPasswordAuth,
   MOCK_PIN,
 } from "@/lib/api/mock-pin";
 
@@ -185,6 +188,88 @@ describe("mockChangePin", () => {
         retryAfterSeconds: 900,
       });
       expect(() => verifyMockPin(MOCK_PIN)).toThrow(expect.objectContaining({ code: "TOO_MANY_ATTEMPTS" }));
+    });
+  });
+});
+
+// Seam gerbang USDX-698 (pin.yaml § set, keputusan PM 21 Sep 2026; USDX-697):
+// first-time set di akun ber-wallet custodial wajib sesi password-auth segar
+// (< 5 menit). Mati secara bawaan = backend yang hidup hari ini (session-only),
+// jadi semua spec lama tidak berubah. Nyala = backend sesudah 698.
+describe("mockSetPin — strict first-time set (backend USDX-698 seam)", () => {
+  const WALLET = { hasCustodialWallet: true };
+
+  beforeEach(() => {
+    seedMockPin(null);
+    seedMockStrictPinSet(true);
+  });
+
+  describe("positive", () => {
+    test("wallet + no PIN + fresh session → the PIN is created", async () => {
+      seedMockSessionFresh(true);
+      await expect(mockSetPin({ pin: NEW_PIN }, WALLET)).resolves.toBeUndefined();
+      expect(() => verifyMockPin(NEW_PIN)).not.toThrow();
+    });
+
+    test("a login (password auth) makes the session fresh", async () => {
+      markMockPasswordAuth();
+      await expect(mockSetPin({ pin: NEW_PIN }, WALLET)).resolves.toBeUndefined();
+    });
+
+    test("no custodial wallet → session-only as before, even when the session is stale", async () => {
+      seedMockSessionFresh(false);
+      await expect(mockSetPin({ pin: NEW_PIN }, { hasCustodialWallet: false })).resolves.toBeUndefined();
+    });
+  });
+
+  describe("negative", () => {
+    test("wallet + no PIN + stale session → 401 REAUTH_REQUIRED with details.pinSet false; nothing is set", async () => {
+      seedMockSessionFresh(false);
+      await expect(mockSetPin({ pin: NEW_PIN }, WALLET)).rejects.toMatchObject({
+        status: 401,
+        code: "REAUTH_REQUIRED",
+        details: { pinSet: false },
+      });
+      expect(isMockPinSet()).toBe(false);
+    });
+
+    test("a currentPin cannot stand in for the fresh session (there is no PIN to prove)", async () => {
+      seedMockSessionFresh(false);
+      await expect(mockSetPin({ pin: NEW_PIN, currentPin: MOCK_PIN }, WALLET)).rejects.toMatchObject({
+        code: "REAUTH_REQUIRED",
+        details: { pinSet: false },
+      });
+    });
+
+    test("overwriting an existing PIN without currentPin on a stale session → REAUTH_REQUIRED with details.pinSet true", async () => {
+      seedMockPin(MOCK_PIN);
+      seedMockSessionFresh(false);
+      await expect(mockSetPin({ pin: NEW_PIN }, WALLET)).rejects.toMatchObject({
+        code: "REAUTH_REQUIRED",
+        details: { pinSet: true },
+      });
+    });
+  });
+
+  describe("edge case", () => {
+    test("a password auth older than 5 minutes is stale", async () => {
+      markMockPasswordAuth(Date.now() - 5 * 60 * 1000 - 1);
+      await expect(mockSetPin({ pin: NEW_PIN }, WALLET)).rejects.toMatchObject({ code: "REAUTH_REQUIRED" });
+    });
+
+    test("seam off (default) → the old backend: wallet + stale session still sets, overwrite REAUTH carries no details", async () => {
+      seedMockStrictPinSet(false);
+      seedMockSessionFresh(false);
+      await expect(mockSetPin({ pin: NEW_PIN }, WALLET)).resolves.toBeUndefined();
+      const err = await mockSetPin({ pin: "111111" }, WALLET).catch((e: unknown) => e);
+      expect(err).toMatchObject({ code: "REAUTH_REQUIRED", details: undefined });
+    });
+
+    test("resetMockPin switches the seam off and forgets the session age", async () => {
+      markMockPasswordAuth();
+      resetMockPin();
+      seedMockPin(null);
+      await expect(mockSetPin({ pin: NEW_PIN }, WALLET)).resolves.toBeUndefined();
     });
   });
 });

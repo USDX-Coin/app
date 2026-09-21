@@ -4,6 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/authStore";
 import * as authApi from "@/lib/api/auth-api";
+import { reloginLanding } from "@/lib/auth/relogin-intent";
 import type {
   LoginRequest,
   RegisterRequest,
@@ -23,6 +24,9 @@ import type {
 // (/onboarding/wallet, USDX-566). That redirect is switched off in every
 // environment (custodial-wallet.md §1, amandemen 14 Sep 2026): verify-email lands
 // on /mint like login and reset-password.
+//
+// A login that follows a "Login ulang" button (lib/auth/relogin-intent, USDX-697)
+// lands on that intent's screen instead of /mint; the screen takes the intent.
 
 export function useAuth() {
   const router = useRouter();
@@ -32,7 +36,7 @@ export function useAuth() {
     mutationFn: (req: LoginRequest) => authApi.login(req),
     onSuccess: (data) => {
       setAuth(data.user, data.token);
-      router.push("/mint");
+      router.push(reloginLanding() ?? "/mint");
     },
   });
 

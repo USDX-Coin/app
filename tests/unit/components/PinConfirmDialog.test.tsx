@@ -4,6 +4,10 @@ import { LanguageProvider } from "@/providers/LanguageProvider";
 import { createWrapper } from "../../helpers/test-utils";
 import { PinConfirmDialog } from "@/components/shared/PinConfirmDialog";
 
+// The create-PIN dialog inside the "no PIN yet" notice carries a re-login button
+// (USDX-697), which needs the app router.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }));
+
 // PIN dialog (USDX-567) — the one approval step on the custodial money paths.
 // The dialog owns only the shape check; the caller maps the API answer into
 // `errorKey` / `cooldownSeconds`. The QueryClient is for the "no PIN yet" state,

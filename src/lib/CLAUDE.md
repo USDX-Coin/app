@@ -54,13 +54,14 @@ Auth + KYC now route through real-or-mock dispatchers; mint/redeem/transactions 
 |------|---------|
 | `env.ts` | `NEXT_PUBLIC_API_BASE_URL` + `useMock` flag (mock when no base URL) + `walletCreateEnabled` (the "Buatkan saya wallet" button: explicit `NEXT_PUBLIC_WALLET_CREATE_ENABLED` wins, otherwise ON only in mock or on `https://api-dev.usdx.co.id` — allowlist, fails closed; USDX-699) |
 | `api/client.ts` | `apiFetch` — Bearer auth, SoT envelope unwrap, `ApiError`, 401 → `onUnauthorized` |
-| `api/errors.ts` | `ApiError` helpers (`isEmailNotVerified`, `getRateLimitSeconds`, …) |
+| `api/errors.ts` | `ApiError` helpers (`isEmailNotVerified`, `getRateLimitSeconds`, …; `getReauthPinSet` reads `details.pinSet` of `401 REAUTH_REQUIRED`, absent = true — USDX-697) |
+| `auth/relogin-intent.ts` | The "log in again" landing marker (USDX-697, shared with 696): sessionStorage `usdx-relogin-intent`, intent name only (never a PIN, never a free URL), taken once by the landing screen. `create-pin` → `/settings` |
 | `api/auth-api.ts` | `login/register/verifyEmail/resend/forgot/reset/getMe/changePassword` → `/api/v2/auth/*` or mock; `setPin/changePin` → `/api/v2/auth/pin/set`, `/change` with `skipUnauthorizedHandler` (401 here is `INVALID_PIN` / `REAUTH_REQUIRED` / `PIN_NOT_SET`, not a dead session) (USDX-651) |
 | `api/kyc-api.ts` | `getMyKycStatus/submitKyc/requestPresignedUpload` → `/api/v2/kyc`, `/api/v2/storage` or mock |
 | `api/wallet-api.ts` | `getCustodialWallet` (404 `WALLET_NOT_FOUND` → `null`, a normal state) / `createCustodialWallet` (always 202 PROVISIONING) → `/api/v2/wallet` or mock (USDX-566); `transferCustodial(req, idempotencyKey)` → `POST /api/v2/wallet/transfer` with the `Idempotency-Key` header + `skipUnauthorizedHandler` (401 here is `INVALID_PIN`, not a dead session) (USDX-567) |
 | `api/mock-api.ts` | In-memory mock backend used when `env.useMock` is true. Demo user: `demo@usdx.com` / `Demo1234` |
 | `api/mock-custodial-wallet.ts` | Mock `POST/GET /api/v2/wallet` (USDX-566): PROVISIONING → ACTIVE state machine in localStorage (`usdx-mock-custodial`), `withCustodialWallet` for the profile copy, Playwright seams. Own file — mock-api.ts is already past the 500-line guideline |
-| `api/mock-pin.ts` | Mock account PIN (pin.yaml, USDX-651): `verifyMockPin` (shared `pin` lockout, 5 wrong / 15 min), `mockSetPin` / `mockChangePin`, `isMockPinSet` for the profile copy. State in localStorage (`usdx-mock-pin`); absent = the demo PIN `123456`, `{ pin: null }` = no PIN. The PIN belongs to the account, not the wallet — `seedMockPin(pin \| null)` (unit) / `seedAccountPin` (Playwright) |
+| `api/mock-pin.ts` | Mock account PIN (pin.yaml, USDX-651): `verifyMockPin` (shared `pin` lockout, 5 wrong / 15 min), `mockSetPin` / `mockChangePin`, `isMockPinSet` for the profile copy. State in localStorage (`usdx-mock-pin`); absent = the demo PIN `123456`, `{ pin: null }` = no PIN. The PIN belongs to the account, not the wallet — `seedMockPin(pin \| null)` (unit) / `seedAccountPin` (Playwright). Seam for the backend of USDX-698 (USDX-697): `seedMockStrictPinSet(true)` / `seedStrictPinSet(page)` (`usdx-mock-pin-strict-set`) — a first-time set on an account with a custodial wallet row needs a fresh password-auth session (mock login/reset = fresh for 5 min, `usdx-mock-password-auth-at`; `loginViaStorage` = stale) else `401 REAUTH_REQUIRED` `details.pinSet: false`. Off by default = today's backend |
 
 To wire a new real endpoint: add a function to the relevant `*-api.ts` that branches on `env.useMock`, calling `apiFetch` for the real path and a `mock*` fn otherwise.
 
@@ -69,8 +70,10 @@ Wallet-custodial error helpers in `api/errors.ts` (USDX-567): `isWalletNotFound`
 `isTooManyAttempts`, `isIdempotencyKeyInProgress`, `isIdempotencyKeyReused`,
 `isRecipientBlacklisted`, `isTransferLimitExceeded` + `getTransferLimitDetails`. They
 branch on `code` AND status because three 409s overlap (wallet.yaml § PETA KODE 409).
-PIN set/change (USDX-651): `isReauthRequired` (401 — overwriting an existing PIN without a
-fresh session, i.e. the profile copy was stale) and `isPinUnchanged` (422).
+PIN set/change (USDX-651): `isReauthRequired` (401 — no fresh session; two meanings told
+apart by `getReauthPinSet`: overwriting an existing PIN, i.e. the profile copy was stale,
+or — `details.pinSet: false`, USDX-697 — a first-time PIN on a custodial-wallet account)
+and `isPinUnchanged` (422).
 
 Mock custodial money paths (`api/mock-custodial-wallet.ts`, USDX-567 on top of the
 566 state machine): the account PIN comes from `mock-pin.ts` (`123456` by default,

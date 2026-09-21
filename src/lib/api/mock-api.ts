@@ -50,7 +50,7 @@ import {
   mockCustodialBalanceUsdx,
   debitMockCustodialBalance,
 } from "./mock-custodial-wallet";
-import { requireAndVerifyMockPin } from "./mock-pin";
+import { markMockPasswordAuth, requireAndVerifyMockPin } from "./mock-pin";
 import { ApiError, type Paginated } from "./client";
 import { validatePassword, validateAddress } from "@/lib/validations";
 import { getBankName } from "@/lib/banks";
@@ -180,6 +180,8 @@ export async function mockLogin(req: LoginRequest): Promise<AuthResponse> {
     throw new ApiError(403, "ACCOUNT_SUSPENDED", "Your account is suspended");
   }
   currentEmail = account.user.email;
+  // Sesi hasil password-auth: segar 5 menit untuk pin.yaml § set (seam mock-pin).
+  markMockPasswordAuth();
   return { user: withCustodialWallet(account.user), token: tokenFor(account.user) };
 }
 
@@ -253,6 +255,7 @@ export async function mockResetPassword(req: ResetPasswordRequest): Promise<Auth
   const account = currentAccount() ?? accounts.get("demo@usdx.com")!;
   account.user.emailVerifiedAt = account.user.emailVerifiedAt ?? new Date().toISOString();
   currentEmail = account.user.email;
+  markMockPasswordAuth();
   return { user: withCustodialWallet(account.user), token: tokenFor(account.user) };
 }
 

@@ -8,8 +8,12 @@
 // langsung bisa dipakai.
 //
 // Bentuk dicek di sini sebelum berangkat (6 digit, kedua kolom sama). Yang dari
-// server: 401 REAUTH_REQUIRED = akun ternyata sudah punya PIN (salinan profil
-// basi) → kalimat "gunakan Ubah PIN"; 429 = hitung mundur di tombol.
+// server: 401 REAUTH_REQUIRED punya dua arti (pin.yaml § set, `details.pinSet`,
+// USDX-697) — akun ternyata sudah punya PIN (salinan profil basi) → kalimat
+// "gunakan Ubah PIN"; ATAU akun ber-wallet custodial belum punya PIN dan sesinya
+// tidak segar → kalimat "login ulang dulu" + tombol Login ulang (useRelogin), yang
+// membawa user kembali ke dialog ini di Pengaturan sesudah login. 429 = hitung
+// mundur di tombol.
 
 import { useState } from "react";
 import { KeyRound } from "lucide-react";
@@ -27,6 +31,7 @@ import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { PinField, isPinShape } from "@/components/shared/PinField";
 import { usePin } from "@/hooks/usePin";
+import { useRelogin } from "@/hooks/useRelogin";
 import { formatDuration } from "@/lib/utils";
 import { useLang } from "@/providers/LanguageProvider";
 
@@ -40,6 +45,7 @@ export interface PinSetupDialogProps {
 export function PinSetupDialog({ open, onOpenChange, onCreated }: PinSetupDialogProps) {
   const { t, lang } = useLang();
   const { setPin, isSettingPin, setPinError, resetErrors, cooldownSeconds } = usePin();
+  const relogin = useRelogin();
   const [pin, setPinValue] = useState("");
   const [confirm, setConfirm] = useState("");
   const [touched, setTouched] = useState(false);
@@ -61,6 +67,12 @@ export function PinSetupDialog({ open, onOpenChange, onCreated }: PinSetupDialog
     if (!next && isSettingPin) return;
     if (!next) reset();
     onOpenChange(next);
+  }
+
+  function handleRelogin() {
+    reset();
+    onOpenChange(false);
+    relogin("create-pin");
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -97,7 +109,17 @@ export function PinSetupDialog({ open, onOpenChange, onCreated }: PinSetupDialog
 
           <DialogBody className="gap-4">
             {formError && (
-              <Alert tone="danger" data-testid="pin-setup-error">
+              <Alert
+                tone="danger"
+                data-testid="pin-setup-error"
+                action={
+                  setPinError?.relogin ? (
+                    <Button type="button" variant="outline" size="sm" onClick={handleRelogin}>
+                      {t("pin.relogin")}
+                    </Button>
+                  ) : undefined
+                }
+              >
                 {formError}
               </Alert>
             )}

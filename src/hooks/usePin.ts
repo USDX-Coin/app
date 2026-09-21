@@ -13,8 +13,9 @@
 // uang (`useCustodialWallet.pinSet`) — hook ini yang mengoreksinya seketika:
 // `true` begitu set sukses (dialog PIN transfer/redeem langsung terbuka, tanpa
 // menunggu /auth/me), dan mengikuti backend saat salinan ternyata basi
-// (401 REAUTH_REQUIRED = akun sudah punya PIN; 401 PIN_NOT_SET = belum). Koreksi
-// ditulis ke store DAN cache /auth/me sekaligus (`usePinSetCorrection`).
+// (401 PIN_NOT_SET = belum punya PIN; 401 REAUTH_REQUIRED = mengikuti
+// `details.pinSet`, absen = sudah punya — USDX-697). Koreksi ditulis ke store DAN
+// cache /auth/me sekaligus (`usePinSetCorrection`).
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/authStore";
@@ -30,6 +31,7 @@ import {
   isTooManyAttempts,
   isValidationError,
   getRateLimitSeconds,
+  getReauthPinSet,
   getFailureKey,
 } from "@/lib/api/errors";
 
@@ -37,6 +39,8 @@ export interface PinError {
   /** Kolom tempat pesannya tampil: PIN lama, PIN baru, atau di atas form. */
   where: "current" | "new" | "form";
   key: string;
+  /** Jalan keluarnya login ulang — dialog memasang tombol "Login ulang". */
+  relogin?: true;
 }
 
 // Pemetaan error set/change → kunci i18n + kolom. Diekspor untuk diuji tanpa
@@ -46,10 +50,16 @@ export function mapPinError(error: unknown): PinError | null {
   if (isTooManyAttempts(error)) return null;
   if (isInvalidPin(error)) return { where: "current", key: "pin.errInvalid" };
   if (isPinNotSet(error)) return { where: "form", key: "pin.errNotSet" };
-  // Pemetaan ini milik jalur first-time set saja ("akun sudah punya PIN").
-  // Di jalur lupa-PIN (USDX-696) REAUTH_REQUIRED berarti jendela sesi segar
-  // 5 menit lewat → login ulang (custodial-wallet.md §5.1).
-  if (isReauthRequired(error)) return { where: "form", key: "pin.errAlreadySet" };
+  // Dua arti REAUTH_REQUIRED di first-time set (pin.yaml § set, USDX-697):
+  // `details.pinSet: false` = akun ber-wallet custodial belum punya PIN dan
+  // sesinya tidak segar → login ulang lalu buat PIN; selain itu = akun sudah
+  // punya PIN → "gunakan Ubah PIN". Di jalur lupa-PIN (USDX-696) REAUTH_REQUIRED
+  // berarti jendela sesi segar 5 menit lewat → login ulang (custodial-wallet.md §5.1).
+  if (isReauthRequired(error)) {
+    return getReauthPinSet(error) === false
+      ? { where: "form", key: "pin.errReloginToCreate", relogin: true }
+      : { where: "form", key: "pin.errAlreadySet" };
+  }
   if (isPinUnchanged(error)) return { where: "new", key: "pin.errUnchanged" };
   if (isValidationError(error)) return { where: "new", key: "pin.errFormat" };
   return { where: "form", key: getFailureKey(error) ?? "pin.errFailed" };
@@ -65,8 +75,11 @@ export function usePin() {
     if (isTooManyAttempts(error)) {
       cooldown.start(getRateLimitSeconds(error) || DEFAULT_COOLDOWN_SECONDS);
     }
-    // Backend yang tahu apakah PIN ada; salinan profil mengikuti.
-    if (isReauthRequired(error)) setPinSet(true);
+    // Backend yang tahu apakah PIN ada; salinan profil mengikuti. Untuk
+    // REAUTH_REQUIRED jawabannya `details.pinSet` — `false` tidak boleh dibalik ke
+    // `true`: itu lingkaran "Ubah PIN" → PIN_NOT_SET → "Buat PIN" (USDX-697).
+    const reauthPinSet = getReauthPinSet(error);
+    if (reauthPinSet !== null) setPinSet(reauthPinSet);
     if (isPinNotSet(error)) setPinSet(false);
   }
 

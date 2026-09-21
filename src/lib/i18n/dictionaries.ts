@@ -406,6 +406,9 @@ const en: Dict = {
   "pin.errMismatch": "The PINs do not match.",
   "pin.errUnchanged": "Choose a PIN that is different from your current one.",
   "pin.errAlreadySet": "Your account already has a PIN. Use Change PIN instead.",
+  "pin.errReloginToCreate": "For your security, log in again first, then create your PIN within 5 minutes.",
+  "pin.relogin": "Log in again",
+  "pin.inviteAfterWallet": "Your wallet is ready. Create your PIN now so you can send and withdraw from it.",
   "pin.errFailed": "Could not save the PIN. Please try again.",
   // The PIN_NOT_SET notice on the transfer/redeem path carries this button.
   "pin.createAction": "Create PIN",
@@ -1445,6 +1448,9 @@ const id: Dict = {
   "pin.errMismatch": "PIN tidak sama.",
   "pin.errUnchanged": "Pilih PIN yang berbeda dari PIN saat ini.",
   "pin.errAlreadySet": "Akun Anda sudah punya PIN. Gunakan Ubah PIN.",
+  "pin.errReloginToCreate": "Demi keamanan, login ulang dulu, lalu buat PIN dalam 5 menit.",
+  "pin.relogin": "Login ulang",
+  "pin.inviteAfterWallet": "Wallet Anda siap. Buat PIN sekarang supaya bisa mengirim dan mencairkan dari wallet ini.",
   "pin.errFailed": "PIN tidak tersimpan. Coba lagi.",
   "pin.createAction": "Buat PIN",
   // Kata status cadangan untuk pesan 409 WALLET_NOT_ACTIVE (transfer/redeem)

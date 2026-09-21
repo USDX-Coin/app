@@ -55,6 +55,24 @@ describe("mapPinError", () => {
       expect(mapPinError(new ApiError(401, "REAUTH_REQUIRED", "x"))).toEqual({ where: "form", key: "pin.errAlreadySet" });
       expect(mapPinError(new ApiError(401, "PIN_NOT_SET", "x"))).toEqual({ where: "form", key: "pin.errNotSet" });
     });
+
+    // pin.yaml § set, keputusan PM 21 Sep 2026 (USDX-697): `details.pinSet: false`
+    // = akun ber-wallet custodial BELUM punya PIN, sesinya tidak segar → login
+    // ulang lalu buat PIN, BUKAN "gunakan Ubah PIN".
+    test("REAUTH_REQUIRED with details.pinSet false → log in again, with the re-login action", () => {
+      expect(mapPinError(new ApiError(401, "REAUTH_REQUIRED", "x", { pinSet: false }))).toEqual({
+        where: "form",
+        key: "pin.errReloginToCreate",
+        relogin: true,
+      });
+    });
+
+    test("REAUTH_REQUIRED with details.pinSet true → Change PIN, exactly as before", () => {
+      expect(mapPinError(new ApiError(401, "REAUTH_REQUIRED", "x", { pinSet: true }))).toEqual({
+        where: "form",
+        key: "pin.errAlreadySet",
+      });
+    });
   });
 
   describe("negative", () => {
@@ -115,6 +133,32 @@ describe("usePin", () => {
       await waitFor(() =>
         expect(result.current.setPinError).toEqual({ where: "form", key: "pin.errAlreadySet" }),
       );
+      expect(useAuthStore.getState().user?.pinSet).toBe(true);
+    });
+
+    test("REAUTH_REQUIRED with details.pinSet false on set → the copy STAYS false and the error asks to log in again", async () => {
+      setPinMock.mockRejectedValueOnce(new ApiError(401, "REAUTH_REQUIRED", "x", { pinSet: false }));
+      const { result } = renderHook(() => usePin(), { wrapper: createWrapper() });
+
+      await act(async () => {
+        await result.current.setPin("654321").catch(() => undefined);
+      });
+
+      await waitFor(() =>
+        expect(result.current.setPinError).toEqual({ where: "form", key: "pin.errReloginToCreate", relogin: true }),
+      );
+      expect(useAuthStore.getState().user?.pinSet).toBe(false);
+    });
+
+    test("REAUTH_REQUIRED with details.pinSet true on set → copy corrected to true (behaviour of USDX-651)", async () => {
+      setPinMock.mockRejectedValueOnce(new ApiError(401, "REAUTH_REQUIRED", "x", { pinSet: true }));
+      const { result } = renderHook(() => usePin(), { wrapper: createWrapper() });
+
+      await act(async () => {
+        await result.current.setPin("654321").catch(() => undefined);
+      });
+
+      await waitFor(() => expect(result.current.setPinError?.key).toBe("pin.errAlreadySet"));
       expect(useAuthStore.getState().user?.pinSet).toBe(true);
     });
 
@@ -225,6 +269,21 @@ describe("usePin", () => {
       expect(useAuthStore.getState().user?.pinSet).toBe(false);
 
       await reopenSessionScreenWithFailingRefetch(wrapper);
+      expect(useAuthStore.getState().user?.pinSet).toBe(false);
+    });
+
+    test("REAUTH_REQUIRED details.pinSet false leaves an unknown copy (older session) at false, never true", async () => {
+      const { pinSet: _dropped, ...legacy } = USER;
+      void _dropped;
+      useAuthStore.getState().setAuth(legacy as User, "token");
+      setPinMock.mockRejectedValueOnce(new ApiError(401, "REAUTH_REQUIRED", "x", { pinSet: false }));
+      const { result } = renderHook(() => usePin(), { wrapper: createWrapper() });
+
+      await act(async () => {
+        await result.current.setPin("654321").catch(() => undefined);
+      });
+
+      await waitFor(() => expect(result.current.setPinError?.relogin).toBe(true));
       expect(useAuthStore.getState().user?.pinSet).toBe(false);
     });
 

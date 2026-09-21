@@ -1,9 +1,10 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
-import { createWrapper } from "../../helpers/test-utils";
+import { createWrapper, createCachingWrapper } from "../../helpers/test-utils";
 import { usePin, mapPinError } from "@/hooks/usePin";
+import { useSession } from "@/hooks/useSession";
 import { useAuthStore } from "@/stores/authStore";
-import { setPin, changePin } from "@/lib/api/auth-api";
+import { setPin, changePin, getMe } from "@/lib/api/auth-api";
 import { ApiError } from "@/lib/api/client";
 import type { User } from "@/types";
 
@@ -14,6 +15,7 @@ vi.mock("@/lib/api/auth-api", () => ({
 }));
 const setPinMock = vi.mocked(setPin);
 const changePinMock = vi.mocked(changePin);
+const getMeMock = vi.mocked(getMe);
 
 // Create / change PIN (pin.yaml § set / change, USDX-651). What the hook owns:
 // the profile copy of `pinSet` follows the outcome at once (the money screens
@@ -37,6 +39,7 @@ const USER: User = {
 beforeEach(() => {
   setPinMock.mockReset();
   changePinMock.mockReset();
+  getMeMock.mockReset();
   useAuthStore.getState().setAuth(USER, "token");
 });
 
@@ -175,6 +178,54 @@ describe("usePin", () => {
         await result.current.setPin("654321");
       });
       await waitFor(() => expect(result.current.cooldownSeconds).toBe(0));
+    });
+
+    // A screen with `useSession` (Settings / Profile / KYC) cached /auth/me before
+    // the PIN changed; /send and /redeem do not mount it, so invalidating alone
+    // never refetches. Reopening that screen must not write the old copy back —
+    // least of all when its refetch fails (custodial-wallet.md §5.1 "PIN di web").
+    async function cacheSessionThenLeave(wrapper: ReturnType<typeof createCachingWrapper>, pinSet: boolean) {
+      getMeMock.mockResolvedValueOnce({ ...USER, pinSet });
+      const screen = renderHook(() => useSession(), { wrapper });
+      await waitFor(() => expect(screen.result.current.data).toBeTruthy());
+      screen.unmount();
+    }
+
+    async function reopenSessionScreenWithFailingRefetch(wrapper: ReturnType<typeof createCachingWrapper>) {
+      getMeMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+      const screen = renderHook(() => useSession(), { wrapper });
+      await waitFor(() => expect(screen.result.current.isFetching).toBe(false));
+    }
+
+    test("a cached /auth/me saying false does not undo a successful set when its screen reopens", async () => {
+      const wrapper = createCachingWrapper();
+      await cacheSessionThenLeave(wrapper, false);
+
+      setPinMock.mockResolvedValueOnce(undefined);
+      const { result } = renderHook(() => usePin(), { wrapper });
+      await act(async () => {
+        await result.current.setPin("246810");
+      });
+      expect(useAuthStore.getState().user?.pinSet).toBe(true);
+
+      await reopenSessionScreenWithFailingRefetch(wrapper);
+      expect(useAuthStore.getState().user?.pinSet).toBe(true);
+    });
+
+    test("a cached /auth/me saying true does not undo a PIN_NOT_SET correction when its screen reopens", async () => {
+      useAuthStore.getState().setPinSet(true);
+      const wrapper = createCachingWrapper();
+      await cacheSessionThenLeave(wrapper, true);
+
+      changePinMock.mockRejectedValueOnce(new ApiError(401, "PIN_NOT_SET", "x"));
+      const { result } = renderHook(() => usePin(), { wrapper });
+      await act(async () => {
+        await result.current.changePin({ currentPin: "123456", newPin: "654321" }).catch(() => undefined);
+      });
+      expect(useAuthStore.getState().user?.pinSet).toBe(false);
+
+      await reopenSessionScreenWithFailingRefetch(wrapper);
+      expect(useAuthStore.getState().user?.pinSet).toBe(false);
     });
 
     test("pinSet is null for a persisted session that predates the field", () => {

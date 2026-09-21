@@ -31,7 +31,7 @@
 import { useCallback, useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useTransferStore } from "@/stores/transferStore";
-import { useAuthStore } from "@/stores/authStore";
+import { usePinSetCorrection } from "@/hooks/usePinSetCorrection";
 import { useCustodialWallet } from "@/hooks/useCustodialWallet";
 import { useCooldown, DEFAULT_COOLDOWN_SECONDS } from "@/hooks/useCooldown";
 import { transferCustodial } from "@/lib/api/wallet-api";
@@ -144,7 +144,7 @@ export function useTransfer(
   const store = useTransferStore();
   const wallet = useCustodialWallet();
   const pinCooldown = useCooldown();
-  const setPinSet = useAuthStore((s) => s.setPinSet);
+  const setPinSet = usePinSetCorrection();
 
   const parsedAmount = parseAmount(store.amount);
   const addressError = store.to ? validateTransferAddress(store.to, wallet.address) : null;

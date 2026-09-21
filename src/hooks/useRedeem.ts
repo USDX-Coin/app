@@ -12,7 +12,7 @@
 import { useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useRedeemStore } from "@/stores/redeemStore";
-import { useAuthStore } from "@/stores/authStore";
+import { usePinSetCorrection } from "@/hooks/usePinSetCorrection";
 import { useConsumerRate } from "@/hooks/useConsumerRate";
 import { useAppConfig } from "@/hooks/useAppConfig";
 import { useCustodialWallet } from "@/hooks/useCustodialWallet";
@@ -96,7 +96,7 @@ export function useRedeem() {
   const source = custodialAvailable ? store.source : "external";
   const isCustodialSource = source === "custodial";
   const pinCooldown = useCooldown();
-  const setPinSet = useAuthStore((s) => s.setPinSet);
+  const setPinSet = usePinSetCorrection();
 
   const effectiveSellRate = rateQuery.data ? Number(rateQuery.data.effectiveSellRate) : null;
   const enteredAmount = parseAmount(store.amount);

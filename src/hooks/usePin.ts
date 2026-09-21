@@ -13,10 +13,12 @@
 // uang (`useCustodialWallet.pinSet`) — hook ini yang mengoreksinya seketika:
 // `true` begitu set sukses (dialog PIN transfer/redeem langsung terbuka, tanpa
 // menunggu /auth/me), dan mengikuti backend saat salinan ternyata basi
-// (401 REAUTH_REQUIRED = akun sudah punya PIN; 401 PIN_NOT_SET = belum).
+// (401 REAUTH_REQUIRED = akun sudah punya PIN; 401 PIN_NOT_SET = belum). Koreksi
+// ditulis ke store DAN cache /auth/me sekaligus (`usePinSetCorrection`).
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/authStore";
+import { usePinSetCorrection } from "@/hooks/usePinSetCorrection";
 import { useCooldown, DEFAULT_COOLDOWN_SECONDS } from "@/hooks/useCooldown";
 import { setPin as apiSetPin, changePin as apiChangePin } from "@/lib/api/auth-api";
 import type { ChangePinRequest } from "@/lib/api/types";
@@ -52,7 +54,7 @@ export function mapPinError(error: unknown): PinError | null {
 
 export function usePin() {
   const user = useAuthStore((s) => s.user);
-  const setPinSet = useAuthStore((s) => s.setPinSet);
+  const setPinSet = usePinSetCorrection();
   const queryClient = useQueryClient();
   const cooldown = useCooldown();
 

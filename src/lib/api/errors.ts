@@ -219,12 +219,25 @@ export function isPinNotSet(error: unknown): boolean {
   return isApiError(error) && error.status === 401 && error.code === "PIN_NOT_SET";
 }
 
-// 401 REAUTH_REQUIRED — POST /auth/pin/set untuk MENIMPA PIN yang sudah ada tanpa
-// sesi segar dan tanpa `currentPin` (pin.yaml § set, USDX-328). Bagi FE artinya
-// salinan profil basi (`pinSet` dibaca false padahal akun sudah punya PIN) →
-// arahkan ke "ubah PIN", bukan logout: sesinya masih valid.
+// 401 REAUTH_REQUIRED — POST /auth/pin/set tanpa sesi password-auth segar (pin.yaml
+// § set). Dua arti, dibedakan `details.pinSet` (`getReauthPinSet`): menimpa PIN
+// yang sudah ada tanpa `currentPin` (USDX-328), atau first-time set di akun
+// ber-wallet custodial (USDX-698). Bukan logout: sesinya masih valid.
 export function isReauthRequired(error: unknown): boolean {
   return isApiError(error) && error.status === 401 && error.code === "REAUTH_REQUIRED";
+}
+
+// `details.pinSet` dari 401 REAUTH_REQUIRED (pin.yaml § set, additive 21 Sep 2026;
+// USDX-697). `false` = akun BELUM punya PIN tapi punya wallet custodial, sesinya
+// tidak segar → login ulang lalu buat PIN dalam 5 menit. `true` = akun SUDAH
+// punya PIN → ubah PIN. Absen (backend lama) atau bukan boolean dibaca `true`:
+// hanya `false` eksplisit yang berarti "belum punya PIN". Null = bukan
+// REAUTH_REQUIRED.
+export function getReauthPinSet(error: unknown): boolean | null {
+  if (!isReauthRequired(error)) return null;
+  const details = (error as ApiError).details;
+  if (!details || typeof details !== "object") return true;
+  return (details as Record<string, unknown>).pinSet !== false;
 }
 
 // 422 PIN_UNCHANGED — POST /auth/pin/change dengan `newPin` sama dengan

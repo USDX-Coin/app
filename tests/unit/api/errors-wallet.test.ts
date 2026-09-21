@@ -14,6 +14,7 @@ import {
   isRecipientBlacklisted,
   isTransferLimitExceeded,
   getTransferLimitDetails,
+  getReauthPinSet,
 } from "@/lib/api/errors";
 
 // Helper error-code wallet custodial (wallet.yaml § PETA KODE 409, USDX-567).
@@ -117,6 +118,45 @@ describe("errors helpers — wallet custodial", () => {
         resetAt: null,
       });
       expect(getTransferLimitDetails(err)?.resetAt).toBeNull();
+    });
+  });
+});
+
+// `details.pinSet` pada 401 REAUTH_REQUIRED dari POST /auth/pin/set (pin.yaml
+// § set, additive 21 Sep 2026; USDX-697). `false` = akun ber-wallet custodial
+// yang BELUM punya PIN dan sesinya tidak segar; `true` / absen (backend lama) =
+// akun sudah punya PIN. Klien tidak boleh menyimpulkan "sudah punya PIN" dari
+// kode saja.
+describe("getReauthPinSet", () => {
+  describe("positive", () => {
+    test("details.pinSet false → false (no PIN yet, the session is not fresh)", () => {
+      expect(getReauthPinSet(new ApiError(401, "REAUTH_REQUIRED", "x", { pinSet: false }))).toBe(false);
+    });
+
+    test("details.pinSet true → true (the account already has a PIN)", () => {
+      expect(getReauthPinSet(new ApiError(401, "REAUTH_REQUIRED", "x", { pinSet: true }))).toBe(true);
+    });
+  });
+
+  describe("negative", () => {
+    test("anything that is not REAUTH_REQUIRED → null", () => {
+      expect(getReauthPinSet(new ApiError(401, "PIN_NOT_SET", "x", { pinSet: false }))).toBeNull();
+      expect(getReauthPinSet(new ApiError(401, "INVALID_PIN", "x"))).toBeNull();
+      expect(getReauthPinSet(new Error("boom"))).toBeNull();
+      expect(getReauthPinSet(undefined)).toBeNull();
+    });
+  });
+
+  describe("edge case", () => {
+    test("details absent (old backend) → true, as the contract says", () => {
+      expect(getReauthPinSet(new ApiError(401, "REAUTH_REQUIRED", "x"))).toBe(true);
+      expect(getReauthPinSet(new ApiError(401, "REAUTH_REQUIRED", "x", {}))).toBe(true);
+    });
+
+    test("a pinSet that is not a boolean is read as true — only an explicit false means no PIN", () => {
+      expect(getReauthPinSet(new ApiError(401, "REAUTH_REQUIRED", "x", { pinSet: "false" }))).toBe(true);
+      expect(getReauthPinSet(new ApiError(401, "REAUTH_REQUIRED", "x", { pinSet: null }))).toBe(true);
+      expect(getReauthPinSet(new ApiError(401, "REAUTH_REQUIRED", "x", "pinSet"))).toBe(true);
     });
   });
 });

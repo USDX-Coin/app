@@ -3,17 +3,27 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import { createWrapper } from "../../helpers/test-utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useAuthStore } from "@/stores/authStore";
+import { markReloginIntent, reloginLanding } from "@/lib/auth/relogin-intent";
 
+const push = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
-    push: vi.fn(),
+    push,
     replace: vi.fn(),
   }),
 }));
 
 beforeEach(() => {
   useAuthStore.getState().logout();
+  push.mockReset();
+  sessionStorage.clear();
 });
+
+async function loginAsDemo(result: { current: ReturnType<typeof useAuth> }) {
+  await act(async () => {
+    await result.current.login({ email: "demo@usdx.com", password: "Demo1234" });
+  });
+}
 
 describe("useAuth", () => {
   describe("login", () => {
@@ -32,6 +42,23 @@ describe("useAuth", () => {
 
         expect(useAuthStore.getState().user?.email).toBe("demo@usdx.com");
         expect(useAuthStore.getState().token).toBeTruthy();
+      });
+
+      test("lands on /mint without a re-login intent", async () => {
+        const { result } = renderHook(() => useAuth(), { wrapper: createWrapper() });
+        await loginAsDemo(result);
+        expect(push).toHaveBeenCalledWith("/mint");
+      });
+
+      // "Login ulang" dari dialog Buat PIN (USDX-697, custodial-wallet.md §5.1):
+      // sesudah login user kembali ke layar niatnya, bukan ke /mint. Penanda tetap
+      // ada untuk diambil layar tujuan (yang membuka dialognya).
+      test("a create-pin re-login intent lands on /settings and is left for that screen to take", async () => {
+        markReloginIntent("create-pin");
+        const { result } = renderHook(() => useAuth(), { wrapper: createWrapper() });
+        await loginAsDemo(result);
+        expect(push).toHaveBeenCalledWith("/settings");
+        expect(reloginLanding()).toBe("/settings");
       });
 
       test("returns loginLoading during mutation", async () => {
@@ -65,6 +92,16 @@ describe("useAuth", () => {
             "Invalid email or password"
           );
         });
+      });
+
+      test("a failed login does not navigate and keeps the re-login intent for the next try", async () => {
+        markReloginIntent("create-pin");
+        const { result } = renderHook(() => useAuth(), { wrapper: createWrapper() });
+        await act(async () => {
+          await result.current.login({ email: "demo@usdx.com", password: "wrong" }).catch(() => undefined);
+        });
+        expect(push).not.toHaveBeenCalled();
+        expect(reloginLanding()).toBe("/settings");
       });
     });
   });

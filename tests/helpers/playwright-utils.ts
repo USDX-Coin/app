@@ -390,6 +390,19 @@ export async function seedAccountPin(page: Page, pin: string | null) {
 }
 
 /**
+ * Switch the mock to the backend of USDX-698 (mock-pin "usdx-mock-pin-strict-set",
+ * USDX-697): a first-time PIN on an account that has a custodial wallet needs a
+ * fresh password-auth session (< 5 min). `loginViaStorage` never logs in through
+ * the mock, so its session is stale → POST /auth/pin/set answers 401
+ * REAUTH_REQUIRED with `details.pinSet: false`; a login through the form makes it
+ * fresh. Unarmed = today's backend (session-only). Constant seam — safe on every
+ * navigation. Call before the first page.goto().
+ */
+export async function seedStrictPinSet(page: Page) {
+  await page.addInitScript(() => localStorage.setItem("usdx-mock-pin-strict-set", "1"));
+}
+
+/**
  * Shorten the custodial poll window (useCustodialWallet seam
  * "usdx-mock-custodial-poll-budget", read only in mock mode) so the "still
  * being set up" + retry state is reachable without waiting a full minute.

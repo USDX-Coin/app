@@ -5,6 +5,7 @@ import {
   forceIndonesian,
   seedAccountPin,
   seedCustodialWallet,
+  seedStrictPinSet,
   MOCK_CUSTODIAL_WALLET_SUMMARY,
   MOCK_PIN,
   VIEWPORTS,
@@ -173,6 +174,98 @@ test.describe("Settings — transaction PIN", () => {
       await dialog.getByRole("button", { name: "Buat PIN" }).click();
       await expect(page.getByText("PIN dibuat. Bisa langsung dipakai.")).toBeVisible();
       await expect(row.getByText("PIN sudah dibuat")).toBeVisible();
+    });
+  });
+});
+
+// First-time PIN on an account that already has a custodial wallet, against the
+// backend of USDX-698 (pin.yaml § set, keputusan PM 21 Sep 2026; USDX-697): the
+// session must be a fresh password-auth one. `loginViaStorage` never logs in
+// through the mock, so it plays the stale session — 401 REAUTH_REQUIRED with
+// `details.pinSet: false`. The way out is "Log in again": the login form, then
+// straight back to this dialog on Settings.
+async function tryCreate(page: Page, pin = NEW_PIN) {
+  const dialog = page.getByTestId("pin-setup-dialog");
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel("New PIN", { exact: true }).fill(pin);
+  await dialog.getByLabel("Repeat PIN", { exact: true }).fill(pin);
+  await dialog.getByRole("button", { name: "Create PIN" }).click();
+  return dialog;
+}
+
+async function loginThroughForm(page: Page) {
+  await expect(page).toHaveURL(/\/login/);
+  await page.getByPlaceholder("name@email.com").fill("demo@usdx.com");
+  await page.getByPlaceholder("Enter your password").fill("Demo1234");
+  await page.getByRole("button", { name: "Login" }).click();
+}
+
+test.describe("Settings — create PIN needs a fresh login (backend USDX-698)", () => {
+  test.beforeEach(async ({ page }) => {
+    await forceEnglish(page);
+    await seedStrictPinSet(page);
+    await seedAccountPin(page, null);
+  });
+
+  test.describe("positive", () => {
+    test("stale session → log in again → back on Settings with Create PIN open → the PIN is created", async ({
+      page,
+    }) => {
+      await seedCustodialWallet(page, { status: "ACTIVE", balance: "1000.00" });
+      await loginViaStorage(page, { pinSet: false, custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
+      await gotoSettings(page);
+      await pinRow(page).getByRole("button", { name: "Create PIN" }).click();
+
+      const dialog = await tryCreate(page);
+      const error = dialog.getByTestId("pin-setup-error");
+      await expect(error).toContainText("For your security, log in again first, then create your PIN within 5 minutes.");
+      await expect(error).not.toContainText("Change PIN");
+      // The copy stays "no PIN" — never flipped to "PIN set" / "Change PIN".
+      await expect(pinRow(page).getByText("No PIN yet")).toBeVisible();
+
+      await error.getByRole("button", { name: "Log in again" }).click();
+      await loginThroughForm(page);
+
+      await expect(page).toHaveURL(/\/settings$/, { timeout: 15000 });
+      await tryCreate(page);
+      await expect(page.getByText("PIN created. You can use it right away.")).toBeVisible();
+      await expect(pinRow(page).getByText("PIN set")).toBeVisible();
+    });
+  });
+
+  test.describe("negative", () => {
+    test("no custodial wallet → the gate does not apply: the PIN is created on the stale session", async ({
+      page,
+    }) => {
+      await loginViaStorage(page, { pinSet: false });
+      await gotoSettings(page);
+      await pinRow(page).getByRole("button", { name: "Create PIN" }).click();
+
+      await tryCreate(page);
+      await expect(page.getByText("PIN created. You can use it right away.")).toBeVisible();
+    });
+  });
+
+  test.describe("edge case", () => {
+    test("the landing marker is used once: after the re-login, a reload of Settings opens no dialog", async ({
+      page,
+    }) => {
+      await seedCustodialWallet(page, { status: "ACTIVE", balance: "1000.00" });
+      await loginViaStorage(page, { pinSet: false, custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
+      await gotoSettings(page);
+      await pinRow(page).getByRole("button", { name: "Create PIN" }).click();
+      const dialog = await tryCreate(page);
+      await dialog.getByRole("button", { name: "Log in again" }).click();
+
+      // Per tab, and only the intent name — never the PIN just typed.
+      expect(await page.evaluate(() => sessionStorage.getItem("usdx-relogin-intent"))).toBe("create-pin");
+      await loginThroughForm(page);
+      await expect(page.getByTestId("pin-setup-dialog")).toBeVisible({ timeout: 15000 });
+      expect(await page.evaluate(() => sessionStorage.getItem("usdx-relogin-intent"))).toBeNull();
+
+      await page.reload();
+      await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible({ timeout: 15000 });
+      await expect(page.getByTestId("pin-setup-dialog")).toHaveCount(0);
     });
   });
 });

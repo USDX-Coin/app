@@ -115,6 +115,12 @@ export function seedMockCustodialWallet(
   return state;
 }
 
+// Punya baris di salinan kerja (`custodial_wallet_mirror`), status APA PUN — yang
+// dibaca gerbang first-time set pin.yaml § set (backend USDX-698, seam mock-pin).
+export function hasMockCustodialWallet(): boolean {
+  return readCustodialState() !== null;
+}
+
 // PROVISIONING → ACTIVE berjalan "di latar" (wallet-service), terlihat saat GET.
 function settleCustodialState(state: MockCustodialState): MockCustodialState {
   if (

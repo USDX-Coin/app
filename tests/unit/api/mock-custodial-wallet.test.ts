@@ -4,10 +4,12 @@ import {
   mockCreateCustodialWallet,
   mockGetCustodialWallet,
   resetMockCustodialWallet,
+  hasMockCustodialWallet,
   MOCK_CUSTODIAL_ADDRESS,
   MOCK_PROVISIONING_MS,
   type MockCustodialState,
 } from "@/lib/api/mock-custodial-wallet";
+import { mockSetPin, seedMockPin, seedMockStrictPinSet, isMockPinSet } from "@/lib/api/mock-pin";
 
 // The mock persists its wallet in localStorage ("usdx-mock-custodial") so the
 // Playwright flows survive page loads. jsdom gives every test the same store,
@@ -143,6 +145,50 @@ describe("mock custodial wallet", () => {
       const wallet = await mockGetCustodialWallet();
       expect(wallet.balance).toBe("125.50");
       expect(wallet.balanceWei).toBe("125500000");
+    });
+  });
+});
+
+// Gerbang first-time set (pin.yaml § set, backend USDX-698; seam USDX-697): yang
+// dihitung adalah BARIS wallet, status apa pun — dan login mock memberi sesi
+// password-auth segar.
+describe("mock custodial wallet — first-time PIN gate inputs", () => {
+  describe("positive", () => {
+    test("any wallet row counts: PROVISIONING, ACTIVE and SUSPENDED", () => {
+      for (const status of ["PROVISIONING", "ACTIVE", "SUSPENDED"] as const) {
+        seed({ status });
+        expect(hasMockCustodialWallet()).toBe(true);
+      }
+    });
+
+    test("right after a mock login the gate lets a wallet owner create a PIN", async () => {
+      seed({ status: "ACTIVE" });
+      seedMockPin(null);
+      seedMockStrictPinSet(true);
+      await mockLogin({ email: "demo@usdx.com", password: "Demo1234" });
+
+      await expect(
+        mockSetPin({ pin: "654321" }, { hasCustodialWallet: hasMockCustodialWallet() }),
+      ).resolves.toBeUndefined();
+      expect(isMockPinSet()).toBe(true);
+    });
+  });
+
+  describe("negative", () => {
+    test("no wallet row → false", () => {
+      expect(hasMockCustodialWallet()).toBe(false);
+    });
+  });
+
+  describe("edge case", () => {
+    test("without a login (storage-seeded session) the same wallet owner is asked to log in again", async () => {
+      seed({ status: "PROVISIONING" });
+      seedMockPin(null);
+      seedMockStrictPinSet(true);
+
+      await expect(
+        mockSetPin({ pin: "654321" }, { hasCustodialWallet: hasMockCustodialWallet() }),
+      ).rejects.toMatchObject({ code: "REAUTH_REQUIRED", details: { pinSet: false } });
     });
   });
 });

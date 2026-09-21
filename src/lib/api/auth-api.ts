@@ -29,6 +29,7 @@ import {
   mockMintCheckoutCode,
 } from "./mock-api";
 import { mockSetPin, mockChangePin } from "./mock-pin";
+import { hasMockCustodialWallet } from "./mock-custodial-wallet";
 
 // openapi AuthTokenV2 — Better Auth issues a session via cookie or access token.
 interface AuthTokenV2 {
@@ -126,11 +127,12 @@ export async function changePassword(req: ChangePasswordRequest): Promise<void> 
 // INVALID_PIN / REAUTH_REQUIRED / PIN_NOT_SET — jawaban di dalam form, bukan
 // sesi mati (pola `changePassword`); salah ketik PIN tidak boleh berakhir logout.
 //
-// `setPin` dipakai FE HANYA untuk first-time set (`user.pinSet === false`). Kalau
-// backend menjawab 401 REAUTH_REQUIRED, akun ternyata sudah punya PIN (salinan
-// profil basi) — pemanggil mengarahkan ke `changePin`.
+// `setPin` dipakai FE HANYA untuk first-time set (`user.pinSet === false`). 401
+// REAUTH_REQUIRED punya dua arti, dibedakan `details.pinSet` (USDX-697): akun
+// ternyata sudah punya PIN (salinan profil basi) → `changePin`; atau akun
+// ber-wallet custodial belum punya PIN dan sesinya tidak segar → login ulang.
 export async function setPin(req: SetPinRequest): Promise<void> {
-  if (env.useMock) return mockSetPin(req);
+  if (env.useMock) return mockSetPin(req, { hasCustodialWallet: hasMockCustodialWallet() });
   await apiFetch<void>("/api/v2/auth/pin/set", {
     method: "POST",
     body: req,

@@ -221,7 +221,7 @@ describe('functionOrPage') →
 - **E2E tests**: auth flow, mint flow, redeem flows, address book, QR scan, rate limit, custodial transfer/redeem, PIN created from the money paths
 
 Test helpers in `tests/helpers/`:
-- `test-utils.tsx`: QueryClient wrapper for renderHook
+- `test-utils.tsx`: QueryClient wrapper for renderHook (`createWrapper`, gcTime 0; `createCachingWrapper` keeps the cache across unmounts like the app)
 - `playwright-utils.ts`: loginViaStorage, clearAuth, VIEWPORTS
 
 ## Route Structure
@@ -271,8 +271,9 @@ Test helpers in `tests/helpers/`:
   `user.pinSet === false` shows the `PinNotSetNotice` ("buat PIN dulu" + a Create PIN
   button that opens the set dialog in place) and disables the step. `user.pinSet` in the
   auth store is the single source the money screens read: `/set` success flips it to
-  `true` at once (`authStore.setPinSet`, no /auth/me wait), `401 PIN_NOT_SET` flips it to
-  `false`. Mock: `seedMockCustodialWallet` (unit, `mock-custodial-wallet.ts`) /
+  `true` at once (no /auth/me wait), `401 PIN_NOT_SET` flips it to `false` — every
+  correction goes through `hooks/usePinSetCorrection`, which writes the store AND the
+  `["session","me"]` cache so a stale cached /auth/me cannot write the old value back. Mock: `seedMockCustodialWallet` (unit, `mock-custodial-wallet.ts`) /
   `seedCustodialWallet(page, { status, balance, …seams })` (Playwright); the account PIN
   is its own seam — `mock-pin.ts`, `seedMockPin(pin | null)` (unit) /
   `seedAccountPin(page, pin | null)` (Playwright), default PIN `123456`

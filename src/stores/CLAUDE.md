@@ -6,7 +6,7 @@ Client-side state stores using Zustand 5.
 
 | Store | Persisted | State |
 |-------|-----------|-------|
-| `authStore` | Yes (localStorage `usdx-auth`) | `user`, `token`, `isAuthenticated`; `setPinSet(bool)` corrects `user.pinSet` alone (USDX-651: `/pin/set` success → true at once; `401 PIN_NOT_SET` → false) |
+| `authStore` | Yes (localStorage `usdx-auth`) | `user`, `token`, `isAuthenticated`; `setPinSet(bool)` corrects `user.pinSet` alone (USDX-651: `/pin/set` success → true at once; `401 PIN_NOT_SET` → false) — call it through `hooks/usePinSetCorrection`, which also patches the `/auth/me` cache |
 | `mintStore` | No | `chainId`, `amount`, `amountCurrency`, `destinationAddress`, `destinationSource` (`custodial` \| `manual`, USDX-567), `reviewOpen`, `handoffPending` |
 | `redeemStore` | No | `step`, `source` (`custodial` \| `external`, USDX-567), `pinOpen`, `amount`, `amountCurrency`, `bankCode`, `bankAccountNumber`, `bankAccountName`, `orderId`, `burnState`, `burnErrorKey` |
 | `transferStore` | Partly (sessionStorage `usdx-transfer-intent`: `to`, `amount`, `idempotencyKey` only) | `step` (`form` \| `done`), `to`, `amount`, `reviewOpen`, `pinOpen`, `idempotencyKey`, `result` (USDX-567) |

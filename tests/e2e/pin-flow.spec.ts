@@ -18,6 +18,7 @@ const TO = "0xabcdef1234567890abcdef1234567890abcdef12";
 
 async function createPinFromNotice(page: Page, notice: ReturnType<Page["getByTestId"]>) {
   await expect(notice).toContainText("no PIN yet");
+  await expect(notice).not.toContainText(/custodial/i);
   await notice.getByRole("button", { name: "Create PIN" }).click();
   const setup = page.getByTestId("pin-setup-dialog");
   await expect(setup).toBeVisible();

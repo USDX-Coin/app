@@ -384,7 +384,7 @@ const en: Dict = {
   "pin.confirm": "Confirm",
   "pin.errFormat": "Enter the 6 digits of your PIN",
   "pin.errInvalid": "Wrong PIN. Please try again.",
-  "pin.errNotSet": "Your account has no PIN yet. Set a PIN before using your custodial wallet.",
+  "pin.errNotSet": "Your account has no PIN yet. Create one to send or withdraw from your USDX wallet.",
   "pin.errLocked": "Too many wrong attempts. Try again in {time}.",
   // Create / change PIN (pin.yaml § set / change, USDX-651). Copy stays in plain
   // words: "transfers and withdrawals from your USDX wallet", never "custodial".
@@ -1423,7 +1423,7 @@ const id: Dict = {
   "pin.confirm": "Konfirmasi",
   "pin.errFormat": "Masukkan 6 digit PIN Anda",
   "pin.errInvalid": "PIN salah. Coba lagi.",
-  "pin.errNotSet": "Akun Anda belum punya PIN. Buat PIN dulu sebelum memakai wallet custodial.",
+  "pin.errNotSet": "Akun Anda belum punya PIN. Buat PIN dulu untuk mengirim atau mencairkan dari wallet USDX Anda.",
   "pin.errLocked": "Terlalu banyak percobaan salah. Coba lagi dalam {time}.",
   // Buat / ubah PIN (pin.yaml § set / change, USDX-651).
   "pin.setup.title": "Buat PIN",

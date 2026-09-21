@@ -58,6 +58,8 @@ describe("PinConfirmDialog", () => {
       const { onSubmit } = renderDialog({ pinNotSet: true });
       expect(screen.queryByLabelText("PIN 6 digit")).toBeNull();
       expect(screen.getByRole("alert")).toHaveTextContent(/belum punya PIN/);
+      // Copy tanpa jargon (USDX-651 AC): "wallet USDX", bukan "custodial".
+      expect(screen.getByRole("alert")).not.toHaveTextContent(/custodial/i);
       expect(screen.getByRole("button", { name: "Konfirmasi" })).toBeDisabled();
       // The way out is right there (USDX-651): the notice opens the create-PIN dialog.
       fireEvent.click(screen.getByRole("button", { name: "Buat PIN" }));

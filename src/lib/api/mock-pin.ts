@@ -78,13 +78,10 @@ export function resetMockPin(): void {
   pinFailures = 0;
 }
 
-// Verifikasi PIN dengan urutan backend: belum punya PIN → lockout → cocokkan.
+// Verifikasi PIN dengan urutan backend (pin.yaml § change "Urutan pemeriksaan",
+// sama untuk step-up transfer/redeem): lockout → belum punya PIN → cocokkan.
 // Dipakai transfer dan redeem custodial (satu counter, seperti scope `pin`).
 export function verifyMockPin(pin: string): void {
-  const current = currentMockPin();
-  if (current === null) {
-    throw new ApiError(401, "PIN_NOT_SET", "Akun belum punya PIN");
-  }
   if (pinFailures >= MOCK_PIN_MAX_ATTEMPTS) {
     throw new ApiError(
       429,
@@ -93,6 +90,10 @@ export function verifyMockPin(pin: string): void {
       { retryAfterSeconds: MOCK_PIN_LOCKOUT_SECONDS },
       MOCK_PIN_LOCKOUT_SECONDS,
     );
+  }
+  const current = currentMockPin();
+  if (current === null) {
+    throw new ApiError(401, "PIN_NOT_SET", "Akun belum punya PIN");
   }
   if (pin !== current) {
     pinFailures += 1;
@@ -134,17 +135,19 @@ export async function mockSetPin(req: SetPinRequest): Promise<void> {
 
 // ── POST /api/v2/auth/pin/change (pin.yaml § change) ─────────────────────────
 // Rotasi PIN, gated PIN lama; PIN lama salah dihitung ke counter lockout yang
-// SAMA dengan transfer/redeem. Urutan: bentuk (422 VALIDATION_ERROR) → newPin ==
-// currentPin (422 PIN_UNCHANGED, murni cek body) → verifikasi PIN lama
-// (401 PIN_NOT_SET / 429 / 401 INVALID_PIN).
+// SAMA dengan transfer/redeem. Urutan backend (pin.yaml § change "Urutan
+// pemeriksaan"): bentuk (422 VALIDATION_ERROR) → verifikasi PIN lama (429 /
+// 401 PIN_NOT_SET / 401 INVALID_PIN) → BARU newPin == currentPin (422
+// PIN_UNCHANGED). PIN lama salah + PIN baru sama tetap INVALID_PIN dan membakar
+// attempt.
 export async function mockChangePin(req: ChangePinRequest): Promise<void> {
   await delay(300);
   if (!PIN_REGEX.test(req.currentPin) || !PIN_REGEX.test(req.newPin)) {
     throw new ApiError(422, "VALIDATION_ERROR", "PIN harus 6 digit");
   }
+  verifyMockPin(req.currentPin);
   if (req.newPin === req.currentPin) {
     throw new ApiError(422, "PIN_UNCHANGED", "PIN baru harus berbeda dari PIN lama");
   }
-  verifyMockPin(req.currentPin);
   writeRecord({ pin: req.newPin });
 }

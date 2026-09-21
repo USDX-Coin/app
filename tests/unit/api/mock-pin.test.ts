@@ -11,8 +11,9 @@ import {
 
 // Mock layer for the account PIN (pin.yaml § set / change, USDX-651). The mock is
 // the only backend the offline suites (Playwright) ever see, so its error
-// precedence has to match the contract: shape first (422, no attempt burnt),
-// then the shared `pin` lockout, then the comparison.
+// precedence has to match the contract (pin.yaml § change "Urutan pemeriksaan"):
+// shape first (422, no attempt burnt), then the shared `pin` lockout, then
+// "has a PIN", then the comparison — and only then PIN_UNCHANGED.
 const NEW_PIN = "654321";
 
 beforeEach(() => {
@@ -129,15 +130,24 @@ describe("mockChangePin", () => {
       });
     });
 
-    test("newPin equal to currentPin → 422 PIN_UNCHANGED, checked before the PIN is verified", async () => {
-      await expect(mockChangePin({ currentPin: "000000", newPin: "000000" })).rejects.toMatchObject({
+    test("newPin equal to a correct currentPin → 422 PIN_UNCHANGED, nothing changes", async () => {
+      await expect(mockChangePin({ currentPin: MOCK_PIN, newPin: MOCK_PIN })).rejects.toMatchObject({
         status: 422,
         code: "PIN_UNCHANGED",
       });
-      // A body check only: no attempt was burnt on the wrong current PIN.
+      expect(() => verifyMockPin(MOCK_PIN)).not.toThrow();
+    });
+
+    test("wrong currentPin + the same newPin → 401 INVALID_PIN and the attempt is burnt (PIN is checked first)", async () => {
+      // pin.yaml § change "Urutan pemeriksaan": PIN_UNCHANGED only ever follows a
+      // CORRECT currentPin (PinService, backend dev@d2224818).
       for (let i = 0; i < 5; i++) {
-        expect(() => verifyMockPin("000000")).toThrow(expect.objectContaining({ code: "INVALID_PIN" }));
+        await expect(mockChangePin({ currentPin: "000000", newPin: "000000" })).rejects.toMatchObject({
+          status: 401,
+          code: "INVALID_PIN",
+        });
       }
+      expect(() => verifyMockPin(MOCK_PIN)).toThrow(expect.objectContaining({ code: "TOO_MANY_ATTEMPTS" }));
     });
 
     test("malformed PINs → 422 VALIDATION_ERROR", async () => {
@@ -151,6 +161,18 @@ describe("mockChangePin", () => {
   });
 
   describe("edge case", () => {
+    test("the lockout answers before PIN_NOT_SET (order: lockout → PIN_NOT_SET → INVALID_PIN)", async () => {
+      for (let i = 0; i < 5; i++) {
+        expect(() => verifyMockPin("000000")).toThrow(expect.objectContaining({ code: "INVALID_PIN" }));
+      }
+      seedMockPin(null); // the PIN is gone, the lockout is not
+      expect(() => verifyMockPin(MOCK_PIN)).toThrow(expect.objectContaining({ code: "TOO_MANY_ATTEMPTS" }));
+      await expect(mockChangePin({ currentPin: MOCK_PIN, newPin: NEW_PIN })).rejects.toMatchObject({
+        status: 429,
+        code: "TOO_MANY_ATTEMPTS",
+      });
+    });
+
     test("the lockout is shared: wrong attempts on change lock the transfer/redeem verification too", async () => {
       for (let i = 0; i < 5; i++) {
         await expect(mockChangePin({ currentPin: "000000", newPin: NEW_PIN })).rejects.toMatchObject({

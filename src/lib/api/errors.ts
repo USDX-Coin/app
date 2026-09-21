@@ -228,7 +228,9 @@ export function isReauthRequired(error: unknown): boolean {
 }
 
 // 422 PIN_UNCHANGED — POST /auth/pin/change dengan `newPin` sama dengan
-// `currentPin` (pin.yaml § change). Cek body murni: tidak membakar attempt.
+// `currentPin` (pin.yaml § change). Hanya keluar sesudah `currentPin` terbukti
+// BENAR; PIN lama salah + PIN baru sama = 401 INVALID_PIN (attempt terbakar).
+// FE menolak `newPin == currentPin` sebelum berangkat.
 export function isPinUnchanged(error: unknown): boolean {
   return isApiError(error) && error.status === 422 && error.code === "PIN_UNCHANGED";
 }

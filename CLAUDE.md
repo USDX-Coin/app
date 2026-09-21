@@ -271,12 +271,17 @@ Test helpers in `tests/helpers/`:
   `user.pinSet === false` shows the `PinNotSetNotice` ("buat PIN dulu" + a Create PIN
   button that opens the set dialog in place) and disables the step. `user.pinSet` in the
   auth store is the single source the money screens read: `/set` success flips it to
-  `true` at once (no /auth/me wait), `401 PIN_NOT_SET` flips it to `false` — every
+  `true` at once (no /auth/me wait), `401 PIN_NOT_SET` flips it to `false`, `401
+  REAUTH_REQUIRED` follows `details.pinSet` (absent = true; `false` = log in again, then
+  create the PIN — `hooks/useRelogin` + `lib/auth/relogin-intent` bring the user back to
+  the Create PIN dialog on Settings, USDX-697) — every
   correction goes through `hooks/usePinSetCorrection`, which writes the store AND the
   `["session","me"]` cache so a stale cached /auth/me cannot write the old value back. Mock: `seedMockCustodialWallet` (unit, `mock-custodial-wallet.ts`) /
   `seedCustodialWallet(page, { status, balance, …seams })` (Playwright); the account PIN
   is its own seam — `mock-pin.ts`, `seedMockPin(pin | null)` (unit) /
-  `seedAccountPin(page, pin | null)` (Playwright), default PIN `123456`
+  `seedAccountPin(page, pin | null)` (Playwright), default PIN `123456`; the backend of
+  USDX-698 (first-time PIN on a wallet account needs a fresh login) is the seam
+  `seedMockStrictPinSet(true)` / `seedStrictPinSet(page)`, off by default
 - The `/payment` mock gateway route was deleted (it faked "Payment Successful" with a
   `setTimeout`); the real mint flow uses the cross-origin checkout handoff
 - RainbowKit wallet connection works; the USDX balance is read **on-chain for real**

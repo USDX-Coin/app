@@ -84,7 +84,12 @@ components/
   + numeric, letters dropped, 6 max) with `PinConfirmDialog`. `PinNotSetNotice` is the
   "no PIN yet" alert with a Create PIN button that opens `PinSetupDialog` in place — used
   by `TransferReview`, `RedeemReview` and `PinConfirmDialog`, so the user never leaves
-  the transfer/redeem to get a PIN. The submit handlers of both dialogs
+  the transfer/redeem to get a PIN. `401 REAUTH_REQUIRED` with `details.pinSet: false`
+  (a custodial-wallet account without a PIN on a stale session, backend USDX-698) shows
+  "log in again" + a **Log in again** button (`hooks/useRelogin`) in `PinSetupDialog` —
+  every create door gets it; after the login `PinSection` takes the intent and opens the
+  dialog (USDX-697). `CustodialWalletSection` shows one `PinNotSetNotice` invite when a
+  wallet created on that screen turns ACTIVE on an account without a PIN. The submit handlers of both dialogs
   `stopPropagation()`: a portal's submit still bubbles through the React tree into
   `PinConfirmDialog`'s `<form>`.
 - `mint/MintForm` shows a destination switch (custodial default · another address) only

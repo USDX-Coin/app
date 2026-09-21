@@ -14,6 +14,15 @@
 //   week2.md § Ringkasan); override per environment via `NEXT_PUBLIC_CHECKOUT_URL`
 //   (mis. dev → checkout dev) agar E2E lintas-domain (USDX-226) bisa.
 //
+// - `walletCreateEnabled` — sakelar tombol "Buatkan saya wallet" (custodial-wallet.md
+//   §1, amandemen 21 Sep 2026, USDX-699). Tombol hanya tampil di build DEV; prod tetap
+//   pill "Segera hadir" (hotfix USDX-684) sampai wallet-service prod hidup. Nilai
+//   eksplisit `NEXT_PUBLIC_WALLET_CREATE_ENABLED` ("true"/"false") menang; tanpa itu
+//   menyala HANYA di mode mock (lokal/test) atau bila API = `WALLET_CREATE_DEV_API`.
+//   Daftar-izin, bukan daftar-tolak: URL lain apa pun — prod, atau yang belum dikenal
+//   — berarti MATI (gagal tertutup), jadi salah konfigurasi tidak pernah membuka
+//   tombol yang pasti 503 di depan user nyata.
+//
 // Session transport is Bearer-token (matches back-office + openapi `bearerAuth`),
 // chosen over cross-site cookies because FE (Netlify) and API (Railway) are
 // different origins. See PR notes.
@@ -24,13 +33,31 @@ const checkoutUrl = (
   process.env.NEXT_PUBLIC_CHECKOUT_URL ?? "https://mint.usdx.co.id"
 ).replace(/\/$/, "");
 
+const useMock =
+  explicitMock === "true" ? true : explicitMock === "false" ? false : apiBaseUrl === "";
+
+/** Satu-satunya backend tempat membuat wallet custodial boleh ditawarkan tanpa flag eksplisit. */
+export const WALLET_CREATE_DEV_API = "https://api-dev.usdx.co.id";
+
+// Diekspor supaya tabel kebenarannya bisa diuji tanpa memuat ulang modul
+// (`NEXT_PUBLIC_*` di-inline saat build).
+export function resolveWalletCreateEnabled(input: {
+  explicit: string | undefined;
+  useMock: boolean;
+  apiBaseUrl: string;
+}): boolean {
+  if (input.explicit === "true") return true;
+  if (input.explicit === "false") return false;
+  return input.useMock || input.apiBaseUrl === WALLET_CREATE_DEV_API;
+}
+
 export const env = {
   apiBaseUrl,
   checkoutUrl,
-  useMock:
-    explicitMock === "true"
-      ? true
-      : explicitMock === "false"
-        ? false
-        : apiBaseUrl === "",
+  useMock,
+  walletCreateEnabled: resolveWalletCreateEnabled({
+    explicit: process.env.NEXT_PUBLIC_WALLET_CREATE_ENABLED,
+    useMock,
+    apiBaseUrl,
+  }),
 } as const;

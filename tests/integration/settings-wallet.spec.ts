@@ -5,6 +5,7 @@ import {
   forceIndonesian,
   seedCustodialWallet,
   seedCustodialPollBudget,
+  seedCustodialCreateFailure,
   MOCK_CUSTODIAL_ADDRESS,
 } from "../helpers/playwright-utils";
 
@@ -12,12 +13,11 @@ import {
 // localStorage seams: the mock keeps the wallet in "usdx-mock-custodial", so a
 // state seeded before the first page load is what GET /api/v2/wallet answers.
 //
-// What these pin: a user without a wallet still sees the offer, but where the
-// create button stood there is a "Coming Soon" pill (custodial-wallet.md §1,
-// amandemen 14 Sep 2026); an existing wallet shows address, status and a real
-// balance; PROVISIONING is shown as a state, not a spinner without end; the poll
-// gives up and offers "try again", and that retry (a repeat POST) is what heals
-// a stuck wallet; a null balance is "—", never 0; the address is gated on ACTIVE.
+// What these pin, per the ticket's ACs: an existing user activates from
+// Settings and ends up ACTIVE with a real 0 balance; PROVISIONING is shown as a
+// state, not a spinner without end; the poll gives up and offers "try again",
+// and that retry (a repeat POST) is what heals a stuck wallet; a null balance is
+// "—", never 0; the address is gated on ACTIVE.
 
 const ACTIVE_SUMMARY = { address: MOCK_CUSTODIAL_ADDRESS, status: "ACTIVE" as const };
 const walletCard = (page: Page) => page.locator('[data-slot="settings-wallet"]');
@@ -29,7 +29,7 @@ async function gotoSettings(page: Page) {
 
 test.describe("Settings — custodial wallet", () => {
   test.describe("positive", () => {
-    test("an existing user without a wallet sees the offer with a Coming Soon pill instead of a create button", async ({
+    test("an existing user without a wallet sees the offer and can activate it to ACTIVE with balance 0", async ({
       page,
     }) => {
       await forceEnglish(page);
@@ -39,10 +39,22 @@ test.describe("Settings — custodial wallet", () => {
 
       const card = walletCard(page);
       await expect(card.getByText("No wallet yet? We'll make you one.")).toBeVisible();
-      await expect(card.locator('[data-slot="wallet-offer-soon"]')).toHaveText("Coming Soon");
-      // The offer has no button at all: no create, and Settings has no "Not now".
-      await expect(card.locator('[data-slot="wallet-offer"]').getByRole("button")).toHaveCount(0);
-      await expect(card.getByRole("button", { name: "Create my wallet" })).toHaveCount(0);
+      // Settings has no "Not now": there is nothing to skip to.
+      await expect(card.getByRole("button", { name: "Not now" })).toHaveCount(0);
+
+      await card.getByRole("button", { name: "Create my wallet" }).click();
+
+      // PROVISIONING is a named state on screen, not an endless spinner.
+      await expect(card.getByText("Your wallet is being set up")).toBeVisible({ timeout: 10000 });
+      await expect(card.locator('[data-status="PROVISIONING"]').first()).toBeVisible();
+
+      // The mock flips to ACTIVE ~1.5 s later; polling picks it up.
+      await expect(card.getByText("Receiving address")).toBeVisible({ timeout: 20000 });
+      await expect(card.locator('[data-slot="wallet-balance"]')).toHaveText("0 USDX");
+      await expect(card.locator('[data-slot="wallet-balance"]')).toHaveAttribute("data-known", "true");
+      await expect(card.locator('[data-status="ACTIVE"]').first()).toBeVisible();
+      await expect(card.getByRole("img", { name: "QR code of the receiving address" })).toBeVisible();
+      await expect(card.getByText("This wallet is managed by USDX")).toBeVisible();
     });
 
     test("a user who already has a wallet sees address, status and the live balance", async ({
@@ -59,7 +71,6 @@ test.describe("Settings — custodial wallet", () => {
       });
       await expect(card.getByText(/^as of /)).toBeVisible();
       await expect(card.getByText("No wallet yet?")).toHaveCount(0);
-      await expect(card.locator('[data-slot="wallet-offer-soon"]')).toHaveCount(0);
     });
 
     test("the address is shown shortened, with copy and a toggle for the full 42 characters", async ({
@@ -110,6 +121,30 @@ test.describe("Settings — custodial wallet", () => {
       await expect(card.getByText("0 USDX", { exact: true })).toHaveCount(0);
     });
 
+    test("503 from POST /wallet is a friendly sentence, the offer stays, and the second try succeeds", async ({
+      page,
+    }) => {
+      await forceEnglish(page);
+      await seedCustodialWallet(page, null);
+      await seedCustodialCreateFailure(page);
+      await loginViaStorage(page);
+      await gotoSettings(page);
+
+      const card = walletCard(page);
+      await card.getByRole("button", { name: "Create my wallet" }).click();
+
+      // Our sentence, with the one reassurance that matters — nothing changed.
+      await expect(card.getByText("The wallet service is unavailable right now")).toBeVisible({
+        timeout: 10000,
+      });
+      await expect(card.getByText("Nothing was changed")).toBeVisible();
+      await expect(card.getByRole("button", { name: "Create my wallet" })).toBeEnabled();
+
+      // Retry: the seam has disarmed, so this one goes through to ACTIVE.
+      await card.getByRole("button", { name: "Create my wallet" }).click();
+      await expect(card.getByText("Receiving address")).toBeVisible({ timeout: 20000 });
+    });
+
     test("a SUSPENDED wallet explains itself and shows no receiving address", async ({ page }) => {
       await forceEnglish(page);
       await seedCustodialWallet(page, { status: "SUSPENDED" });
@@ -152,7 +187,7 @@ test.describe("Settings — custodial wallet", () => {
       await expect(card.locator('[data-slot="wallet-balance"]')).toHaveText("0 USDX");
     });
 
-    test("the offer reads in Indonesian with the Segera Hadir pill, without jargon", async ({ page }) => {
+    test("the offer and the wallet read in Indonesian, without jargon", async ({ page }) => {
       await forceIndonesian(page);
       await seedCustodialWallet(page, null);
       await loginViaStorage(page);
@@ -163,8 +198,10 @@ test.describe("Settings — custodial wallet", () => {
 
       const card = walletCard(page);
       await expect(card.getByText("Belum punya wallet? Kami buatkan.")).toBeVisible();
-      await expect(card.locator('[data-slot="wallet-offer-soon"]')).toHaveText("Segera Hadir");
-      await expect(card.getByRole("button", { name: "Buatkan saya wallet" })).toHaveCount(0);
+      await card.getByRole("button", { name: "Buatkan saya wallet" }).click();
+      await expect(card.getByText("Wallet kamu sedang disiapkan")).toBeVisible({ timeout: 10000 });
+      await expect(card.getByText("Alamat penerimaan")).toBeVisible({ timeout: 20000 });
+      await expect(card.getByRole("button", { name: "Salin alamat" })).toBeVisible();
       // None of these words are ever on this screen (ticket § Copy UX).
       await expect(card.getByText(/private key|gas|custodial/i)).toHaveCount(0);
     });

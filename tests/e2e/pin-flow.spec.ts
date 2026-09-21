@@ -4,6 +4,7 @@ import {
   forceEnglish,
   seedAccountPin,
   seedCustodialWallet,
+  seedStrictPinSet,
   MOCK_CUSTODIAL_WALLET_SUMMARY,
 } from "../helpers/playwright-utils";
 
@@ -152,6 +153,127 @@ test.describe("PIN Flow (create from the money paths)", () => {
       await expect(notice).toBeVisible();
       await expect(page.getByRole("button", { name: "Continue to PIN" })).toBeDisabled();
       await expect(page.getByRole("dialog").filter({ hasText: "Transaction Summary" })).toBeVisible();
+    });
+  });
+});
+
+// Against the backend of USDX-698 (pin.yaml § set; USDX-697): the storage-seeded
+// session is stale, so creating the PIN from a money path is answered 401
+// REAUTH_REQUIRED + `details.pinSet: false`. Every create-PIN door says "log in
+// again" — never "use Change PIN" — and the re-login brings the user back to the
+// Create PIN dialog, after which the new PIN approves the transfer.
+const RELOGIN_SENTENCE = "For your security, log in again first, then create your PIN within 5 minutes.";
+
+async function submitCreatePin(page: Page) {
+  const setup = page.getByTestId("pin-setup-dialog");
+  await expect(setup).toBeVisible({ timeout: 15000 });
+  await setup.getByLabel("New PIN", { exact: true }).fill(NEW_PIN);
+  await setup.getByLabel("Repeat PIN", { exact: true }).fill(NEW_PIN);
+  await setup.getByRole("button", { name: "Create PIN" }).click();
+  return setup;
+}
+
+async function expectReloginAsked(page: Page) {
+  const error = page.getByTestId("pin-setup-error");
+  await expect(error).toContainText(RELOGIN_SENTENCE, { timeout: 10000 });
+  await expect(error).not.toContainText("Change PIN");
+  return error;
+}
+
+async function openTransferSummary(page: Page) {
+  await page.goto("/send");
+  await expect(page.getByText("You will send")).toBeVisible({ timeout: 15000 });
+  await page.getByPlaceholder("0", { exact: true }).fill("25");
+  await page.getByPlaceholder("0x5DC489Ad05Efc").fill(TO);
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  const summary = page.getByRole("dialog").filter({ hasText: "Transaction Summary" });
+  await expect(summary).toBeVisible();
+  return summary;
+}
+
+test.describe("PIN Flow (create PIN needs a fresh login, backend USDX-698)", () => {
+  test.beforeEach(async ({ page }) => {
+    await forceEnglish(page);
+    await seedStrictPinSet(page);
+    await seedCustodialWallet(page, { status: "ACTIVE", balance: "1000.00" });
+  });
+
+  test.describe("positive", () => {
+    test("transfer notice → log in again → Create PIN on Settings → the new PIN approves a transfer", async ({
+      page,
+    }) => {
+      await loginWithoutPin(page);
+      await openTransferSummary(page);
+      await page.getByTestId("transfer-pin-not-set").getByRole("button", { name: "Create PIN" }).click();
+      await submitCreatePin(page);
+      const error = await expectReloginAsked(page);
+
+      await error.getByRole("button", { name: "Log in again" }).click();
+      await expect(page).toHaveURL(/\/login/);
+      await page.getByPlaceholder("name@email.com").fill("demo@usdx.com");
+      await page.getByPlaceholder("Enter your password").fill("Demo1234");
+      await page.getByRole("button", { name: "Login" }).click();
+
+      await expect(page).toHaveURL(/\/settings$/, { timeout: 15000 });
+      const setup = await submitCreatePin(page);
+      await expect(page.getByText("PIN created. You can use it right away.")).toBeVisible();
+      await expect(setup).toBeHidden();
+
+      const summary = await openTransferSummary(page);
+      await summary.getByRole("button", { name: "Continue to PIN" }).click();
+      const pin = page.getByRole("dialog").filter({ hasText: "Confirm with PIN" });
+      await pin.getByLabel("6-digit PIN").fill(NEW_PIN);
+      await pin.getByRole("button", { name: "Send", exact: true }).click();
+      await expect(page.getByTestId("transfer-result")).toBeVisible({ timeout: 15000 });
+    });
+  });
+
+  test.describe("negative", () => {
+    test("redeem notice: the same log-in-again answer, and Continue to Confirmation stays closed", async ({
+      page,
+    }) => {
+      await loginWithoutPin(page);
+      await page.goto("/redeem");
+      await expect(page.getByText("You will redeem")).toBeVisible({ timeout: 15000 });
+      await page.getByPlaceholder("0", { exact: true }).fill("100");
+      await page.getByRole("combobox", { name: "Select bank" }).click();
+      await page.getByText("BCA", { exact: true }).click();
+      await page.getByPlaceholder("1234567890").fill("1234563210");
+      await page.getByPlaceholder("As printed on the passbook").fill("SINGGIH BRILIAN TARA");
+      await page.getByRole("button", { name: "Redeem", exact: true }).click();
+
+      await page.getByTestId("redeem-pin-not-set").getByRole("button", { name: "Create PIN" }).click();
+      await submitCreatePin(page);
+      await expectReloginAsked(page);
+      // Still no PIN once the dialog is closed: the notice stays, the step stays shut.
+      await page.getByTestId("pin-setup-dialog").getByRole("button", { name: "Cancel" }).click();
+      await expect(page.getByTestId("redeem-pin-not-set")).toBeVisible();
+      await expect(page.getByRole("button", { name: "Continue to Confirmation" })).toBeDisabled();
+    });
+  });
+
+  test.describe("edge case", () => {
+    test("PIN dialog notice (copy said there was a PIN): log in again, the copy is not flipped back to 'has a PIN'", async ({
+      page,
+    }) => {
+      await loginViaStorage(page, { pinSet: true, custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
+      const summary = await openTransferSummary(page);
+      await summary.getByRole("button", { name: "Continue to PIN" }).click();
+      const pin = page.getByRole("dialog").filter({ hasText: "Confirm with PIN" });
+      await expect(pin.getByLabel("6-digit PIN")).toBeVisible();
+      await page.evaluate(() => localStorage.setItem("usdx-mock-pin", JSON.stringify({ pin: null })));
+      await pin.getByLabel("6-digit PIN").fill("111111");
+      await pin.getByRole("button", { name: "Send", exact: true }).click();
+
+      const notice = page.getByTestId("pin-confirm-not-set");
+      await expect(notice).toBeVisible({ timeout: 15000 });
+      await notice.getByRole("button", { name: "Create PIN" }).click();
+      await submitCreatePin(page);
+      await expectReloginAsked(page);
+      // The PIN_NOT_SET correction stands: still the notice, still no input.
+      await page.getByTestId("pin-setup-dialog").getByRole("button", { name: "Cancel" }).click();
+      await expect(notice).toBeVisible();
+      await expect(pin.getByLabel("6-digit PIN")).toHaveCount(0);
     });
   });
 });

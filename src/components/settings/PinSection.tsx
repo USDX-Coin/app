@@ -7,13 +7,18 @@
 // lama yang belum membawa field-nya, → "Buat PIN" (PinSetupDialog — kalau akun
 // ternyata sudah punya, backend menjawab REAUTH_REQUIRED dan barisnya berbalik
 // ke "Ubah PIN" lewat koreksi salinan di usePin).
+//
+// Juga layar tujuan tombol "Login ulang" di dialog Buat PIN (USDX-697,
+// custodial-wallet.md §5.1): sesudah login, penanda `create-pin` diambil di sini
+// dan dialog Buat PIN langsung terbuka — sesinya segar, jendela 5 menit berjalan.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PinSetupDialog } from "@/components/shared/PinSetupDialog";
 import { PinChangeDialog } from "@/components/shared/PinChangeDialog";
 import { usePin } from "@/hooks/usePin";
+import { takeReloginIntent } from "@/lib/auth/relogin-intent";
 import { useLang } from "@/providers/LanguageProvider";
 
 export function PinSection() {
@@ -21,6 +26,17 @@ export function PinSection() {
   const { pinSet } = usePin();
   const [setupOpen, setSetupOpen] = useState(false);
   const [changeOpen, setChangeOpen] = useState(false);
+
+  // Sekali saat mount. Penanda selalu dibuang; dialog hanya dibuka bila akun
+  // memang belum punya PIN — kalau sudah, "Buat PIN" di sesi segar justru menimpa
+  // PIN yang ada (jalur lupa-PIN, bukan niat user ini).
+  useEffect(() => {
+    // Penanda hidup di sessionStorage — tidak terbaca saat render server, jadi
+    // dialognya dibuka sesudah hidrasi.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (takeReloginIntent("create-pin") && pinSet !== true) setSetupOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sekali per mount, bukan tiap pinSet berubah
+  }, []);
 
   return (
     <div

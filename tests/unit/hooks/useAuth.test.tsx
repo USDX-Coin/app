@@ -104,6 +104,18 @@ describe("useAuth", () => {
         expect(reloginLanding()).toBe("/settings");
       });
     });
+
+    describe("edge case", () => {
+      // The marker is read from storage anyone on the page can write: a value that
+      // is not a known intent must never become a redirect target.
+      test("a foreign value in the re-login marker is ignored — login lands on /mint", async () => {
+        sessionStorage.setItem("usdx-relogin-intent", "https://evil.example");
+        const { result } = renderHook(() => useAuth(), { wrapper: createWrapper() });
+        await loginAsDemo(result);
+        expect(push).toHaveBeenCalledWith("/mint");
+        expect(push).not.toHaveBeenCalledWith("https://evil.example");
+      });
+    });
   });
 
   describe("register", () => {

@@ -9,15 +9,18 @@
 // yang tidak dikenal diabaikan, jadi penanda tidak bisa dipakai sebagai open
 // redirect. Storage yang melempar (mode privat, diblokir) = tidak ada niat.
 //
-// Niat pertama `create-pin` (USDX-697: first-time set di akun ber-wallet custodial
-// tanpa sesi segar). Jalur lupa-PIN (USDX-696) menambah niatnya sendiri di sini.
+// Niat `create-pin` (USDX-697: first-time set di akun ber-wallet custodial tanpa
+// sesi segar) dan `forgot-pin` (USDX-696: buat PIN baru tanpa PIN lama — overwrite
+// di sesi segar). Keduanya mendarat di Pengaturan; masing-masing diambil dengan
+// namanya sendiri, jadi yang satu tidak pernah menelan penanda yang lain.
 
-export type ReloginIntent = "create-pin";
+export type ReloginIntent = "create-pin" | "forgot-pin";
 
 export const RELOGIN_INTENT_KEY = "usdx-relogin-intent";
 
 const LANDING: Record<ReloginIntent, string> = {
   "create-pin": "/settings",
+  "forgot-pin": "/settings",
 };
 
 function isReloginIntent(value: string | null): value is ReloginIntent {

@@ -79,6 +79,15 @@ describe("useWalletTransferTracker", () => {
       expect(result.current.transfer).toBeNull();
     });
 
+    test("422 VALIDATION_ERROR (id is not a UUID) is read as not found — no retry, no poll", async () => {
+      getMock.mockRejectedValue(new ApiError(422, "VALIDATION_ERROR", "id harus UUID"));
+      const { result } = renderHook(() => useWalletTransferTracker("not-a-uuid"), { wrapper: createWrapper() });
+
+      await waitFor(() => expect(result.current.notFound).toBe(true));
+      await vi.advanceTimersByTimeAsync(TRANSFER_POLL_MS * 3);
+      expect(getMock).toHaveBeenCalledTimes(1);
+    });
+
     test("no id → nothing is fetched", async () => {
       renderHook(() => useWalletTransferTracker(null), { wrapper: createWrapper() });
       await vi.advanceTimersByTimeAsync(TRANSFER_POLL_MS * 3);

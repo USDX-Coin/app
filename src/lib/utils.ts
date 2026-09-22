@@ -66,6 +66,15 @@ export function truncateAddress(address: string, chars = 4): string {
   return `${address.slice(0, chars + 2)}...${address.slice(-chars)}`;
 }
 
+/**
+ * Two EVM addresses are the same account regardless of letter case: EIP-55 is a
+ * checksum on top of the hex, not a different address. Both sides must be
+ * present — a missing address never matches (USDX-653, `custodial-wallet.md` §5.2).
+ */
+export function isSameAddress(a: string | null | undefined, b: string | null | undefined): boolean {
+  return !!a && !!b && a.toLowerCase() === b.toLowerCase();
+}
+
 export function parseAmount(value: string): number {
   const cleaned = value.replace(/,/g, "");
   const parsed = parseFloat(cleaned);

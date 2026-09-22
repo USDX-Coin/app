@@ -6,6 +6,7 @@ import {
   formatDuration,
   formatTokenAmount,
   formatUSD,
+  isSameAddress,
   truncateAddress,
   parseAmount,
 } from "@/lib/utils";
@@ -82,6 +83,39 @@ describe("truncateAddress", () => {
   describe("edge cases", () => {
     test("handles empty string", () => {
       expect(truncateAddress("")).toBe("");
+    });
+  });
+});
+
+describe("isSameAddress", () => {
+  const CHECKSUM = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed";
+
+  describe("positive", () => {
+    test("matches the same address byte for byte", () => {
+      expect(isSameAddress(CHECKSUM, CHECKSUM)).toBe(true);
+    });
+    test("matches the all-lowercase form of an EIP-55 address", () => {
+      expect(isSameAddress(CHECKSUM.toLowerCase(), CHECKSUM)).toBe(true);
+    });
+  });
+
+  describe("negative", () => {
+    test("does not match a different address", () => {
+      expect(isSameAddress(CHECKSUM, "0x1234567890abcdef1234567890abcdef12345678")).toBe(false);
+    });
+    test("a missing side never matches", () => {
+      expect(isSameAddress(undefined, CHECKSUM)).toBe(false);
+      expect(isSameAddress(CHECKSUM, null)).toBe(false);
+    });
+  });
+
+  describe("edge case", () => {
+    test("two empty values are not a match", () => {
+      expect(isSameAddress("", "")).toBe(false);
+      expect(isSameAddress(null, undefined)).toBe(false);
+    });
+    test("matches the all-uppercase hex form too", () => {
+      expect(isSameAddress("0x" + CHECKSUM.slice(2).toUpperCase(), CHECKSUM)).toBe(true);
     });
   });
 });

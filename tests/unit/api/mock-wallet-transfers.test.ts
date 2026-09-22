@@ -6,11 +6,8 @@ import {
   resetMockCustodialWallet,
   seedMockCustodialWallet,
 } from "@/lib/api/mock-custodial-wallet";
-import {
-  MOCK_TRANSFER_CONFIRM_MS,
-  MOCK_WALLET_TRANSFER_FIXTURES as FX,
-  seedMockWalletTransfers,
-} from "@/lib/api/mock-wallet-transfers";
+import { MOCK_TRANSFER_CONFIRM_MS, seedMockWalletTransfers } from "@/lib/api/mock-wallet-transfers";
+import { MOCK_WALLET_TRANSFER_FIXTURES as FX } from "@/lib/api/mock-wallet-transfer-fixtures";
 import { MOCK_PIN } from "@/lib/api/mock-pin";
 
 // Mock riwayat & status transfer custodial (wallet.yaml § transfers / transfer-detail,

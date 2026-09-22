@@ -5,7 +5,7 @@ import { TRANSFER_POLL_MS, useWalletTransferTracker } from "@/hooks/useWalletTra
 import { useWalletTransfers } from "@/hooks/useWalletTransfers";
 import { getWalletTransfer, listWalletTransfers } from "@/lib/api/wallet-api";
 import { ApiError } from "@/lib/api/client";
-import { MOCK_WALLET_TRANSFER_FIXTURES as FX } from "@/lib/api/mock-wallet-transfers";
+import { MOCK_WALLET_TRANSFER_FIXTURES as FX } from "@/lib/api/mock-wallet-transfer-fixtures";
 import type { WalletTransfer } from "@/types";
 
 vi.mock("@/lib/api/wallet-api", () => ({

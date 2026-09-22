@@ -5,7 +5,7 @@ import { createWrapper } from "../../helpers/test-utils";
 import { TransferDetail } from "@/components/transfer/TransferDetail";
 import { getWalletTransfer } from "@/lib/api/wallet-api";
 import { ApiError } from "@/lib/api/client";
-import { MOCK_WALLET_TRANSFER_FIXTURES as FX } from "@/lib/api/mock-wallet-transfers";
+import { MOCK_WALLET_TRANSFER_FIXTURES as FX } from "@/lib/api/mock-wallet-transfer-fixtures";
 
 vi.mock("@/lib/api/wallet-api", () => ({ getWalletTransfer: vi.fn() }));
 const getMock = vi.mocked(getWalletTransfer);

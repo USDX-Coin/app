@@ -44,23 +44,23 @@ function row(page: Page, type: "Minting" | "Redeem", amount: string) {
 
 test.describe("History — custodial wallet marker", () => {
   test.describe("positive", () => {
-    test("a mint to the custodial wallet reads 'To my custodial wallet'", async ({ page }) => {
+    test("a mint to the custodial wallet is marked 'My custodial wallet'", async ({ page }) => {
       await page.setViewportSize(VIEWPORTS.desktop);
       await openHistory(page, { custodial: true });
       await showType(page, "Minting");
       await expect(row(page, "Minting", "100.00").getByTestId("tx-custodial-marker")).toHaveText(
-        "To my custodial wallet",
+        "My custodial wallet",
       );
     });
 
-    test("a redeem burned from the custodial wallet reads 'From my custodial wallet'", async ({
+    test("a redeem burned from the custodial wallet is marked 'My custodial wallet'", async ({
       page,
     }) => {
       await page.setViewportSize(VIEWPORTS.desktop);
       await openHistory(page, { custodial: true });
       await showType(page, "Redeem");
       await expect(row(page, "Redeem", "100.00").getByTestId("tx-custodial-marker")).toHaveText(
-        "From my custodial wallet",
+        "My custodial wallet",
       );
     });
   });
@@ -92,7 +92,7 @@ test.describe("History — custodial wallet marker", () => {
       await openHistory(page, { custodial: true });
       await showType(page, "Minting");
       await expect(row(page, "Minting", "250.00").getByTestId("tx-custodial-marker")).toHaveText(
-        "To my custodial wallet",
+        "My custodial wallet",
       );
     });
 
@@ -102,7 +102,7 @@ test.describe("History — custodial wallet marker", () => {
       await page.getByRole("tab", { name: "Minting", exact: true }).click();
       // Table is hidden below `lg`; the visible marker lives in the card.
       await expect(page.getByTestId("tx-custodial-marker").filter({ visible: true }).first()).toHaveText(
-        "To my custodial wallet",
+        "My custodial wallet",
       );
     });
   });

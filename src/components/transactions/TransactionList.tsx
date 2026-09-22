@@ -237,7 +237,10 @@ export function TransactionList() {
         className="flex items-center gap-1 text-xs text-muted-text"
       >
         <Wallet className="size-3.5 shrink-0" aria-hidden />
-        {t(tx.type === "MINT" ? "tx.custodialTo" : "tx.custodialFrom")}
+        {/* The mint review's label, word for word (USDX-653: "samakan dengan label
+            tujuan custodial di review mint") — one key, so the two never drift. The
+            row's type (Minting / Redeem) already says destination vs burn source. */}
+        {t("mint.destCustodial")}
       </span>
     );
   }

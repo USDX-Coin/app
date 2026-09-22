@@ -124,16 +124,16 @@ afterEach(() => {
 // Riwayat: penanda "wallet custodial saya" (USDX-653, custodial-wallet.md §5.2).
 describe("TransactionList — custodial wallet marker", () => {
   describe("positive", () => {
-    test("marks a mint to and a redeem from the custodial wallet, with the direction", async () => {
+    test("marks a mint to and a redeem from the custodial wallet with the mint review's label", async () => {
       setUser({ address: CUSTODIAL, status: "ACTIVE" });
       serve([tx("m1", "MINT", "11", CUSTODIAL), tx("r1", "REDEEM", "12", CUSTODIAL)]);
       renderList();
 
       expect(within(await row("11,00")).getByTestId("tx-custodial-marker")).toHaveTextContent(
-        "Ke wallet custodial saya",
+        "Wallet custodial saya",
       );
       expect(within(await row("12,00")).getByTestId("tx-custodial-marker")).toHaveTextContent(
-        "Dari wallet custodial saya",
+        "Wallet custodial saya",
       );
     });
 

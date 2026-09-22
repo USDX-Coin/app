@@ -230,12 +230,6 @@ const en: Dict = {
   // Names the scroll region the history table lives in — it scrolls sideways
   // and is keyboard-reachable, so a screen reader has to be told what it is.
   "tx.tableScroll": "Transaction table, scrolls sideways",
-  // "wallet custodial saya" marker in the history list (USDX-653, custodial-wallet.md
-  // §5.2). Same words as the mint review label (`mint.destCustodial`) plus the
-  // direction, because the list has no address column: MINT = destination,
-  // REDEEM = burn source.
-  "tx.custodialTo": "To my custodial wallet",
-  "tx.custodialFrom": "From my custodial wallet",
   // coming soon
   // toast
   "toast.bridgeSubmitted": "Bridge request submitted",
@@ -1324,11 +1318,6 @@ const id: Dict = {
   "tx.copyHash": "Salin hash",
   "tx.sortedNewest": "diurutkan dari yang terbaru",
   "tx.tableScroll": "Tabel transaksi, dapat digulir ke samping",
-  // penanda "wallet custodial saya" di riwayat (USDX-653, custodial-wallet.md §5.2).
-  // Kata yang sama dengan label review mint (`mint.destCustodial`) + arah, karena
-  // daftar tidak punya kolom alamat: MINT = tujuan, REDEEM = sumber burn.
-  "tx.custodialTo": "Ke wallet custodial saya",
-  "tx.custodialFrom": "Dari wallet custodial saya",
   "toast.bridgeSubmitted": "Permintaan bridge terkirim",
   "toast.sendSubmitted": "Permintaan kirim terkirim",
   "toast.redeemSubmitted": "Permintaan redeem terkirim",

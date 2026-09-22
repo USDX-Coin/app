@@ -52,7 +52,7 @@ function tx(
   id: string,
   type: "MINT" | "REDEEM",
   amount: string,
-  userAddress: string | undefined,
+  userAddress: string,
 ): ConsumerTransaction {
   return {
     id,
@@ -64,7 +64,7 @@ function tx(
     netPayoutIdr: type === "REDEEM" ? "155000" : null,
     effectiveRate: "16000",
     chain: "polygon",
-    ...(userAddress === undefined ? {} : { userAddress }),
+    userAddress,
     paymentStatus: type === "MINT" ? "PAID" : null,
     status: type === "MINT" ? "COMPLETED" : "PAYOUT_COMPLETE",
     txHash: null,
@@ -187,14 +187,6 @@ describe("TransactionList — custodial wallet marker", () => {
       renderList();
 
       expect(within(await row("11,00")).getByTestId("tx-custodial-marker")).toBeInTheDocument();
-    });
-
-    test("a backend without TransactionItem.userAddress shows no marker", async () => {
-      setUser({ address: CUSTODIAL, status: "ACTIVE" });
-      serve([tx("m1", "MINT", "11", undefined)]);
-      renderList();
-
-      expect(within(await row("11,00")).queryByTestId("tx-custodial-marker")).toBeNull();
     });
 
     test("a wallet still provisioning (no address yet) marks nothing", async () => {

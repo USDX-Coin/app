@@ -18,6 +18,7 @@ const PAGE: Paginated<ConsumerTransaction> = {
       netPayoutIdr: null,
       effectiveRate: "16400",
       chain: "polygon",
+      userAddress: "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed",
       paymentStatus: "PAID",
       status: "COMPLETED",
       txHash: "0xabc",

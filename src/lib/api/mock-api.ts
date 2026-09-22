@@ -235,6 +235,10 @@ export async function mockVerifyEmail(req: VerifyEmailRequest): Promise<AuthResp
     accounts.get("demo@usdx.com")!;
   account.user.emailVerifiedAt = new Date().toISOString();
   currentEmail = account.user.email;
+  // Sesi auto-login verifikasi email ikut dihitung segar untuk pin.yaml § set
+  // (keputusan PM 21 Sep 2026): token dari email = bukti yang tak bisa dipicu dari
+  // sesi bocor, dan alur akun baru verifikasi → wallet → PIN tanpa login ulang.
+  markMockPasswordAuth();
   return { user: withCustodialWallet(account.user), token: tokenFor(account.user) };
 }
 

@@ -121,8 +121,8 @@ function readPasswordAuthAt(): number | null {
   return Number.isFinite(at) ? at : null;
 }
 
-// Login / reset password berhasil = sesi hasil password-auth (mock-api). Sesi
-// dari `loginViaStorage` Playwright tidak pernah lewat sini → basi. Login sukses
+// Login / reset password / verifikasi email berhasil = sesi "segar" pin.yaml § set
+// (mock-api). Sesi dari `loginViaStorage` Playwright tidak pernah lewat sini → basi. Login sukses
 // juga membersihkan lockout `pin` (pin.yaml § verify — jalan keluar lupa-PIN).
 export function markMockPasswordAuth(at: number = Date.now()): void {
   writePasswordAuthAt(at);

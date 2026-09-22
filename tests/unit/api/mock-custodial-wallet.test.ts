@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
-import { mockGetMe, mockLogin } from "@/lib/api/mock-api";
+import { mockGetMe, mockLogin, mockVerifyEmail } from "@/lib/api/mock-api";
 import {
   mockCreateCustodialWallet,
   mockGetCustodialWallet,
@@ -170,6 +170,18 @@ describe("mock custodial wallet — first-time PIN gate inputs", () => {
         mockSetPin({ pin: "654321" }, { hasCustodialWallet: hasMockCustodialWallet() }),
       ).resolves.toBeUndefined();
       expect(isMockPinSet()).toBe(true);
+    });
+
+    // pin.yaml § set (keputusan PM 21 Sep 2026): sesi auto-login verifikasi email
+    // ikut dihitung segar — alur akun baru verifikasi → wallet → PIN tanpa login ulang.
+    test("right after email verification (auto-login) the gate lets a wallet owner create a PIN", async () => {
+      seed({ status: "ACTIVE" });
+      seedMockPin(null);
+      await mockVerifyEmail({ token: "valid-token" });
+
+      await expect(
+        mockSetPin({ pin: "654321" }, { hasCustodialWallet: hasMockCustodialWallet() }),
+      ).resolves.toBeUndefined();
     });
   });
 

@@ -165,3 +165,68 @@ describe("PinSetupDialog", () => {
     });
   });
 });
+
+// Varian "Buat PIN baru" — jalur lupa-PIN (custodial-wallet.md §5.1 "Lupa PIN di
+// web", USDX-696): dibuka sesudah login ulang, akun biasanya SUDAH punya PIN, body
+// tetap `{pin}` tanpa `currentPin`. REAUTH_REQUIRED di sini = jendela 5 menit
+// lewat → login ulang dengan niat forgot-pin, tidak pernah "gunakan Ubah PIN".
+describe("PinSetupDialog — reset variant (forgot PIN)", () => {
+  beforeEach(() => {
+    useAuthStore.getState().setPinSet(true);
+  });
+
+  function fillReset(pin: string) {
+    fireEvent.change(screen.getByLabelText("PIN baru"), { target: { value: pin } });
+    fireEvent.change(screen.getByLabelText("Ulangi PIN"), { target: { value: pin } });
+    fireEvent.click(screen.getByRole("button", { name: "Simpan PIN baru" }));
+  }
+
+  describe("positive", () => {
+    test("own title, no old-PIN field, POST set {pin} only; closes and pinSet stays true", async () => {
+      setPinMock.mockResolvedValueOnce(undefined);
+      const { onOpenChange } = renderDialog({ variant: "reset" });
+
+      expect(screen.getByRole("heading", { name: "Buat PIN baru" })).toBeInTheDocument();
+      expect(screen.getByText(/PIN lama tidak diperlukan/)).toBeInTheDocument();
+      expect(screen.queryByLabelText("PIN saat ini")).not.toBeInTheDocument();
+
+      fillReset("654321");
+
+      await waitFor(() => expect(setPinMock).toHaveBeenCalledWith({ pin: "654321" }));
+      await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+      expect(useAuthStore.getState().user?.pinSet).toBe(true);
+    });
+  });
+
+  describe("negative", () => {
+    test("REAUTH_REQUIRED (5 minutes passed) → log-in-again sentence, never 'Ubah PIN'; the button marks forgot-pin", async () => {
+      setPinMock.mockRejectedValueOnce(new ApiError(401, "REAUTH_REQUIRED", "x", { pinSet: true }));
+      renderDialog({ variant: "reset" });
+      fillReset("654321");
+
+      await waitFor(() =>
+        expect(screen.getByTestId("pin-setup-error")).toHaveTextContent(
+          "Demi keamanan, login ulang dulu, lalu buat PIN baru dalam 5 menit.",
+        ),
+      );
+      expect(screen.getByTestId("pin-setup-error")).not.toHaveTextContent("Ubah PIN");
+
+      fireEvent.click(screen.getByRole("button", { name: "Login ulang" }));
+      expect(sessionStorage.getItem("usdx-relogin-intent")).toBe("forgot-pin");
+      expect(revokeSession).toHaveBeenCalledTimes(1);
+      expect(push).toHaveBeenCalledWith("/login");
+    });
+  });
+
+  describe("edge case", () => {
+    test("cancelling sends nothing and leaves no marker behind", () => {
+      const { onOpenChange } = renderDialog({ variant: "reset" });
+      fireEvent.change(screen.getByLabelText("PIN baru"), { target: { value: "654321" } });
+      fireEvent.click(screen.getByRole("button", { name: "Batal" }));
+
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+      expect(setPinMock).not.toHaveBeenCalled();
+      expect(reloginLanding()).toBeNull();
+    });
+  });
+});

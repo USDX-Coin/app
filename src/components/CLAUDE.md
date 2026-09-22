@@ -102,6 +102,11 @@ components/
 - `mint/MintForm` shows a destination switch (custodial default · another address) only
   when `useMint().custodialAvailable`; `MintReview` marks the recipient "wallet custodial
   saya" by a byte-identical address match — there is no flag on the order.
+- `transactions/TransactionList` marks history rows "Ke wallet custodial saya" (MINT) /
+  "Dari wallet custodial saya" (REDEEM) when `tx.userAddress` equals
+  `useCustodialWallet().address` **case-insensitively** (`isSameAddress`, `lib/utils.ts`)
+  — unlike the review, a stored mint address may be all lowercase. No wallet = no marker
+  and no request; never a detail call per row (USDX-653, `custodial-wallet.md` §5.2).
 - `redeem/RedeemStatus` hides `BurnGate` for `order.burnMode === "CUSTODIAL"` and shows
   the "sistem sedang memproses burn" strip instead; `useRedeemBurn.runBurn` refuses such
   an order too, so the resume-from-history path cannot trigger a wallet either.

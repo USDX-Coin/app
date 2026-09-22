@@ -296,3 +296,105 @@ describe("usePin", () => {
     });
   });
 });
+
+// Jalur lupa-PIN (custodial-wallet.md §5.1 "Lupa PIN di web", USDX-696): `/set`
+// tanpa `currentPin` di sesi segar. Di jalur INI REAUTH_REQUIRED berarti jendela
+// 5 menit lewat → login ulang — bukan "gunakan Ubah PIN" (itu milik first-time set).
+describe("mapPinError — forgot-PIN path", () => {
+  describe("positive", () => {
+    test("REAUTH_REQUIRED → log in again, then create the new PIN within 5 minutes, with the re-login button", () => {
+      expect(mapPinError(new ApiError(401, "REAUTH_REQUIRED", "x"), "reset")).toEqual({
+        where: "form",
+        key: "pin.errReloginToReset",
+        relogin: true,
+      });
+    });
+  });
+
+  describe("negative", () => {
+    test("never the Change PIN sentence, whatever details.pinSet says", () => {
+      for (const details of [undefined, { pinSet: true }, { pinSet: false }]) {
+        expect(mapPinError(new ApiError(401, "REAUTH_REQUIRED", "x", details), "reset")?.key).toBe(
+          "pin.errReloginToReset",
+        );
+      }
+    });
+  });
+
+  describe("edge case", () => {
+    test("every other code maps exactly as on first-time set", () => {
+      for (const err of [
+        new ApiError(422, "VALIDATION_ERROR", "x"),
+        new ApiError(401, "PIN_NOT_SET", "x"),
+        new ApiError(500, "INTERNAL_ERROR", "x"),
+        new ApiError(429, "TOO_MANY_ATTEMPTS", "x"),
+      ]) {
+        expect(mapPinError(err, "reset")).toEqual(mapPinError(err));
+      }
+    });
+  });
+});
+
+describe("usePin — resetPin (forgot PIN)", () => {
+  describe("positive", () => {
+    test("resetPin → POST set with {pin} only, no currentPin; user.pinSet true", async () => {
+      useAuthStore.getState().setPinSet(true);
+      setPinMock.mockResolvedValueOnce(undefined);
+      const { result } = renderHook(() => usePin(), { wrapper: createWrapper() });
+
+      await act(async () => {
+        await result.current.resetPin("654321");
+      });
+
+      expect(setPinMock).toHaveBeenCalledWith({ pin: "654321" });
+      expect(useAuthStore.getState().user?.pinSet).toBe(true);
+      expect(result.current.resetPinError).toBeNull();
+    });
+  });
+
+  describe("negative", () => {
+    test("REAUTH_REQUIRED → the re-login error on resetPinError; the first-time set error stays empty", async () => {
+      useAuthStore.getState().setPinSet(true);
+      setPinMock.mockRejectedValueOnce(new ApiError(401, "REAUTH_REQUIRED", "x", { pinSet: true }));
+      const { result } = renderHook(() => usePin(), { wrapper: createWrapper() });
+
+      await act(async () => {
+        await result.current.resetPin("654321").catch(() => {});
+      });
+
+      await waitFor(() =>
+        expect(result.current.resetPinError).toEqual({ where: "form", key: "pin.errReloginToReset", relogin: true }),
+      );
+      expect(result.current.setPinError).toBeNull();
+      expect(useAuthStore.getState().user?.pinSet).toBe(true);
+    });
+  });
+
+  describe("edge case", () => {
+    test("a successful reset stops a running lockout countdown; resetErrors clears the reset error too", async () => {
+      setPinMock.mockRejectedValueOnce(
+        new ApiError(429, "TOO_MANY_ATTEMPTS", "x", { retryAfterSeconds: 900 }, 900),
+      );
+      setPinMock.mockRejectedValueOnce(new ApiError(401, "REAUTH_REQUIRED", "x"));
+      setPinMock.mockResolvedValueOnce(undefined);
+      const { result } = renderHook(() => usePin(), { wrapper: createWrapper() });
+
+      await act(async () => {
+        await result.current.resetPin("654321").catch(() => {});
+      });
+      await waitFor(() => expect(result.current.cooldownSeconds).toBe(900));
+
+      await act(async () => {
+        await result.current.resetPin("654321").catch(() => {});
+      });
+      await waitFor(() => expect(result.current.resetPinError).not.toBeNull());
+      act(() => result.current.resetErrors());
+      await waitFor(() => expect(result.current.resetPinError).toBeNull());
+
+      await act(async () => {
+        await result.current.resetPin("654321");
+      });
+      await waitFor(() => expect(result.current.cooldownSeconds).toBe(0));
+    });
+  });
+});

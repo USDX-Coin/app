@@ -5,7 +5,7 @@ import {
   forceIndonesian,
   seedAccountPin,
   seedCustodialWallet,
-  seedStrictPinSet,
+  seedFreshPasswordAuth,
   MOCK_CUSTODIAL_WALLET_SUMMARY,
   MOCK_PIN,
   VIEWPORTS,
@@ -51,6 +51,8 @@ test.describe("Settings — transaction PIN", () => {
       await forceEnglish(page);
       await seedAccountPin(page, null);
       await seedCustodialWallet(page, { status: "ACTIVE", balance: "1000.00" });
+      // Right after a login — a wallet owner's first PIN needs a fresh session (USDX-698).
+      await seedFreshPasswordAuth(page);
       await loginViaStorage(page, { pinSet: false, custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
       await gotoSettings(page);
 
@@ -203,7 +205,6 @@ async function loginThroughForm(page: Page) {
 test.describe("Settings — create PIN needs a fresh login (backend USDX-698)", () => {
   test.beforeEach(async ({ page }) => {
     await forceEnglish(page);
-    await seedStrictPinSet(page);
     await seedAccountPin(page, null);
   });
 

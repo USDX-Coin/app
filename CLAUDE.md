@@ -280,8 +280,9 @@ Test helpers in `tests/helpers/`:
   `seedCustodialWallet(page, { status, balance, …seams })` (Playwright); the account PIN
   is its own seam — `mock-pin.ts`, `seedMockPin(pin | null)` (unit) /
   `seedAccountPin(page, pin | null)` (Playwright), default PIN `123456`; the backend of
-  USDX-698 (first-time PIN on a wallet account needs a fresh login) is the seam
-  `seedMockStrictPinSet(true)` / `seedStrictPinSet(page)`, off by default
+  USDX-698 (first-time PIN on a wallet account needs a fresh login) is ON by default
+  (698 is live on api-dev; `seedMockStrictPinSet(false)` = the old backend) — a flow that
+  starts right after a login arms `seedFreshPasswordAuth(page)` (Playwright)
 - The `/payment` mock gateway route was deleted (it faked "Payment Successful" with a
   `setTimeout`); the real mint flow uses the cross-origin checkout handoff
 - RainbowKit wallet connection works; the USDX balance is read **on-chain for real**

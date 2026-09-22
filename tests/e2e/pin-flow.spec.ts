@@ -4,14 +4,15 @@ import {
   forceEnglish,
   seedAccountPin,
   seedCustodialWallet,
-  seedStrictPinSet,
+  seedFreshPasswordAuth,
   MOCK_CUSTODIAL_WALLET_SUMMARY,
 } from "../helpers/playwright-utils";
 
 // Create the PIN from inside the money paths (USDX-651). A custodial-wallet
 // owner without a PIN reaches the Ringkasan of a transfer / a custodial redeem,
 // sees the "no PIN yet" notice, creates the PIN right there, and approves the
-// same transaction with it — without leaving the flow or logging in again.
+// same transaction with it — without leaving the flow or logging in again
+// (the session is fresh: the flow starts right after a login, USDX-698).
 // The account PIN is the "usdx-mock-pin" seam; `pinSet: false` on the profile
 // copy is what the screens read first.
 const NEW_PIN = "654321";
@@ -41,6 +42,10 @@ test.describe("PIN Flow (create from the money paths)", () => {
   test.beforeEach(async ({ page }) => {
     await forceEnglish(page);
     await seedCustodialWallet(page, { status: "ACTIVE", balance: "1000.00" });
+    // Right after a login: since USDX-698 a wallet owner creates a first PIN only
+    // on a fresh session (the stale-session door is the "PIN Flow (create PIN
+    // needs a fresh login)" block below).
+    await seedFreshPasswordAuth(page);
   });
 
   test.describe("positive", () => {
@@ -194,7 +199,6 @@ async function openTransferSummary(page: Page) {
 test.describe("PIN Flow (create PIN needs a fresh login, backend USDX-698)", () => {
   test.beforeEach(async ({ page }) => {
     await forceEnglish(page);
-    await seedStrictPinSet(page);
     await seedCustodialWallet(page, { status: "ACTIVE", balance: "1000.00" });
   });
 

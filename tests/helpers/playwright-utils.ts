@@ -390,16 +390,20 @@ export async function seedAccountPin(page: Page, pin: string | null) {
 }
 
 /**
- * Switch the mock to the backend of USDX-698 (mock-pin "usdx-mock-pin-strict-set",
- * USDX-697): a first-time PIN on an account that has a custodial wallet needs a
- * fresh password-auth session (< 5 min). `loginViaStorage` never logs in through
- * the mock, so its session is stale → POST /auth/pin/set answers 401
- * REAUTH_REQUIRED with `details.pinSet: false`; a login through the form makes it
- * fresh. Unarmed = today's backend (session-only). Constant seam — safe on every
- * navigation. Call before the first page.goto().
+ * The session was minted by a password login moments ago (mock-pin
+ * "usdx-mock-password-auth-at"): fresh for 5 minutes, as pin.yaml § set counts
+ * it. `loginViaStorage` alone never logs in through the mock, so its session is
+ * stale — and since USDX-698 a custodial-wallet owner without a PIN cannot create
+ * one on a stale session. Arm this for flows that start right after a login.
+ * Applied once per tab (a later login through the form refreshes it anyway).
+ * Call before the first page.goto().
  */
-export async function seedStrictPinSet(page: Page) {
-  await page.addInitScript(() => localStorage.setItem("usdx-mock-pin-strict-set", "1"));
+export async function seedFreshPasswordAuth(page: Page) {
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem("usdx-mock-password-auth-seeded")) return;
+    sessionStorage.setItem("usdx-mock-password-auth-seeded", "1");
+    localStorage.setItem("usdx-mock-password-auth-at", String(Date.now()));
+  });
 }
 
 /**

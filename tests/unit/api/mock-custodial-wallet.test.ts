@@ -9,7 +9,7 @@ import {
   MOCK_PROVISIONING_MS,
   type MockCustodialState,
 } from "@/lib/api/mock-custodial-wallet";
-import { mockSetPin, seedMockPin, seedMockStrictPinSet, isMockPinSet } from "@/lib/api/mock-pin";
+import { mockSetPin, seedMockPin, isMockPinSet } from "@/lib/api/mock-pin";
 
 // The mock persists its wallet in localStorage ("usdx-mock-custodial") so the
 // Playwright flows survive page loads. jsdom gives every test the same store,
@@ -164,7 +164,6 @@ describe("mock custodial wallet — first-time PIN gate inputs", () => {
     test("right after a mock login the gate lets a wallet owner create a PIN", async () => {
       seed({ status: "ACTIVE" });
       seedMockPin(null);
-      seedMockStrictPinSet(true);
       await mockLogin({ email: "demo@usdx.com", password: "Demo1234" });
 
       await expect(
@@ -184,7 +183,6 @@ describe("mock custodial wallet — first-time PIN gate inputs", () => {
     test("without a login (storage-seeded session) the same wallet owner is asked to log in again", async () => {
       seed({ status: "PROVISIONING" });
       seedMockPin(null);
-      seedMockStrictPinSet(true);
 
       await expect(
         mockSetPin({ pin: "654321" }, { hasCustodialWallet: hasMockCustodialWallet() }),

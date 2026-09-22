@@ -22,7 +22,7 @@ import type { ChangePinRequest, SetPinRequest } from "./types";
 
 const PIN_KEY = "usdx-mock-pin";
 // Seam gerbang backend USDX-698 (lihat § set di bawah) + umur sesi password-auth.
-const STRICT_SET_KEY = "usdx-mock-pin-strict-set";
+const LEGACY_SET_KEY = "usdx-mock-pin-legacy-set";
 const PASSWORD_AUTH_AT_KEY = "usdx-mock-password-auth-at";
 // Jendela "sesi segar" pin.yaml § set (sama dengan backend).
 const FRESH_SESSION_MS = 5 * 60 * 1000;
@@ -39,7 +39,7 @@ interface MockPinRecord {
 
 let pinMemory: MockPinRecord | null = null;
 let pinFailures = 0;
-let strictSetMemory = false;
+let strictSetMemory = true;
 let passwordAuthAtMemory: number | null = null;
 
 function delay(ms: number): Promise<void> {
@@ -79,31 +79,32 @@ export function seedMockPin(pin: string | null): void {
   writeRecord({ pin });
 }
 
-// Kembalikan ke bawaan (PIN `MOCK_PIN`, lockout bersih, gerbang 698 mati, umur
+// Kembalikan ke bawaan (PIN `MOCK_PIN`, lockout bersih, gerbang 698 nyala, umur
 // sesi dilupakan).
 export function resetMockPin(): void {
   writeRecord(null);
   pinFailures = 0;
-  seedMockStrictPinSet(false);
+  seedMockStrictPinSet(true);
   writePasswordAuthAt(null);
 }
 
 // ── Seam gerbang first-time set (backend USDX-698, USDX-697) ────────────────
-// Mati (bawaan) = backend yang hidup hari ini: first-time set session-only, 401
-// REAUTH_REQUIRED tanpa `details`. Nyala = backend sesudah 698: first-time set di
-// akun ber-wallet custodial wajib sesi password-auth segar, dan REAUTH_REQUIRED
-// membawa `details.pinSet`. Disimpan di localStorage supaya Playwright bisa
-// menyalakannya (`seedStrictPinSet`).
+// Nyala (bawaan sejak 698 tayang di api-dev, dibalik di USDX-696) = backend
+// sekarang: first-time set di akun ber-wallet custodial wajib sesi password-auth
+// segar, dan REAUTH_REQUIRED membawa `details.pinSet`. Mati = backend lama:
+// first-time set session-only, 401 REAUTH_REQUIRED tanpa `details` — penanda
+// "usdx-mock-pin-legacy-set" di localStorage supaya Playwright bisa memerankannya
+// (`seedLegacyPinSet`).
 export function seedMockStrictPinSet(on: boolean): void {
   strictSetMemory = on;
   if (typeof localStorage === "undefined") return;
-  if (on) localStorage.setItem(STRICT_SET_KEY, "1");
-  else localStorage.removeItem(STRICT_SET_KEY);
+  if (on) localStorage.removeItem(LEGACY_SET_KEY);
+  else localStorage.setItem(LEGACY_SET_KEY, "1");
 }
 
 function isStrictPinSet(): boolean {
   if (typeof localStorage === "undefined") return strictSetMemory;
-  return localStorage.getItem(STRICT_SET_KEY) !== null;
+  return localStorage.getItem(LEGACY_SET_KEY) === null;
 }
 
 function writePasswordAuthAt(at: number | null) {

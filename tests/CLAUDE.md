@@ -98,9 +98,10 @@ beforeEach(() => {
   `MOCK_PIN` ("123456"); the account PIN is its own seam — `seedAccountPin(page, pin | null)`
   (null = no PIN yet → `401 PIN_NOT_SET`, pair it with `pinSet: false` on `loginViaStorage`),
   applied once per tab because the flow under test creates/changes it (USDX-651).
-  `seedStrictPinSet(page)` plays the backend of USDX-698: with a custodial wallet seeded,
+  The mock plays the backend of USDX-698 by default: with a custodial wallet seeded,
   creating a PIN on the `loginViaStorage` session (stale) is refused with "log in again";
-  a login through the form is fresh (USDX-697). Never arm
+  a login through the form is fresh (USDX-697), and `seedFreshPasswordAuth(page)` stands
+  for "logged in moments ago" (also what lets the forgot-PIN overwrite through). Never arm
   `seedWallet` (the external-wallet seam) in a custodial
   spec: proving "no wallet dialog" needs the external wallet to be absent
 - Unit tests mock all data — no network, no DOM rendering for store tests

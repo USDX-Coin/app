@@ -137,6 +137,26 @@ describe("useWalletTransferTracker", () => {
       await waitFor(() => expect(getMock).toHaveBeenCalledTimes(2));
     });
 
+    test("reaching a final status refreshes the cached history once, so list and detail agree (review app#79)", async () => {
+      listMock.mockResolvedValue({ data: [pending], metadata: { page: 1, limit: 10, total: 1 } });
+      getMock.mockResolvedValueOnce(pending).mockResolvedValue(confirmed);
+      const { result } = renderHook(
+        () => ({ tracker: useWalletTransferTracker(ID), history: useWalletTransfers({ page: 1, take: 10 }) }),
+        { wrapper: createWrapper() },
+      );
+
+      await waitFor(() => expect(result.current.history.isSuccess).toBe(true));
+      await waitFor(() => expect(result.current.tracker.status).toBe("PENDING"));
+      expect(listMock).toHaveBeenCalledTimes(1); // PENDING does not touch the list
+
+      await vi.advanceTimersByTimeAsync(TRANSFER_POLL_MS + 50);
+      await waitFor(() => expect(result.current.tracker.status).toBe("CONFIRMED"));
+      await waitFor(() => expect(listMock).toHaveBeenCalledTimes(2));
+
+      await vi.advanceTimersByTimeAsync(TRANSFER_POLL_MS * 3);
+      expect(listMock).toHaveBeenCalledTimes(2); // once, not on every render
+    });
+
     test("leaving the screen (unmount) stops the poll", async () => {
       getMock.mockResolvedValue(pending);
       const { unmount } = renderHook(() => useWalletTransferTracker(ID), { wrapper: createWrapper() });

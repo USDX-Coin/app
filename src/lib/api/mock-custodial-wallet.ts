@@ -26,9 +26,22 @@
 // dan bagian ini hanya bergantung pada `ApiError` + `USDX_DECIMALS`. mock-api.ts
 // mengimpor `withCustodialWallet` dari sini — arah impor satu jalur, tanpa siklus.
 
-import type { CustodialWallet, CustodialWalletSummary, TransferAccepted, User } from "@/types";
+import type {
+  CustodialWallet,
+  CustodialWalletSummary,
+  TransferAccepted,
+  User,
+  WalletTransfer,
+} from "@/types";
 import type { CreateTransferRequest } from "./types";
-import { ApiError } from "./client";
+import { ApiError, type Paginated } from "./client";
+import {
+  getMockWalletTransfer,
+  listMockWalletTransfers,
+  recordMockWalletTransfer,
+  resetMockWalletTransfers,
+  type MockTransferOutcome,
+} from "./mock-wallet-transfers";
 import { isMockPinSet, resetMockPin, verifyMockPin } from "./mock-pin";
 import { USDX_DECIMALS } from "@/lib/constants";
 import { uuidv7 } from "@/lib/uuid";
@@ -68,6 +81,10 @@ export interface MockCustodialState {
   transferLimit?: { perTx?: string; daily?: string };
   // Transfer pertama tiap key menggantung dulu (409 IN_PROGRESS), lalu selesai.
   slowFirstTransfer?: boolean;
+  // ── Seam USDX-701 (tracker konfirmasi) ──
+  // Keputusan "watcher" untuk transfer BERIKUTNYA (default CONFIRMED). "PENDING" =
+  // macet selamanya; nilai lain = status yang belum dikenal FE (mock-wallet-transfers.ts).
+  transferOutcome?: MockTransferOutcome;
 }
 
 let custodialMemory: MockCustodialState | null = null;
@@ -95,6 +112,7 @@ export function resetMockCustodialWallet() {
   writeCustodialState(null);
   transferRequests.clear();
   resetMockPin();
+  resetMockWalletTransfers();
   dailyTransferredUsdx = 0;
 }
 
@@ -445,7 +463,28 @@ export async function mockTransferCustodial(
     submittedAt: new Date().toISOString(),
   };
   row.result = result;
+  // Riwayat (USDX-701): baris PENDING yang diputuskan "watcher" belakangan.
+  recordMockWalletTransfer(result, userId, active.transferOutcome);
   dailyTransferredUsdx += amount;
   if (balance !== null) writeCustodialState({ ...active, balance: idr(balance - amount) });
   return result;
+}
+
+// ── Riwayat & tracker (wallet.yaml § transfers / transfer-detail, USDX-701) ──
+// Buku besarnya di mock-wallet-transfers.ts; di sini hanya pintu yang tahu siapa
+// user sesi + throttle grup `wallet`. Seperti kontrak: tanpa gate wallet (user
+// tanpa wallet = daftar kosong) dan tanpa 503 (tidak menyentuh zona kunci).
+export async function mockListWalletTransfers(params: {
+  page?: number;
+  take?: number;
+}): Promise<Paginated<WalletTransfer>> {
+  await delay(150);
+  maybeThrowRateLimited();
+  return listMockWalletTransfers(currentMockUserId(), params);
+}
+
+export async function mockGetWalletTransfer(id: string): Promise<WalletTransfer> {
+  await delay(150);
+  maybeThrowRateLimited();
+  return getMockWalletTransfer(currentMockUserId(), id);
 }

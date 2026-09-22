@@ -14,6 +14,7 @@ import {
   mockDeleteBankAccount,
   MOCK_BLACKLISTED_ADDRESS,
 } from "@/lib/api/mock-api";
+import { MOCK_CUSTODIAL_ADDRESS } from "@/lib/api/mock-custodial-wallet";
 
 const VALID_REDEEM = {
   amount: "100",
@@ -156,6 +157,56 @@ describe("mockListConsumerTransactions", () => {
       const types = new Set(result.data.map((t) => t.type));
       expect(types.has("MINT")).toBe(true);
       expect(types.has("REDEEM")).toBe(true);
+    });
+  });
+});
+
+// USDX-653: the history rows carry TransactionItem.userAddress, so the list can mark
+// orders to/from "wallet custodial saya" without a detail call per row.
+describe("mockListConsumerTransactions — userAddress (USDX-653)", () => {
+  describe("positive", () => {
+    test("every seeded row carries a well-formed userAddress", async () => {
+      // Seeds only: other tests in this file create orders with placeholder addresses.
+      const result = await mockListConsumerTransactions({ page: 1, take: 100 });
+      const seeds = result.data.filter((t) => t.id.startsWith("seed_"));
+      expect(seeds.length).toBeGreaterThan(0);
+      for (const row of seeds) expect(row.userAddress).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    });
+
+    test("seeds a mint and a redeem to/from the mock custodial wallet", async () => {
+      const result = await mockListConsumerTransactions({ page: 1, take: 100 });
+      const custodial = result.data.filter((t) => t.userAddress === MOCK_CUSTODIAL_ADDRESS);
+      expect(custodial.map((t) => t.type).sort()).toEqual(["MINT", "REDEEM"]);
+    });
+  });
+
+  describe("negative", () => {
+    test("rows to a manual address keep that address", async () => {
+      const result = await mockListConsumerTransactions({ page: 1, take: 100 });
+      const manual = result.data.filter(
+        (t) => t.userAddress?.toLowerCase() !== MOCK_CUSTODIAL_ADDRESS.toLowerCase(),
+      );
+      expect(manual.some((t) => t.type === "MINT")).toBe(true);
+      expect(manual.some((t) => t.type === "REDEEM")).toBe(true);
+    });
+  });
+
+  describe("edge case", () => {
+    test("one mint stores the custodial address all lowercase (no normalisation)", async () => {
+      const result = await mockListConsumerTransactions({ page: 1, take: 100, type: "MINT" });
+      expect(result.data.some((t) => t.userAddress === MOCK_CUSTODIAL_ADDRESS.toLowerCase())).toBe(true);
+    });
+
+    test("an order created this session echoes its request userAddress", async () => {
+      const userAddress = "0x9999999999999999999999999999999999999999";
+      const created = await mockCreateMintOrder({
+        amount: "100",
+        amountCurrency: "USD",
+        userAddress,
+        chain: "polygon",
+      });
+      const result = await mockListConsumerTransactions({ page: 1, take: 100, type: "MINT" });
+      expect(result.data.find((t) => t.id === created.id)?.userAddress).toBe(userAddress);
     });
   });
 });

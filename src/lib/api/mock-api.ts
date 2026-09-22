@@ -44,6 +44,7 @@ import type {
 import {
   MOCK_CONTRACT_ADDRESS,
   MOCK_BLACKLISTED_ADDRESS,
+  MOCK_CUSTODIAL_ADDRESS,
   withCustodialWallet,
   isMockCustodialAddress,
   requireActiveCustodialWallet,
@@ -848,12 +849,25 @@ function mintRecordToTransaction(order: MockMintRecord): ConsumerTransaction {
     netPayoutIdr: null, // redeem-only
     effectiveRate: order.effectiveRate,
     chain: order.chain,
+    userAddress: order.userAddress,
     paymentStatus: order.paymentStatus,
     status: order.status,
     txHash: order.onChainTxHash,
     createdAt: order.createdAt,
     updatedAt: order.updatedAt,
   };
+}
+
+// `userAddress` of the seeded history rows (USDX-653). The first row of each type
+// goes to/from the mock custodial wallet, so a user seeded with that wallet sees
+// the "wallet custodial saya" marker; the second mint row stores the same address
+// all lowercase, as `CreateMintOrderV2.userAddress` allows. The rest are an
+// address-book wallet — no marker. A user without a wallet sees no marker at all.
+const MOCK_MANUAL_HISTORY_ADDRESS = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed";
+function seededMintUserAddress(i: number): string {
+  if (i === 0) return MOCK_CUSTODIAL_ADDRESS;
+  if (i === 1) return MOCK_CUSTODIAL_ADDRESS.toLowerCase();
+  return MOCK_MANUAL_HISTORY_ADDRESS;
 }
 
 // A few deterministic completed mint rows so /history (USDX-204) isn't empty in
@@ -873,6 +887,7 @@ function seededTransactions(): ConsumerTransaction[] {
       netPayoutIdr: null,
       effectiveRate: idr(mockEffectiveBuyRate()),
       chain: "polygon",
+      userAddress: seededMintUserAddress(i),
       paymentStatus: "PAID" as const,
       status: "COMPLETED" as const,
       txHash: "0x" + (2_000_000 + i * 7919).toString(16).padStart(64, "0").slice(0, 64),
@@ -1404,6 +1419,7 @@ function redeemRecordToTransaction(record: MockRedeemRecord): ConsumerTransactio
     netPayoutIdr: d.netPayoutIdr,
     effectiveRate: d.effectiveRate,
     chain: d.chain,
+    userAddress: d.userAddress,
     paymentStatus: null, // mint-only
     status: d.status,
     txHash: d.burnTxHash,
@@ -1439,6 +1455,8 @@ function seededRedeemTransactions(): ConsumerTransaction[] {
       netPayoutIdr: idr(net),
       effectiveRate: idr(rate),
       chain: "polygon",
+      // Redeem consumer demands EIP-55 at create, so no lowercase variant here.
+      userAddress: i === 0 ? MOCK_CUSTODIAL_ADDRESS : MOCK_MANUAL_HISTORY_ADDRESS,
       paymentStatus: null,
       status: s.status,
       txHash: s.burned

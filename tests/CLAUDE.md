@@ -24,7 +24,7 @@ tests/
     mint.spec.ts        # Mint form, chain selector, review panel
     transactions.spec.ts # Transaction table rendering
     profile.spec.ts     # User info display
-    settings-pin.spec.ts # Settings → Account → transaction PIN: create, use at once on /send, change, lockout (USDX-651); create on a stale session → log in again → back to the dialog (USDX-697)
+    settings-pin.spec.ts # Settings → Account → transaction PIN: create, use at once on /send, change, lockout (USDX-651); create on a stale session → log in again → back to the dialog (USDX-697); forgot PIN from Change PIN: lockout, 5-minute window, cancel, per tab (USDX-696)
   e2e/                  # Playwright — full user flows
     auth-flow.spec.ts   # Register -> logout -> login
     mint-flow.spec.ts   # Login -> mint -> review -> cross-origin checkout handoff
@@ -32,7 +32,7 @@ tests/
     custodial-wallet-flow.spec.ts # Register -> verify -> /mint -> wallet step -> create -> ACTIVE -> receives USDX -> balance; Settings activation; decline (USDX-566; the mock build has env.walletCreateEnabled ON, USDX-699 — the production pill is unit-tested in CustodialWalletOffer.test)
     transfer-flow.spec.ts         # Custodial transfer: form -> Ringkasan -> PIN -> tx hash (USDX-567)
     redeem-custodial-flow.spec.ts # Custodial redeem: PIN, no wallet dialog, tracker to payout (USDX-567)
-    pin-flow.spec.ts              # PIN created from the transfer/redeem notice, stale-copy PIN_NOT_SET (USDX-651); every create door asks to log in again under backend USDX-698 (USDX-697)
+    pin-flow.spec.ts              # PIN created from the transfer/redeem notice, stale-copy PIN_NOT_SET (USDX-651); every create door asks to log in again under backend USDX-698 (USDX-697); forgot PIN from a locked transfer PIN dialog → new PIN approves, old refused (USDX-696)
   audit-ui/             # node + Playwright — measurement, NOT assertions
     sweep-auth.js       # Every authed page x 4 viewports: overflow, out-of-bounds
     state-audit.js      # Empty, 500, 401, 429, offline, slow loading

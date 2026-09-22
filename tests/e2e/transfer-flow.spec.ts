@@ -9,11 +9,13 @@ import {
 } from "../helpers/playwright-utils";
 
 // Transfer from the custodial wallet (USDX-567, wallet.yaml § POST
-// /api/v2/wallet/transfer): form → Ringkasan → PIN → 202 → result with tx hash.
-// No wallet extension is involved anywhere on this path. The mock enforces the
-// contract's idempotency + error precedence, so what these specs prove is the
-// UI's side of it: the PIN failures stay in the PIN dialog, the balance is
-// re-read after a broadcast, and the screen never says "successful".
+// /api/v2/wallet/transfer): form → Ringkasan → PIN → 202 → confirmation tracker
+// (USDX-701, GET /api/v2/wallet/transfers/{id}). No wallet extension is involved
+// anywhere on this path. The mock enforces the contract's idempotency + error
+// precedence and plays the receipt watcher (PENDING → final after 3.5 s), so what
+// these specs prove is the UI's side of it: the PIN failures stay in the PIN
+// dialog, the balance is re-read after a broadcast, and the screen says
+// "successful" only once the backend reports CONFIRMED.
 const TO = "0xabcdef1234567890abcdef1234567890abcdef12";
 
 async function openPinDialog(page: import("@playwright/test").Page, amount = "25") {
@@ -37,7 +39,7 @@ test.describe("Transfer Flow (custodial)", () => {
       await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
     });
 
-    test("form → Ringkasan → PIN → 202 → tx hash + explorer link, balance refreshed", async ({
+    test("form → Ringkasan → PIN → 202 → tracker PENDING → CONFIRMED, balance refreshed", async ({
       page,
     }) => {
       await page.goto("/send");
@@ -53,14 +55,19 @@ test.describe("Transfer Flow (custodial)", () => {
 
       const result = page.getByTestId("transfer-result");
       await expect(result).toBeVisible({ timeout: 15000 });
-      await expect(result.getByText("Transfer sent to the network")).toBeVisible();
-      // Proof of broadcast, not a success claim.
+      const status = result.getByTestId("transfer-status");
+      // 202 = proof of broadcast: "waiting for confirmation", not a success claim.
+      await expect(status).toHaveAttribute("data-status", "PENDING");
+      await expect(result.getByText("Sent — waiting for confirmation")).toBeVisible();
       await expect(result.getByText(/successful/i)).toHaveCount(0);
       await expect(result.getByRole("link", { name: "View on explorer" })).toHaveAttribute(
         "href",
         /^https:\/\/polygonscan\.com\/tx\/0x[0-9a-f]{64}$/,
       );
-      await expect(result.getByText("25 USDX")).toBeVisible();
+      await expect(result.getByText("25.00 USDX")).toBeVisible();
+      // The tracker polls the detail and flips on its own — no reload.
+      await expect(status).toHaveAttribute("data-status", "CONFIRMED", { timeout: 15000 });
+      await expect(result.getByText("Transfer successful")).toBeVisible();
 
       // Back to the form: the balance reflects the debit (1,000 − 25).
       await page.getByRole("button", { name: "Send another transfer" }).click();
@@ -81,6 +88,30 @@ test.describe("Transfer Flow (custodial)", () => {
       await expect(page.getByTestId("transfer-result")).toBeVisible({ timeout: 15000 });
     });
 
+    test("the sent transfer shows up in the history with the same status, and opens the same detail", async ({
+      page,
+    }) => {
+      const pin = await openPinDialog(page, "12");
+      await pin.getByLabel("6-digit PIN").fill(MOCK_PIN);
+      await pin.getByRole("button", { name: "Send", exact: true }).click();
+      const result = page.getByTestId("transfer-result");
+      await expect(result.getByTestId("transfer-status")).toHaveAttribute("data-status", "CONFIRMED", {
+        timeout: 15000,
+      });
+      const hash = await result.getByRole("link", { name: "View on explorer" }).getAttribute("href");
+
+      await result.getByRole("link", { name: "Transfer history" }).click();
+      const rows = page.getByTestId("transfer-history-row");
+      await expect(rows).toHaveCount(1, { timeout: 15000 });
+      await expect(rows.first()).toContainText("12.00 USDX");
+      await expect(rows.first().getByTestId("transfer-status-badge")).toHaveText("Successful");
+      await rows.first().getByRole("link", { name: "View details" }).click();
+      await expect(page.getByTestId("transfer-status")).toHaveAttribute("data-status", "CONFIRMED", {
+        timeout: 15000,
+      });
+      await expect(page.getByRole("link", { name: "View on explorer" })).toHaveAttribute("href", hash!);
+    });
+
     test("destination can come from the address book", async ({ page }) => {
       await page.goto("/send");
       await expect(page.getByText("You will send")).toBeVisible({ timeout: 15000 });
@@ -93,6 +124,28 @@ test.describe("Transfer Flow (custodial)", () => {
   });
 
   test.describe("negative", () => {
+    test("a transfer the network rejects ends as failed — USDX did not move, safe to send again", async ({
+      page,
+    }) => {
+      await forceEnglish(page);
+      await seedCustodialWallet(page, { status: "ACTIVE", balance: "1000.00", transferOutcome: "DROPPED" });
+      await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
+      const pin = await openPinDialog(page);
+      await pin.getByLabel("6-digit PIN").fill(MOCK_PIN);
+      await pin.getByRole("button", { name: "Send", exact: true }).click();
+
+      const result = page.getByTestId("transfer-result");
+      await expect(result.getByText("Sent — waiting for confirmation")).toBeVisible({ timeout: 15000 });
+      await expect(result.getByTestId("transfer-status")).toHaveAttribute("data-status", "FAILED", {
+        timeout: 15000,
+      });
+      await expect(result.getByText("Your USDX did not move. It's safe to send again.")).toBeVisible();
+      await expect(result.getByTestId("transfer-failure-reason")).toHaveText(
+        "Replaced by another transaction from the same wallet",
+      );
+      await expect(result.getByText(/successful/i)).toHaveCount(0);
+    });
+
     test("transfer over the per-transaction limit → the limit is named, not a generic error", async ({
       page,
     }) => {
@@ -166,6 +219,23 @@ test.describe("Transfer Flow (custodial)", () => {
       await expect(page.getByText("You will send")).toHaveCount(0);
     });
 
+    test("a transfer stuck in PENDING stays 'waiting' — age never turns it into failed", async ({ page }) => {
+      await forceEnglish(page);
+      await seedCustodialWallet(page, { status: "ACTIVE", balance: "1000.00", transferOutcome: "PENDING" });
+      await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
+      const pin = await openPinDialog(page);
+      await pin.getByLabel("6-digit PIN").fill(MOCK_PIN);
+      await pin.getByRole("button", { name: "Send", exact: true }).click();
+
+      const result = page.getByTestId("transfer-result");
+      await expect(result).toBeVisible({ timeout: 15000 });
+      // Well past the mock watcher's 3.5 s and several 3 s polls.
+      await page.waitForTimeout(8_000);
+      await expect(result.getByTestId("transfer-status")).toHaveAttribute("data-status", "PENDING");
+      await expect(result.getByText("Sent — waiting for confirmation")).toBeVisible();
+      await expect(result.getByRole("link", { name: "View on explorer" })).toBeVisible();
+    });
+
     test("a transfer still in progress is retried with the same key and completes", async ({
       page,
     }) => {
@@ -179,6 +249,9 @@ test.describe("Transfer Flow (custodial)", () => {
       // Exactly one debit: the retry replayed, it did not send twice.
       await page.getByRole("button", { name: "Send another transfer" }).click();
       await expect(page.getByTestId("transfer-balance")).toHaveText("975 USDX", { timeout: 15000 });
+      // …and exactly one transfer in the history — one intent, one tracker.
+      await page.goto("/send/history");
+      await expect(page.getByTestId("transfer-history-row")).toHaveCount(1, { timeout: 15000 });
     });
   });
 });

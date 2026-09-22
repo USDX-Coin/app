@@ -7,8 +7,9 @@
 // semuanya 15 menit (429 → hitung mundur di tombol). PIN baru yang sama dengan
 // yang lama ditolak di sini dulu (422 PIN_UNCHANGED kalau lolos).
 //
-// Jalur lupa-PIN (login ulang → set tanpa PIN lama, pin.yaml § set "sesi segar")
-// sengaja tidak ada di dialog ini: itu alur re-auth, bukan ubah PIN.
+// User yang lupa PIN lama tidak bisa lewat sini — tautan "Lupa PIN?" di bawah
+// kolom PIN lama membawanya ke jalur lupa-PIN (login ulang → Buat PIN baru tanpa
+// PIN lama, custodial-wallet.md §5.1, USDX-696), juga saat terkunci hitung mundur.
 
 import { useState } from "react";
 import { KeyRound } from "lucide-react";
@@ -25,6 +26,7 @@ import {
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { PinField, isPinShape } from "@/components/shared/PinField";
+import { ForgotPinLink } from "@/components/shared/ForgotPinLink";
 import { usePin } from "@/hooks/usePin";
 import { formatDuration } from "@/lib/utils";
 import { useLang } from "@/providers/LanguageProvider";
@@ -116,6 +118,7 @@ export function PinChangeDialog({ open, onOpenChange }: PinChangeDialogProps) {
               disabled={isChangingPin}
               error={currentFormatError ?? serverCurrentError}
             />
+            <ForgotPinLink disabled={isChangingPin} />
             <PinField
               id="pin-change-new"
               label={t("pin.change.new")}

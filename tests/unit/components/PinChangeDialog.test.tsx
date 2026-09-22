@@ -4,7 +4,7 @@ import { LanguageProvider } from "@/providers/LanguageProvider";
 import { createWrapper } from "../../helpers/test-utils";
 import { PinChangeDialog } from "@/components/shared/PinChangeDialog";
 import { useAuthStore } from "@/stores/authStore";
-import { changePin } from "@/lib/api/auth-api";
+import { changePin, logout } from "@/lib/api/auth-api";
 import { ApiError } from "@/lib/api/client";
 import type { User } from "@/types";
 
@@ -12,7 +12,11 @@ vi.mock("@/lib/api/auth-api", () => ({
   setPin: vi.fn(),
   changePin: vi.fn(),
   getMe: vi.fn(),
+  logout: vi.fn(),
 }));
+// The "Lupa PIN?" link logs in again (USDX-696), which needs the app router.
+const push = vi.hoisted(() => vi.fn());
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push, replace: vi.fn() }) }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 const changePinMock = vi.mocked(changePin);
 
@@ -140,6 +144,51 @@ describe("PinChangeDialog", () => {
       fill("123456", "654321", "654321");
       fireEvent.click(screen.getByRole("button", { name: "Batal" }));
       expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
+  });
+});
+
+// Pintu lupa-PIN (custodial-wallet.md §5.1 "Lupa PIN di web", USDX-696): Ubah PIN
+// wajib PIN lama — user yang lupa butuh jalan keluar di sini, juga saat terkunci.
+describe("PinChangeDialog — Forgot PIN door", () => {
+  beforeEach(() => {
+    push.mockReset();
+    vi.mocked(logout).mockReset().mockResolvedValue(undefined);
+    sessionStorage.clear();
+  });
+
+  describe("positive", () => {
+    test("'Lupa PIN?' → Log in again → forgot-pin marked, /login; no PIN change is sent", () => {
+      renderDialog();
+      fireEvent.click(screen.getByRole("button", { name: "Lupa PIN?" }));
+      fireEvent.click(screen.getByRole("button", { name: "Login ulang" }));
+
+      expect(sessionStorage.getItem("usdx-relogin-intent")).toBe("forgot-pin");
+      expect(push).toHaveBeenCalledWith("/login");
+      expect(changePinMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("negative", () => {
+    test("the link never submits the change form", () => {
+      renderDialog();
+      fill("123456", "654321", "654321");
+      fireEvent.click(screen.getByRole("button", { name: "Lupa PIN?" }));
+      expect(changePinMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("edge case", () => {
+    test("after five wrong current PINs (countdown on the button) the link is still usable", async () => {
+      changePinMock.mockRejectedValueOnce(
+        new ApiError(429, "TOO_MANY_ATTEMPTS", "x", { retryAfterSeconds: 900 }, 900),
+      );
+      renderDialog();
+      fill("111111", "654321", "654321");
+      submit();
+
+      await waitFor(() => expect(screen.getByRole("button", { name: /Coba lagi dalam/ })).toBeInTheDocument());
+      expect(screen.getByRole("button", { name: "Lupa PIN?" })).toBeEnabled();
     });
   });
 });

@@ -112,6 +112,32 @@ test.describe("Transfer Flow (custodial)", () => {
       await expect(page.getByRole("link", { name: "View on explorer" })).toHaveAttribute("href", hash!);
     });
 
+    test("history opened moments before a send shows the new transfer at once, not the empty state (review app#79)", async ({
+      page,
+    }) => {
+      // 1. The history is opened first — empty, and now cached as fresh.
+      await page.goto("/send/history");
+      await expect(page.getByTestId("transfer-history-empty")).toBeVisible({ timeout: 15000 });
+      // 2. Client-side navigation keeps that cache alive.
+      await page.getByRole("button", { name: "Send USDX" }).click();
+      await expect(page.getByText("You will send")).toBeVisible({ timeout: 15000 });
+      await page.getByPlaceholder("0", { exact: true }).fill("7");
+      await page.getByPlaceholder("0x5DC489Ad05Efc").fill(TO);
+      await page.getByRole("button", { name: "Send", exact: true }).click();
+      await page.getByRole("button", { name: "Continue to PIN" }).click();
+      const pin = page.getByRole("dialog").filter({ hasText: "Confirm with PIN" });
+      await pin.getByLabel("6-digit PIN").fill(MOCK_PIN);
+      await pin.getByRole("button", { name: "Send", exact: true }).click();
+      const result = page.getByTestId("transfer-result");
+      await expect(result.getByTestId("transfer-status")).toHaveAttribute("data-status", "PENDING", {
+        timeout: 15000,
+      });
+      // 3. Well inside the 15 s staleTime of the cached empty list.
+      await result.getByRole("link", { name: "Transfer history" }).click();
+      await expect(page.getByTestId("transfer-history-row")).toHaveCount(1, { timeout: 15000 });
+      await expect(page.getByTestId("transfer-history-empty")).toHaveCount(0);
+    });
+
     test("destination can come from the address book", async ({ page }) => {
       await page.goto("/send");
       await expect(page.getByText("You will send")).toBeVisible({ timeout: 15000 });

@@ -7,14 +7,14 @@ components/
   ui/          # Design system. OURS — hand-written wrappers, meant to be edited.
   animate-ui/  # Animate UI primitives (motion + Radix). Registry files, edit sparingly.
   layout/      # App layout: AuthLayout, Sidebar, Logo, ThemeToggle
-  shared/      # Cross-feature: PageHeader, ComingSoonPage, RouteErrorState, PinConfirmDialog (USDX-567), PinField + PinSetupDialog + PinChangeDialog + PinNotSetNotice (USDX-651), ForgotPinLink (USDX-696)
+  shared/      # Cross-feature: PageHeader, PagePagination (server-paginated lists), ComingSoonPage, RouteErrorState, PinConfirmDialog (USDX-567), PinField + PinSetupDialog + PinChangeDialog + PinNotSetNotice (USDX-651), ForgotPinLink (USDX-696)
   auth/        # Login, Register, Forgot/Reset password, CheckEmail, VerifyEmail
   kyc/         # KYC form: identity + CDD blocks, document dropzones
   mint/        # Mint flow: MintForm, MintReview, ChainSelector
   redeem/      # Redeem flow: RedeemForm, RedeemReview, RedeemStatus (tracker), BankSelect, BankAccountPicker + AddBankAccountModal (bank book, USDX-261). Custodial source switch + PIN dialog in the review (USDX-567)
   wallet/      # Custodial wallet (USDX-566): CustodialWalletOffer, CustodialWalletPanel, ReceiveAddress (QR + copy), CustodialWalletSection (offer-or-panel), CustodialBalanceCard (sidebar), WalletOnboardingContent
   settings/    # SettingsPageContent — Pengaturan is a real page since USDX-566; PinSection = the transaction PIN row in the Account card (USDX-651)
-  transfer/    # Custodial transfer (USDX-567): TransferPageContent (custodial owner → form, else ComingSoon), TransferForm, TransferReview, TransferResult
+  transfer/    # Custodial transfer (USDX-567): TransferPageContent (custodial owner → form, else ComingSoon), TransferForm, TransferReview, TransferResult (= confirmation tracker, USDX-701). History (USDX-701): TransferHistoryList (/send/history), TransferDetail (/send/history/[id]), TransferStatusPanel + TransferStatusBadge (shared by tracker and detail), TransferHistoryLink (/send, /history)
   transactions/ profile/ system/
 ```
 

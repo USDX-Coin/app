@@ -6,8 +6,6 @@ import {
   ArrowDown,
   ArrowDownToLine,
   ArrowUpFromLine,
-  ChevronLeft,
-  ChevronRight,
   Copy,
   ExternalLink,
   History,
@@ -33,12 +31,6 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-} from "@/components/ui/pagination";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
   DropdownMenu,
@@ -57,6 +49,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TransactionListSkeleton } from "@/components/transactions/TransactionListSkeleton";
+import { PagePagination } from "@/components/shared/PagePagination";
 import type {
   ConsumerOrderType,
   ConsumerTransaction,
@@ -123,14 +116,6 @@ function explorerTxUrl(chain: string, txHash: string | null): string | null {
   if (!txHash) return null;
   const url = getChainById(chain)?.explorerUrl;
   return url ? `${url}/tx/${txHash}` : null;
-}
-
-/** Page list with ellipsis: 1 2 3 … 8 9 10 */
-function pageList(current: number, total: number): (number | "…")[] {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-  if (current <= 3) return [1, 2, 3, "…", total - 2, total - 1, total];
-  if (current >= total - 2) return [1, 2, 3, "…", total - 2, total - 1, total];
-  return [1, "…", current - 1, current, current + 1, "…", total];
 }
 
 // UI filter value → API `type` param. Union mint + redeem (USDX-244).
@@ -493,46 +478,7 @@ export function TransactionList() {
           ))}
         </div>
 
-        {/* Pagination. `PaginationLink` is an `<a>`, which this page cannot use:
-            the page number lives in component state, not in the URL, and
-            prev/next need a real `disabled` — a disabled anchor does not exist. */}
-        {totalPages > 1 && (
-          <Pagination className="justify-between">
-            <Button
-              variant="outline"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-            >
-              <ChevronLeft /> {t("tx.previous")}
-            </Button>
-            <PaginationContent className="hidden sm:flex">
-              {pageList(currentPage, totalPages).map((p, i) => (
-                <PaginationItem key={p === "…" ? `e${i}` : p}>
-                  {p === "…" ? (
-                    <PaginationEllipsis />
-                  ) : (
-                    <Button
-                      variant={p === currentPage ? "brand" : "ghost"}
-                      size="icon-sm"
-                      className="rounded-full"
-                      aria-current={p === currentPage ? "page" : undefined}
-                      onClick={() => setPage(p)}
-                    >
-                      {p}
-                    </Button>
-                  )}
-                </PaginationItem>
-              ))}
-            </PaginationContent>
-            <Button
-              variant="outline"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-            >
-              {t("tx.next")} <ChevronRight />
-            </Button>
-          </Pagination>
-        )}
+        <PagePagination currentPage={currentPage} totalPages={totalPages} onPageChange={setPage} />
       </>
     );
   }

@@ -74,7 +74,7 @@ src/
     redeem/         # RedeemForm, RedeemReview, RedeemPageContent, skeletons
     wallet/         # Custodial wallet (USDX-566): offer, status panel, receive address + QR, sidebar card, onboarding step
     settings/       # SettingsPageContent (Pengaturan — home of the custodial wallet) + PinSection (transaction PIN, USDX-651)
-    transfer/       # Custodial transfer: TransferForm, TransferReview, TransferResult, TransferPageContent (USDX-567)
+    transfer/       # Custodial transfer: TransferForm, TransferReview, TransferResult (tracker), TransferPageContent (USDX-567); TransferStatusPanel/Badge, TransferHistoryList, TransferDetail, TransferHistoryLink (USDX-701)
     transactions/   # TransactionList, skeletons
     profile/        # ProfileCard, skeleton
     ui/             # shadcn/ui base components (auto-generated)
@@ -170,9 +170,15 @@ Mint and Redeem keep their state in Zustand stores; the Ringkasan is a modal:
   or external (the unchanged self-sign path). `burnMode` is decided by the backend, never
   sent by the FE (`redeem.yaml`, USDX-565/567)
 - Transfer (custodial only, `/send`): `form` → Ringkasan modal → `PinConfirmDialog` →
-  `POST /api/v2/wallet/transfer` → `done` (tx hash + explorer link). 202 is proof of
-  BROADCAST, not settlement — the screen never says "berhasil" (USDX-577), and there is
-  no transfer history yet (USDX-576). `Idempotency-Key` (UUID v7) is minted once per
+  `POST /api/v2/wallet/transfer` → `done` = confirmation tracker (USDX-701). 202 is proof
+  of BROADCAST, not settlement: the tracker starts at "Terkirim, menunggu konfirmasi" +
+  explorer link and polls `GET /api/v2/wallet/transfers/{id}` (`TransferAccepted.id`)
+  every 3 s via `hooks/useWalletTransferTracker` until CONFIRMED ("Berhasil") or FAILED
+  ("Gagal — USDX tidak berpindah, aman kirim ulang"); it stops at a final status and on
+  unmount, backs off to `Retry-After` on 429, and NEVER infers failure from age. Unknown
+  `status` values read as PENDING (`lib/wallet-transfer.ts`). History: `/send/history`
+  (list, page/take, API order) + `/send/history/[id]` (same tracker; 404/422 = neutral
+  "not found" + back). `Idempotency-Key` (UUID v7) is minted once per
   intent by `transferStore` and reused by every retry; `setTo`/`setAmount` drop it
 
 Step state lives in Zustand stores. Form data preserved when going back.
@@ -218,7 +224,7 @@ describe('functionOrPage') →
 
 - **Unit tests**: hooks, stores, API, validations, utils, chains
 - **Integration tests**: page interactions + responsive (mobile/tablet/desktop)
-- **E2E tests**: auth flow, mint flow, redeem flows, address book, QR scan, rate limit, custodial transfer/redeem, PIN created from the money paths
+- **E2E tests**: auth flow, mint flow, redeem flows, address book, QR scan, rate limit, custodial transfer/redeem (tracker to CONFIRMED/FAILED + history, USDX-701), PIN created from the money paths
 
 Test helpers in `tests/helpers/`:
 - `test-utils.tsx`: QueryClient wrapper for renderHook (`createWrapper`, gcTime 0; `createCachingWrapper` keeps the cache across unmounts like the app)
@@ -233,12 +239,14 @@ Test helpers in `tests/helpers/`:
 | `/forgot-password` | No | SC | Password reset |
 | `/mint` | Yes | SC | Mint USDX (default dashboard) |
 | `/redeem` | Yes | SC | Redeem USDX to bank |
-| `/history` | Yes | SC | Transaction history (mint + redeem, W3) |
+| `/history` | Yes | SC | Transaction history (mint + redeem, W3). Custodial transfers are NOT here (own resource) — wallet owners get a link to `/send/history` |
 | `/profile` | Yes | SC | User info + verification badge |
 | `/settings` | Yes | SC | Pengaturan: custodial "USDX wallet" (offer — the "Buatkan saya wallet" button on builds with `env.walletCreateEnabled` ON = dev + mock, the "Segera hadir" pill everywhere else incl. production, USDX-699 / address + QR + balance / status) + Account card with the transaction PIN (create / change, USDX-651) + link to Profile (USDX-566; switch: `custodial-wallet.md` §1 amandemen 14 Sep + 21 Sep 2026) |
 | `/onboarding/wallet` | Yes | SC | "Dikasih wallet" step (USDX-566). **No longer reached from verify-email** — that redirect is off in every environment (verify-email lands on `/mint`, `custodial-wallet.md` §1 amandemen 14 Sep 2026); only a direct URL opens it. Same offer as Settings (button or pill by `env.walletCreateEnabled`, USDX-699). "Not now" → `/mint` |
 | `/bridge` | Yes | SC | ComingSoon (gated — no bridge backend yet; sidebar teaser) |
 | `/send` | Yes | SC | Custodial transfer (`TransferPageContent`) for users with `user.custodialWallet`; ComingSoon for everyone else (no external-wallet send backend) |
+| `/send/history` | Yes | SC | Custodial transfer history (`TransferHistoryList`, USDX-701) — `GET /api/v2/wallet/transfers`, linked from `/send` and `/history` for wallet owners (`TransferHistoryLink`); empty list for users without a wallet |
+| `/send/history/[id]` | Yes | SC | One transfer + confirmation tracker (`TransferDetail`, USDX-701); stale/wrong id → neutral "not found" + back to history |
 
 ## Known Limitations
 
@@ -288,6 +296,14 @@ Test helpers in `tests/helpers/`:
   USDX-698 (first-time PIN on a wallet account needs a fresh login) is ON by default
   (698 is live on api-dev; `seedMockStrictPinSet(false)` = the old backend) — a flow that
   starts right after a login arms `seedFreshPasswordAuth(page)` (Playwright)
+- **Custodial transfer history (USDX-701)** — mock ledger in localStorage
+  (`usdx-mock-wallet-transfers`, `lib/api/mock-wallet-transfers.ts`): every mock
+  transfer lands as PENDING and the "receipt watcher" decides it 3.5 s later (seam
+  `transferOutcome` on `seedCustodialWallet`: `CONFIRMED` default, `REVERTED`, `DROPPED`,
+  `PENDING` = stuck forever, anything else = a status the FE does not know). Fixtures for
+  the three statuses + two failure reasons: `lib/api/mock-wallet-transfer-fixtures.ts`
+  (types only, so Playwright imports it) — `seedMockWalletTransfers` (unit) /
+  `seedWalletTransfers(page, rows)` (Playwright)
 - The `/payment` mock gateway route was deleted (it faked "Payment Successful" with a
   `setTimeout`); the real mint flow uses the cross-origin checkout handoff
 - RainbowKit wallet connection works; the USDX balance is read **on-chain for real**

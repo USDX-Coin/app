@@ -2,7 +2,8 @@
 // Satu pintu untuk `/api/v2/wallet`; di dalamnya bercabang ke backend sungguhan
 // atau lapisan mock berdasarkan `env.useMock`, pola `auth-api.ts`.
 //
-// Tiga endpoint: get + create (USDX-566) dan transfer (USDX-567).
+// Lima endpoint: get + create (USDX-566), transfer (USDX-567), riwayat + detail
+// transfer (USDX-701).
 //
 // - `getCustodialWallet` — `GET /api/v2/wallet`. 404 `WALLET_NOT_FOUND` adalah
 //   keadaan NORMAL (user non-custodial), bukan kegagalan: dikembalikan sebagai
@@ -22,15 +23,23 @@
 //   boleh memperlakukan keduanya berbeda. `skipUnauthorizedHandler`: 401 di sini
 //   hampir selalu `INVALID_PIN` / `PIN_NOT_SET` (pin.yaml), bukan sesi mati —
 //   salah ketik PIN tidak boleh berakhir dengan logout.
+// - `listWalletTransfers` — `GET /api/v2/wallet/transfers` (USDX-701). Riwayat
+//   transfer KELUAR yang sudah di-broadcast, terbaru dulu, paginated (page/take).
+//   User tanpa wallet = `200` daftar kosong. Tanpa `503`: sumbernya DB backend.
+// - `getWalletTransfer` — `GET /api/v2/wallet/transfers/{id}` (USDX-701), tracker
+//   konfirmasi sesudah transfer. `404 WALLET_TRANSFER_NOT_FOUND` = id basi/salah/
+//   milik orang lain — dilempar apa adanya, pemanggil yang menampilkan pesan netral.
 
 import { env } from "@/lib/env";
-import { apiFetch } from "./client";
+import { apiFetch, apiFetchPaginated, type Paginated } from "./client";
 import { isWalletNotFound } from "./errors";
-import type { CustodialWallet, TransferAccepted } from "@/types";
-import type { CreateTransferRequest } from "./types";
+import type { CustodialWallet, TransferAccepted, WalletTransfer } from "@/types";
+import type { CreateTransferRequest, ListWalletTransfersParams } from "./types";
 import {
   mockCreateCustodialWallet,
   mockGetCustodialWallet,
+  mockGetWalletTransfer,
+  mockListWalletTransfers,
   mockTransferCustodial,
 } from "./mock-custodial-wallet";
 
@@ -59,5 +68,25 @@ export async function transferCustodial(
     body: req,
     headers: { "Idempotency-Key": idempotencyKey },
     skipUnauthorizedHandler: true,
+  });
+}
+
+export async function listWalletTransfers(
+  params: ListWalletTransfersParams = {},
+): Promise<Paginated<WalletTransfer>> {
+  if (env.useMock) return mockListWalletTransfers(params);
+  const query = new URLSearchParams();
+  if (params.page) query.set("page", String(params.page));
+  if (params.take) query.set("take", String(params.take));
+  const qs = query.toString();
+  return apiFetchPaginated<WalletTransfer>(`/api/v2/wallet/transfers${qs ? `?${qs}` : ""}`, {
+    method: "GET",
+  });
+}
+
+export async function getWalletTransfer(id: string): Promise<WalletTransfer> {
+  if (env.useMock) return mockGetWalletTransfer(id);
+  return apiFetch<WalletTransfer>(`/api/v2/wallet/transfers/${encodeURIComponent(id)}`, {
+    method: "GET",
   });
 }

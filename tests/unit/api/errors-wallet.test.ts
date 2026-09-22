@@ -2,6 +2,7 @@ import { describe, test, expect } from "vitest";
 import { ApiError } from "@/lib/api/client";
 import {
   isWalletNotFound,
+  isWalletTransferNotFound,
   isWalletNotActive,
   isWalletServiceUnavailable,
   isInvalidPin,
@@ -24,6 +25,12 @@ describe("errors helpers — wallet custodial", () => {
   describe("positive", () => {
     test("isWalletNotFound matches 404 WALLET_NOT_FOUND", () => {
       expect(isWalletNotFound(new ApiError(404, "WALLET_NOT_FOUND", "x"))).toBe(true);
+    });
+
+    test("isWalletTransferNotFound matches 404 WALLET_TRANSFER_NOT_FOUND (USDX-701)", () => {
+      expect(
+        isWalletTransferNotFound(new ApiError(404, "WALLET_TRANSFER_NOT_FOUND", "x")),
+      ).toBe(true);
     });
 
     test("isWalletNotActive matches 409 WALLET_NOT_ACTIVE", () => {
@@ -89,6 +96,11 @@ describe("errors helpers — wallet custodial", () => {
       expect(isWalletNotActive(new Error("boom"))).toBe(false);
       expect(isInvalidPin(undefined)).toBe(false);
       expect(getTransferLimitDetails(new Error("boom"))).toBeNull();
+    });
+
+    test("the two 404s are told apart: WALLET_NOT_FOUND ≠ WALLET_TRANSFER_NOT_FOUND", () => {
+      expect(isWalletTransferNotFound(new ApiError(404, "WALLET_NOT_FOUND", "x"))).toBe(false);
+      expect(isWalletNotFound(new ApiError(404, "WALLET_TRANSFER_NOT_FOUND", "x"))).toBe(false);
     });
 
     test("isTooManyAttempts does not match RATE_LIMITED (throughput throttle)", () => {

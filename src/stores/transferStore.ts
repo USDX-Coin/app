@@ -5,8 +5,9 @@ import { uuidv7 } from "@/lib/uuid";
 
 // Transfer custodial (USDX-567, wallet.yaml § POST /api/v2/wallet/transfer).
 // Dua tampilan: `form` (tujuan + jumlah, Ringkasan sebagai modal, lalu dialog
-// PIN) dan `done` (tx hash + tautan explorer). Tidak ada tracker: 202 adalah
-// bukti BROADCAST dan belum ada endpoint pemantau konfirmasi (USDX-577).
+// PIN) dan `done` (tracker konfirmasi, USDX-701). 202 adalah bukti BROADCAST;
+// `done` memantau GET /api/v2/wallet/transfers/{result.id} sampai final — store
+// hanya memegang satu `result`, jadi replay 200 (id sama) tetap satu tracker.
 //
 // `idempotencyKey` adalah bagian kontrak, bukan detail teknis: satu key = satu
 // NIAT transfer. Dibuat sekali saat user pertama kali mengonfirmasi, dipakai
@@ -22,7 +23,8 @@ import { uuidv7 } from "@/lib/uuid";
 // user yang memuat ulang lalu mengetik tujuan + jumlah yang sama akan mendapat
 // key BARU = transfer kedua. sessionStorage, bukan localStorage: niat mati
 // bersama tab, tidak ikut ke sesi lain. Tampilan (`step`, `result`, modal) tidak
-// ikut — hasil broadcast toh tidak bisa dipantau (USDX-577).
+// ikut — transfer yang sudah terkirim tetap bisa ditemukan di riwayat
+// (/send/history, USDX-701).
 export type TransferStep = "form" | "done";
 
 interface TransferState {

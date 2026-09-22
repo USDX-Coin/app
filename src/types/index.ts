@@ -65,9 +65,12 @@ export interface CustodialWallet extends CustodialWalletSummary {
 
 // POST /api/v2/wallet/transfer → 202 (wallet.yaml § TransferAccepted). **Bukti
 // BROADCAST, bukan bukti settle**: tx sudah di mempool, konfirmasi on-chain terjadi
-// setelahnya dan belum ada endpoint pemantaunya di gelombang 1 (USDX-577). UI
-// menampilkan tx hash + tautan explorer, tidak boleh mengklaim "berhasil".
+// setelahnya dan dipantau lewat `GET /api/v2/wallet/transfers/{id}` memakai `id`
+// (amandemen 22 Sep 2026, USDX-701). UI tidak boleh mengklaim "berhasil" di sini.
 export interface TransferAccepted {
+  // Kunci tracker `GET /api/v2/wallet/transfers/{id}`. Replay (200) dengan key yang
+  // sama mengembalikan id yang SAMA — satu niat transfer = satu tracker.
+  id: string;
   txHash: string; // 0x-prefixed, 66 chars
   from: string; // address custodial pengirim (echo)
   to: string;
@@ -76,6 +79,34 @@ export interface TransferAccepted {
   chain: string;
   // Waktu broadcast. Pada replay idempotency ini tetap waktu broadcast ASLI.
   submittedAt: string;
+}
+
+// Status on-chain transfer yang sudah di-broadcast (wallet.yaml § WalletTransferStatus,
+// USDX-701). Diputuskan watcher receipt backend. Enum boleh bertambah — FE WAJIB punya
+// cabang default: nilai tak dikenal diperlakukan PENDING (`lib/wallet-transfer.ts`).
+export type WalletTransferStatus = "PENDING" | "CONFIRMED" | "FAILED";
+// Sebab FAILED (hanya terisi saat FAILED). Keduanya = USDX tidak berpindah, aman
+// mengirim ulang sebagai niat baru. Enum bisa bertambah.
+export type WalletTransferFailureReason = "REVERTED" | "DROPPED";
+
+// Satu transfer keluar dari wallet custodial (wallet.yaml § WalletTransfer) — item
+// `GET /api/v2/wallet/transfers` dan isi `GET /api/v2/wallet/transfers/{id}`. Field
+// identitas sama persis dengan `TransferAccepted`. `status` / `failureReason` diketik
+// `string` dengan sengaja: nilai di luar enum bisa datang dari backend yang lebih
+// baru, dan hanya `lib/wallet-transfer.ts` yang boleh menafsirkannya.
+export interface WalletTransfer {
+  id: string;
+  txHash: string;
+  from: string;
+  to: string;
+  amount: string; // decimal USDX, selalu 6 desimal
+  amountWei: string;
+  chain: string;
+  status: WalletTransferStatus | (string & {});
+  failureReason: WalletTransferFailureReason | (string & {}) | null;
+  blockNumber: number | null; // null sebelum ada receipt, dan untuk DROPPED
+  submittedAt: string;
+  finalizedAt: string | null; // null selama PENDING
 }
 
 // Siapa yang menandatangani burn sebuah redeem order (common.yaml § BurnMode).

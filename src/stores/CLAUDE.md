@@ -9,7 +9,7 @@ Client-side state stores using Zustand 5.
 | `authStore` | Yes (localStorage `usdx-auth`) | `user`, `token`, `isAuthenticated`; `setPinSet(bool)` corrects `user.pinSet` alone (USDX-651: `/pin/set` success → true at once; `401 PIN_NOT_SET` → false) — call it through `hooks/usePinSetCorrection`, which also patches the `/auth/me` cache |
 | `mintStore` | No | `chainId`, `amount`, `amountCurrency`, `destinationAddress`, `destinationSource` (`custodial` \| `manual`, USDX-567), `reviewOpen`, `handoffPending` |
 | `redeemStore` | No | `step`, `source` (`custodial` \| `external`, USDX-567), `pinOpen`, `amount`, `amountCurrency`, `bankCode`, `bankAccountNumber`, `bankAccountName`, `orderId`, `burnState`, `burnErrorKey` |
-| `transferStore` | Partly (sessionStorage `usdx-transfer-intent`: `to`, `amount`, `idempotencyKey` only) | `step` (`form` \| `done`), `to`, `amount`, `reviewOpen`, `pinOpen`, `idempotencyKey`, `result` (USDX-567) |
+| `transferStore` | Partly (sessionStorage `usdx-transfer-intent`: `to`, `amount`, `idempotencyKey` only) | `step` (`form` \| `done`), `to`, `amount`, `reviewOpen`, `pinOpen`, `idempotencyKey`, `result` (USDX-567; `result.id` keys the tracker, USDX-701) |
 
 ## Pattern
 
@@ -44,8 +44,10 @@ explicitly by `hooks/useMintHandoffReset`, keyed on `handoffPending`.
   and marks the page as "wipe me" if it comes back from the back-forward cache.
 - **Redeem**: `"form" | "tracker"` (Ringkasan is a modal over the form; `tracker` polls the created order — USDX-243). `burnState` (`idle | submitting | submitted | error`) guards the on-chain burn against double-submit and drives retry (USDX-259); `resumeOrder(id)` opens the tracker for an existing order (resume from /history).
 
-- **Transfer**: `"form" | "done"` — no tracker, because 202 is proof of broadcast and
-  there is no confirmation endpoint yet (USDX-577). `idempotencyKey` is part of the
+- **Transfer**: `"form" | "done"` — `done` is the confirmation tracker (USDX-701):
+  202 is proof of broadcast, and `components/transfer/TransferResult` polls
+  `GET /api/v2/wallet/transfers/{result.id}` until CONFIRMED/FAILED. One `result`
+  = one tracker, so a 200 replay (same id) never opens a second. `idempotencyKey` is part of the
   contract: minted once per INTENT by `ensureIdempotencyKey()`, reused by every retry,
   and dropped by `setTo`/`setAmount` (a new intent) or `setResult` (intent finished).
   `clearIdempotencyKey()` exists only for `409 IDEMPOTENCY_KEY_REUSED` (an FE bug).

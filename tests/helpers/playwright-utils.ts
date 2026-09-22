@@ -1,4 +1,5 @@
 import { expect, type Page } from "@playwright/test";
+import { MOCK_WALLET_TRANSFER_FIXTURES } from "../../src/lib/api/mock-wallet-transfer-fixtures";
 
 const AUTH_STATE = {
   state: {
@@ -343,6 +344,10 @@ export async function seedCustodialWallet(
         serviceDown?: boolean;
         transferLimit?: { perTx?: string; daily?: string };
         slowFirstTransfer?: boolean;
+        // USDX-701: the "watcher" verdict for the NEXT transfer (default CONFIRMED
+        // after 3.5 s). "PENDING" = stuck forever; any other value = a status the
+        // FE does not know (mock-wallet-transfers.ts).
+        transferOutcome?: string;
       },
 ) {
   await page.addInitScript(
@@ -365,6 +370,7 @@ export async function seedCustodialWallet(
           serviceDown: s.serviceDown ?? false,
           transferLimit: s.transferLimit,
           slowFirstTransfer: s.slowFirstTransfer ?? false,
+          transferOutcome: s.transferOutcome,
         }),
       );
     },
@@ -427,4 +433,29 @@ export async function seedCustodialPollBudget(page: Page, ms: number) {
  */
 export async function seedCustodialCreateFailure(page: Page) {
   await page.addInitScript(() => localStorage.setItem("usdx-mock-custodial-fail-create", "1"));
+}
+
+/** Transfer-history fixtures — three statuses, two failure reasons (USDX-701). */
+export const WALLET_TRANSFER_FIXTURES = MOCK_WALLET_TRANSFER_FIXTURES;
+
+/**
+ * Arm the mock's transfer-history ledger (mock-wallet-transfers
+ * "usdx-mock-wallet-transfers", USDX-701) with finished rows for `usr_1` (the
+ * `loginViaStorage` user). Rows keep their status — no watcher runs on them.
+ * Applied ONCE per tab: a transfer sent during the test appends to the same
+ * ledger, and an init script re-runs on every navigation. Call before the first
+ * page.goto().
+ */
+export async function seedWalletTransfers(
+  page: Page,
+  rows: (typeof MOCK_WALLET_TRANSFER_FIXTURES)[keyof typeof MOCK_WALLET_TRANSFER_FIXTURES][] | Record<string, unknown>[],
+) {
+  await page.addInitScript((r) => {
+    if (sessionStorage.getItem("usdx-mock-wallet-transfers-seeded")) return;
+    sessionStorage.setItem("usdx-mock-wallet-transfers-seeded", "1");
+    localStorage.setItem(
+      "usdx-mock-wallet-transfers",
+      JSON.stringify(r.map((row) => ({ settleAt: null, outcome: row.status, userId: "usr_1", ...row }))),
+    );
+  }, rows as Record<string, unknown>[]);
 }

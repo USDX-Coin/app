@@ -23,6 +23,7 @@ describe("transferStore", () => {
       s.setPinOpen(true);
       s.ensureIdempotencyKey();
       s.setResult({
+        id: "0193abce-11aa-7bcd-8e01-5c2f0a9d4e77",
         txHash: "0x" + "ab".repeat(32),
         from: "0xfrom",
         to: "0xto",
@@ -76,6 +77,7 @@ describe("transferStore", () => {
       expect(raw.state).toEqual({ to: "0xA", amount: "10", idempotencyKey: key });
       // A finished intent leaves no key behind for the next one to pick up.
       useTransferStore.getState().setResult({
+        id: "0193abce-11aa-7bcd-8e01-5c2f0a9d4e77",
         txHash: "0x" + "ab".repeat(32), from: "0xF", to: "0xA", amount: "10", amountWei: "10000000",
         chain: "polygon", submittedAt: "2026-08-28T04:20:11.000Z",
       });

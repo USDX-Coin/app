@@ -201,6 +201,7 @@ describe("transferCustodial", () => {
   const req = { to: "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed", amount: "25.00", pin: "123456" };
   const KEY = "0193abcd-2c4d-7abc-91ff-9a7fcd0d2bf1";
   const ACCEPTED: TransferAccepted = {
+    id: "0193abce-11aa-7bcd-8e01-5c2f0a9d4e77",
     txHash: "0x" + "ab".repeat(32),
     from: ACTIVE.address!,
     to: req.to,

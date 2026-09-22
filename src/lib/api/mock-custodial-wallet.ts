@@ -31,6 +31,7 @@ import type { CreateTransferRequest } from "./types";
 import { ApiError } from "./client";
 import { isMockPinSet, resetMockPin, verifyMockPin } from "./mock-pin";
 import { USDX_DECIMALS } from "@/lib/constants";
+import { uuidv7 } from "@/lib/uuid";
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -434,6 +435,7 @@ export async function mockTransferCustodial(
     );
   }
   const result: TransferAccepted = {
+    id: uuidv7(),
     txHash: "0x" + randomHex(32),
     from: active.address!,
     to: req.to,

@@ -53,6 +53,7 @@ const WALLET: CustodialWallet = {
   createdAt: "2026-08-28T04:10:00.000Z",
 };
 const ACCEPTED: TransferAccepted = {
+  id: "0193abce-11aa-7bcd-8e01-5c2f0a9d4e77",
   txHash: "0x" + "ab".repeat(32),
   from: OWN,
   to: TO,

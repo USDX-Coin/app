@@ -10,7 +10,8 @@
 //   empty   — 200 dengan daftar kosong (juga user tanpa wallet) → Empty + "Kirim USDX"
 //   error   — server menjawab gagal → Alert danger + "Coba lagi"
 //   offline — permintaan tidak sampai ke server → Alert warning + "Coba lagi"
-// Endpoint ini tidak punya 503; 429 ditangani toast terpusat + tombol coba lagi.
+// Endpoint ini tidak punya 503. 429 → hook menunggu `Retry-After` dan mencoba lagi
+// dulu (useWalletTransfers); baru bila tetap 429, error-state + tombol coba lagi.
 
 import { useState } from "react";
 import Link from "next/link";

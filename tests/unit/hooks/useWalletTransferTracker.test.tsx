@@ -2,7 +2,7 @@ import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { createWrapper } from "../../helpers/test-utils";
 import { TRANSFER_POLL_MS, useWalletTransferTracker } from "@/hooks/useWalletTransferTracker";
-import { useWalletTransfers } from "@/hooks/useWalletTransfers";
+import { RATE_LIMIT_RETRIES, useWalletTransfers } from "@/hooks/useWalletTransfers";
 import { getWalletTransfer, listWalletTransfers } from "@/lib/api/wallet-api";
 import { ApiError } from "@/lib/api/client";
 import { MOCK_WALLET_TRANSFER_FIXTURES as FX } from "@/lib/api/mock-wallet-transfer-fixtures";
@@ -165,15 +165,41 @@ describe("useWalletTransfers", () => {
 
   describe("negative", () => {
     test("a failed list is an error, not an empty success", async () => {
+      vi.useRealTimers();
       listMock.mockRejectedValue(new ApiError(500, "INTERNAL_ERROR", "x"));
       const { result } = renderHook(() => useWalletTransfers(), { wrapper: createWrapper() });
 
-      await waitFor(() => expect(result.current.isError).toBe(true));
+      await waitFor(() => expect(result.current.isError).toBe(true), { timeout: 3_000 }); // one retry
       expect(result.current.data).toBeUndefined();
     });
   });
 
   describe("edge case", () => {
+    test("429 waits Retry-After and tries again before giving up", async () => {
+      vi.useRealTimers(); // real clock: the retry sleep is TanStack's own timer
+      listMock
+        .mockRejectedValueOnce(rateLimited(2))
+        .mockResolvedValue({ data: [FX.confirmed], metadata: { page: 1, limit: 10, total: 1 } });
+      const { result } = renderHook(() => useWalletTransfers(), { wrapper: createWrapper() });
+
+      await waitFor(() => expect(listMock).toHaveBeenCalledTimes(1));
+      // Past the default 1 s retry delay, still short of Retry-After 2 s.
+      await new Promise((r) => setTimeout(r, 1_500));
+      expect(listMock).toHaveBeenCalledTimes(1);
+      expect(result.current.isError).toBe(false);
+      await waitFor(() => expect(result.current.isSuccess).toBe(true), { timeout: 2_000 });
+      expect(listMock).toHaveBeenCalledTimes(2);
+    });
+
+    test("a 429 that persists ends in the error state after the bounded retries", async () => {
+      vi.useRealTimers();
+      listMock.mockRejectedValue(rateLimited(1));
+      const { result } = renderHook(() => useWalletTransfers(), { wrapper: createWrapper() });
+
+      await waitFor(() => expect(result.current.isError).toBe(true), { timeout: 4_000 });
+      expect(listMock).toHaveBeenCalledTimes(RATE_LIMIT_RETRIES + 1);
+    });
+
     test("an empty list is a success with no rows", async () => {
       listMock.mockResolvedValue({ data: [], metadata: { page: 1, limit: 10, total: 0 } });
       const { result } = renderHook(() => useWalletTransfers(), { wrapper: createWrapper() });

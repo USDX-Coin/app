@@ -112,8 +112,9 @@ test.describe("Transfer history", () => {
 
     test("a failed load is an error with retry — never the empty history", async ({ page }) => {
       await asCustodialOwner(page);
-      await seedRateLimit(page, 3); // the list answers 429
+      await seedRateLimit(page, 1); // the list keeps answering 429 (Retry-After 1 s)
       await page.goto("/send/history");
+      // The hook backs off to Retry-After twice first; only then the error state.
 
       await expect(page.getByTestId("transfer-history-error")).toBeVisible({ timeout: 15000 });
       await expect(page.getByTestId("transfer-history-error")).toContainText("Transfer history could not be loaded");

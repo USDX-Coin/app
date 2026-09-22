@@ -15,7 +15,8 @@
 //
 // PIN 6 digit dicek bentuknya di sini sebelum dikirim: bentuk salah ditolak
 // backend dengan 422 tanpa membakar attempt, tapi lebih baik tidak berangkat.
-// Kolomnya `PinField` (bersama layar buat/ubah PIN, USDX-651).
+// Kolomnya `PinField` (bersama layar buat/ubah PIN, USDX-651). Di bawahnya
+// tautan "Lupa PIN?" (USDX-696) — tetap ada saat terkunci hitung mundur.
 
 import { useState } from "react";
 import { KeyRound } from "lucide-react";
@@ -31,6 +32,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { PinField, isPinShape } from "@/components/shared/PinField";
 import { PinNotSetNotice } from "@/components/shared/PinNotSetNotice";
+import { ForgotPinLink } from "@/components/shared/ForgotPinLink";
 import { formatDuration } from "@/lib/utils";
 import { useLang } from "@/providers/LanguageProvider";
 
@@ -108,20 +110,23 @@ export function PinConfirmDialog({
             {pinNotSet ? (
               <PinNotSetNotice data-testid="pin-confirm-not-set" />
             ) : (
-              <PinField
-                id="pin-confirm"
-                label={t("pin.label")}
-                value={pin}
-                onChange={setPin}
-                autoFocus
-                disabled={isSubmitting || locked}
-                hint={t("pin.hint")}
-                error={
-                  locked
-                    ? t("pin.errLocked", { time: formatDuration(cooldownSeconds, lang) })
-                    : inlineError
-                }
-              />
+              <>
+                <PinField
+                  id="pin-confirm"
+                  label={t("pin.label")}
+                  value={pin}
+                  onChange={setPin}
+                  autoFocus
+                  disabled={isSubmitting || locked}
+                  hint={t("pin.hint")}
+                  error={
+                    locked
+                      ? t("pin.errLocked", { time: formatDuration(cooldownSeconds, lang) })
+                      : inlineError
+                  }
+                />
+                <ForgotPinLink disabled={isSubmitting} />
+              </>
             )}
           </DialogBody>
 

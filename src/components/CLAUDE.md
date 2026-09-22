@@ -7,7 +7,7 @@ components/
   ui/          # Design system. OURS — hand-written wrappers, meant to be edited.
   animate-ui/  # Animate UI primitives (motion + Radix). Registry files, edit sparingly.
   layout/      # App layout: AuthLayout, Sidebar, Logo, ThemeToggle
-  shared/      # Cross-feature: PageHeader, ComingSoonPage, RouteErrorState, PinConfirmDialog (USDX-567), PinField + PinSetupDialog + PinChangeDialog + PinNotSetNotice (USDX-651)
+  shared/      # Cross-feature: PageHeader, ComingSoonPage, RouteErrorState, PinConfirmDialog (USDX-567), PinField + PinSetupDialog + PinChangeDialog + PinNotSetNotice (USDX-651), ForgotPinLink (USDX-696)
   auth/        # Login, Register, Forgot/Reset password, CheckEmail, VerifyEmail
   kyc/         # KYC form: identity + CDD blocks, document dropzones
   mint/        # Mint flow: MintForm, MintReview, ChainSelector
@@ -89,7 +89,14 @@ components/
   "log in again" + a **Log in again** button (`hooks/useRelogin`) in `PinSetupDialog` —
   every create door gets it; after the login `PinSection` takes the intent and opens the
   dialog (USDX-697). `CustodialWalletSection` shows one `PinNotSetNotice` invite when a
-  wallet created on that screen turns ACTIVE on an account without a PIN. The submit handlers of both dialogs
+  wallet created on that screen turns ACTIVE on an account without a PIN.
+- **Forgot PIN (USDX-696, `custodial-wallet.md` §5.1 "Lupa PIN di web")** — `ForgotPinLink`
+  ("Forgot PIN?" → one sentence + **Log in again**, `useRelogin("forgot-pin")`; Cancel leaves
+  no marker) sits under the PIN field of `PinConfirmDialog` (not when there is no PIN;
+  disabled mid-request) and under the current-PIN field of `PinChangeDialog` — still usable
+  during a lockout countdown. After the login `PinSection` takes `forgot-pin` and opens
+  `PinSetupDialog variant="reset"` ("Create a new PIN", `usePin.resetPin`) even when the
+  account has a PIN. The submit handlers of both dialogs
   `stopPropagation()`: a portal's submit still bubbles through the React tree into
   `PinConfirmDialog`'s `<form>`.
 - `mint/MintForm` shows a destination switch (custodial default · another address) only

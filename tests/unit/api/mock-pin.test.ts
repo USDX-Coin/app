@@ -194,8 +194,8 @@ describe("mockChangePin", () => {
 
 // Seam gerbang USDX-698 (pin.yaml § set, keputusan PM 21 Sep 2026; USDX-697):
 // first-time set di akun ber-wallet custodial wajib sesi password-auth segar
-// (< 5 menit). Mati secara bawaan = backend yang hidup hari ini (session-only),
-// jadi semua spec lama tidak berubah. Nyala = backend sesudah 698.
+// (< 5 menit). Nyala secara bawaan sejak 698 tayang di api-dev (dibalik di
+// USDX-696); mati = backend lama (session-only).
 describe("mockSetPin — strict first-time set (backend USDX-698 seam)", () => {
   const WALLET = { hasCustodialWallet: true };
 
@@ -257,7 +257,7 @@ describe("mockSetPin — strict first-time set (backend USDX-698 seam)", () => {
       await expect(mockSetPin({ pin: NEW_PIN }, WALLET)).rejects.toMatchObject({ code: "REAUTH_REQUIRED" });
     });
 
-    test("seam off (default) → the old backend: wallet + stale session still sets, overwrite REAUTH carries no details", async () => {
+    test("seam off → the old backend: wallet + stale session still sets, overwrite REAUTH carries no details", async () => {
       seedMockStrictPinSet(false);
       seedMockSessionFresh(false);
       await expect(mockSetPin({ pin: NEW_PIN }, WALLET)).resolves.toBeUndefined();
@@ -265,11 +265,62 @@ describe("mockSetPin — strict first-time set (backend USDX-698 seam)", () => {
       expect(err).toMatchObject({ code: "REAUTH_REQUIRED", details: undefined });
     });
 
-    test("resetMockPin switches the seam off and forgets the session age", async () => {
+    test("resetMockPin restores the default — seam on — and forgets the session age", async () => {
+      seedMockStrictPinSet(false);
       markMockPasswordAuth();
       resetMockPin();
       seedMockPin(null);
-      await expect(mockSetPin({ pin: NEW_PIN }, WALLET)).resolves.toBeUndefined();
+      await expect(mockSetPin({ pin: NEW_PIN }, WALLET)).rejects.toMatchObject({
+        code: "REAUTH_REQUIRED",
+        details: { pinSet: false },
+      });
+    });
+  });
+});
+
+// Jalur lupa-PIN (USDX-696, custodial-wallet.md §5.1 "Lupa PIN di web"): gerbang
+// overwrite USDX-328 sudah hidup sebelum 698 — menimpa PIN yang ada TANPA PIN lama
+// sah di sesi password-auth segar (< 5 menit), dan login sukses membersihkan
+// lockout `pin` (pin.yaml § set / verify). Tidak bergantung pada seam 698.
+describe("mockSetPin — forgot-PIN overwrite on a fresh session (USDX-328)", () => {
+  describe("positive", () => {
+    test("fresh session + existing PIN + no currentPin → the PIN is replaced; the old one stops working", async () => {
+      seedMockSessionFresh(true);
+      await expect(mockSetPin({ pin: NEW_PIN })).resolves.toBeUndefined();
+      expect(() => verifyMockPin(NEW_PIN)).not.toThrow();
+      expect(() => verifyMockPin(MOCK_PIN)).toThrow(expect.objectContaining({ code: "INVALID_PIN" }));
+    });
+
+    test("a login clears the shared `pin` lockout, and the overwrite resets it too", async () => {
+      for (let i = 0; i < 5; i++) expect(() => verifyMockPin("000000")).toThrow();
+      expect(() => verifyMockPin(MOCK_PIN)).toThrow(expect.objectContaining({ code: "TOO_MANY_ATTEMPTS" }));
+
+      markMockPasswordAuth();
+      await mockSetPin({ pin: NEW_PIN });
+
+      expect(() => verifyMockPin(NEW_PIN)).not.toThrow();
+    });
+  });
+
+  describe("negative", () => {
+    test("stale session + no currentPin → 401 REAUTH_REQUIRED; the PIN is unchanged", async () => {
+      seedMockSessionFresh(false);
+      await expect(mockSetPin({ pin: NEW_PIN })).rejects.toMatchObject({ code: "REAUTH_REQUIRED" });
+      expect(() => verifyMockPin(MOCK_PIN)).not.toThrow();
+    });
+  });
+
+  describe("edge case", () => {
+    test("works with the USDX-698 seam off as well — the overwrite gate is older than 698", async () => {
+      seedMockStrictPinSet(false);
+      seedMockSessionFresh(true);
+      await expect(mockSetPin({ pin: NEW_PIN })).resolves.toBeUndefined();
+    });
+
+    test("a login alone (no PIN set) unlocks the lockout: the correct PIN verifies again", () => {
+      for (let i = 0; i < 5; i++) expect(() => verifyMockPin("000000")).toThrow();
+      markMockPasswordAuth();
+      expect(() => verifyMockPin(MOCK_PIN)).not.toThrow();
     });
   });
 });

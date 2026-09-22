@@ -32,6 +32,13 @@ describe("relogin intent", () => {
       expect(reloginLanding()).toBeNull();
     });
 
+    test("forgot-pin (USDX-696) also lands on /settings and is taken on its own name", () => {
+      markReloginIntent("forgot-pin");
+      expect(reloginLanding()).toBe("/settings");
+      expect(takeReloginIntent("forgot-pin")).toBe(true);
+      expect(reloginLanding()).toBeNull();
+    });
+
     test("reading the landing does not consume the intent (the landing screen does)", () => {
       markReloginIntent("create-pin");
       reloginLanding();
@@ -53,6 +60,12 @@ describe("relogin intent", () => {
   });
 
   describe("edge case", () => {
+    test("taking the other intent leaves the marker in place — create-pin and forgot-pin never swallow each other", () => {
+      markReloginIntent("forgot-pin");
+      expect(takeReloginIntent("create-pin")).toBe(false);
+      expect(takeReloginIntent("forgot-pin")).toBe(true);
+    });
+
     test("lives in sessionStorage (per tab), never in localStorage, and holds only the intent name", () => {
       markReloginIntent("create-pin");
       expect(sessionStorage.getItem(RELOGIN_INTENT_KEY)).toBe("create-pin");

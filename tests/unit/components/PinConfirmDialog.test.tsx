@@ -88,3 +88,36 @@ describe("PinConfirmDialog", () => {
     });
   });
 });
+
+// Pintu lupa-PIN (custodial-wallet.md §5.1 "Lupa PIN di web", USDX-696): tautan
+// di dialog PIN transaksi, termasuk saat terkunci hitung mundur — user yang
+// terkunci justru yang paling butuh jalan keluar.
+describe("PinConfirmDialog — Forgot PIN door", () => {
+  describe("positive", () => {
+    test("the PIN input carries a 'Lupa PIN?' link that opens the log-in-again step", () => {
+      renderDialog();
+      fireEvent.click(screen.getByRole("button", { name: "Lupa PIN?" }));
+      expect(screen.getByTestId("forgot-pin-dialog")).toHaveTextContent("Login ulang");
+    });
+  });
+
+  describe("negative", () => {
+    test("no PIN on the account → nothing to forget, no link (the notice creates one)", () => {
+      renderDialog({ pinNotSet: true });
+      expect(screen.queryByRole("button", { name: "Lupa PIN?" })).not.toBeInTheDocument();
+    });
+  });
+
+  describe("edge case", () => {
+    test("locked out: the link is still there and usable while the input is disabled", () => {
+      renderDialog({ cooldownSeconds: 900 });
+      expect(screen.getByLabelText("PIN 6 digit")).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Lupa PIN?" })).toBeEnabled();
+    });
+
+    test("while the PIN is on its way the link is disabled — leaving mid-request is not offered", () => {
+      renderDialog({ isSubmitting: true });
+      expect(screen.getByRole("button", { name: "Lupa PIN?" })).toBeDisabled();
+    });
+  });
+});

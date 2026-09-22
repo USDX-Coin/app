@@ -66,3 +66,37 @@ describe("PinSection", () => {
     });
   });
 });
+
+// Layar tujuan jalur lupa-PIN (custodial-wallet.md §5.1 "Lupa PIN di web",
+// USDX-696): beda dari create-pin, dialog "Buat PIN baru" justru dibuka saat akun
+// SUDAH punya PIN — itu niat user ini.
+describe("PinSection — forgot-pin landing", () => {
+  describe("positive", () => {
+    test("a forgot-pin intent opens 'Buat PIN baru' on an account that has a PIN, and is used up", async () => {
+      useAuthStore.getState().setPinSet(true);
+      markReloginIntent("forgot-pin");
+      renderSection();
+
+      const dialog = await screen.findByTestId("pin-setup-dialog");
+      expect(dialog).toHaveTextContent("Buat PIN baru");
+      expect(reloginLanding()).toBeNull();
+    });
+  });
+
+  describe("negative", () => {
+    test("an ordinary visit to Settings with a PIN opens nothing", () => {
+      useAuthStore.getState().setPinSet(true);
+      renderSection();
+      expect(screen.getByRole("button", { name: "Ubah PIN" })).toBeInTheDocument();
+      expect(screen.queryByTestId("pin-setup-dialog")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("edge case", () => {
+    test("forgot-pin on an account without a PIN still opens 'Buat PIN baru' (the same /set)", async () => {
+      markReloginIntent("forgot-pin");
+      renderSection();
+      expect(await screen.findByTestId("pin-setup-dialog")).toHaveTextContent("Buat PIN baru");
+    });
+  });
+});

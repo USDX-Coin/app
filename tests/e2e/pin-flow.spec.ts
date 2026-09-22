@@ -4,14 +4,15 @@ import {
   forceEnglish,
   seedAccountPin,
   seedCustodialWallet,
-  seedStrictPinSet,
+  seedFreshPasswordAuth,
   MOCK_CUSTODIAL_WALLET_SUMMARY,
 } from "../helpers/playwright-utils";
 
 // Create the PIN from inside the money paths (USDX-651). A custodial-wallet
 // owner without a PIN reaches the Ringkasan of a transfer / a custodial redeem,
 // sees the "no PIN yet" notice, creates the PIN right there, and approves the
-// same transaction with it — without leaving the flow or logging in again.
+// same transaction with it — without leaving the flow or logging in again
+// (the session is fresh: the flow starts right after a login, USDX-698).
 // The account PIN is the "usdx-mock-pin" seam; `pinSet: false` on the profile
 // copy is what the screens read first.
 const NEW_PIN = "654321";
@@ -41,6 +42,10 @@ test.describe("PIN Flow (create from the money paths)", () => {
   test.beforeEach(async ({ page }) => {
     await forceEnglish(page);
     await seedCustodialWallet(page, { status: "ACTIVE", balance: "1000.00" });
+    // Right after a login: since USDX-698 a wallet owner creates a first PIN only
+    // on a fresh session (the stale-session door is the "PIN Flow (create PIN
+    // needs a fresh login)" block below).
+    await seedFreshPasswordAuth(page);
   });
 
   test.describe("positive", () => {
@@ -194,7 +199,6 @@ async function openTransferSummary(page: Page) {
 test.describe("PIN Flow (create PIN needs a fresh login, backend USDX-698)", () => {
   test.beforeEach(async ({ page }) => {
     await forceEnglish(page);
-    await seedStrictPinSet(page);
     await seedCustodialWallet(page, { status: "ACTIVE", balance: "1000.00" });
   });
 
@@ -274,6 +278,113 @@ test.describe("PIN Flow (create PIN needs a fresh login, backend USDX-698)", () 
       await page.getByTestId("pin-setup-dialog").getByRole("button", { name: "Cancel" }).click();
       await expect(notice).toBeVisible();
       await expect(pin.getByLabel("6-digit PIN")).toHaveCount(0);
+    });
+  });
+});
+
+// Forgot PIN from the money paths (custodial-wallet.md §5.1 "Lupa PIN di web",
+// USDX-696). The account has the demo PIN `MOCK_PIN` ("123456"); the user has
+// forgotten it. "Forgot PIN?" in the PIN dialog → Log in again → Settings with
+// "Create a new PIN" open → the new PIN approves the transfer, the old one is
+// refused. The login clears the shared `pin` lockout, so a locked-out user gets
+// straight back in.
+const OLD_PIN = "123456";
+
+async function openTransferPinDialog(page: Page) {
+  const summary = await openTransferSummary(page);
+  await summary.getByRole("button", { name: "Continue to PIN" }).click();
+  const pin = page.getByRole("dialog").filter({ hasText: "Confirm with PIN" });
+  await expect(pin).toBeVisible();
+  return pin;
+}
+
+async function logInAgainFromForgot(page: Page, pinDialog: ReturnType<Page["getByRole"]>) {
+  await pinDialog.getByRole("button", { name: "Forgot PIN?" }).click();
+  await page.getByTestId("forgot-pin-dialog").getByRole("button", { name: "Log in again" }).click();
+  await expect(page).toHaveURL(/\/login/);
+  await page.getByPlaceholder("name@email.com").fill("demo@usdx.com");
+  await page.getByPlaceholder("Enter your password").fill("Demo1234");
+  await page.getByRole("button", { name: "Login" }).click();
+  await expect(page).toHaveURL(/\/settings$/, { timeout: 15000 });
+}
+
+test.describe("PIN Flow (forgot PIN from the money paths, USDX-696)", () => {
+  test.beforeEach(async ({ page }) => {
+    await forceEnglish(page);
+    await seedCustodialWallet(page, { status: "ACTIVE", balance: "1000.00" });
+    await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
+  });
+
+  test.describe("positive", () => {
+    test("locked out in the transfer PIN dialog → Forgot PIN? → log in again → new PIN → the countdown is gone and the new PIN approves the transfer", async ({
+      page,
+    }) => {
+      const pin = await openTransferPinDialog(page);
+      for (let i = 0; i < 5; i++) {
+        await pin.getByLabel("6-digit PIN").fill("000000");
+        await pin.getByRole("button", { name: "Send", exact: true }).click();
+        await expect(pin.getByText("Wrong PIN. Please try again.")).toBeVisible({ timeout: 10000 });
+      }
+      await pin.getByLabel("6-digit PIN").fill(OLD_PIN);
+      await pin.getByRole("button", { name: "Send", exact: true }).click();
+      await expect(pin.getByText(/Too many wrong attempts/)).toBeVisible({ timeout: 10000 });
+
+      await logInAgainFromForgot(page, pin);
+      const setup = page.getByTestId("pin-setup-dialog");
+      await expect(setup.getByRole("heading", { name: "Create a new PIN" })).toBeVisible({ timeout: 15000 });
+      await setup.getByLabel("New PIN", { exact: true }).fill(NEW_PIN);
+      await setup.getByLabel("Repeat PIN", { exact: true }).fill(NEW_PIN);
+      await setup.getByRole("button", { name: "Save new PIN" }).click();
+      await expect(page.getByText("New PIN saved. Your old PIN no longer works.")).toBeVisible();
+
+      const again = await openTransferPinDialog(page);
+      await expect(again.getByText(/Too many wrong attempts/)).toHaveCount(0);
+      await again.getByLabel("6-digit PIN").fill(OLD_PIN);
+      await again.getByRole("button", { name: "Send", exact: true }).click();
+      await expect(again.getByText("Wrong PIN. Please try again.")).toBeVisible({ timeout: 10000 });
+      await again.getByLabel("6-digit PIN").fill(NEW_PIN);
+      await again.getByRole("button", { name: "Send", exact: true }).click();
+      await expect(page.getByTestId("transfer-result")).toBeVisible({ timeout: 15000 });
+    });
+  });
+
+  test.describe("negative", () => {
+    test("Cancel on the log-in-again step keeps the transfer where it was; the old PIN still approves it", async ({
+      page,
+    }) => {
+      const pin = await openTransferPinDialog(page);
+      await pin.getByRole("button", { name: "Forgot PIN?" }).click();
+      const forgot = page.getByTestId("forgot-pin-dialog");
+      await forgot.getByRole("button", { name: "Cancel" }).click();
+      await expect(forgot).toBeHidden();
+      expect(await page.evaluate(() => sessionStorage.getItem("usdx-relogin-intent"))).toBeNull();
+
+      await expect(pin).toBeVisible();
+      await pin.getByLabel("6-digit PIN").fill(OLD_PIN);
+      await pin.getByRole("button", { name: "Send", exact: true }).click();
+      await expect(page.getByTestId("transfer-result")).toBeVisible({ timeout: 15000 });
+    });
+  });
+
+  test.describe("edge case", () => {
+    test("the custodial redeem PIN dialog has the same door", async ({ page }) => {
+      await page.goto("/redeem");
+      await expect(page.getByText("You will redeem")).toBeVisible({ timeout: 15000 });
+      await page.getByPlaceholder("0", { exact: true }).fill("100");
+      await page.getByRole("combobox", { name: "Select bank" }).click();
+      await page.getByText("BCA", { exact: true }).click();
+      await page.getByPlaceholder("1234567890").fill("1234563210");
+      await page.getByPlaceholder("As printed on the passbook").fill("SINGGIH BRILIAN TARA");
+      await page.getByRole("button", { name: "Redeem", exact: true }).click();
+      const summary = page.getByRole("dialog").filter({ hasText: "Transaction Summary" });
+      await summary.getByRole("button", { name: "Continue to Confirmation" }).click();
+      const pin = page.getByRole("dialog").filter({ hasText: "Confirm with PIN" });
+      await expect(pin).toBeVisible();
+
+      await logInAgainFromForgot(page, pin);
+      await expect(page.getByTestId("pin-setup-dialog").getByRole("heading", { name: "Create a new PIN" })).toBeVisible({
+        timeout: 15000,
+      });
     });
   });
 });

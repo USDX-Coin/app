@@ -61,6 +61,16 @@ describe("useAuth", () => {
         expect(reloginLanding()).toBe("/settings");
       });
 
+      // "Lupa PIN?" → Login ulang (USDX-696, custodial-wallet.md §5.1): login yang
+      // sama mendarat di Pengaturan, tempat dialog "Buat PIN baru" dibuka.
+      test("a forgot-pin re-login intent lands on /settings and is left for that screen to take", async () => {
+        markReloginIntent("forgot-pin");
+        const { result } = renderHook(() => useAuth(), { wrapper: createWrapper() });
+        await loginAsDemo(result);
+        expect(push).toHaveBeenCalledWith("/settings");
+        expect(sessionStorage.getItem("usdx-relogin-intent")).toBe("forgot-pin");
+      });
+
       test("returns loginLoading during mutation", async () => {
         const { result } = renderHook(() => useAuth(), {
           wrapper: createWrapper(),
@@ -108,6 +118,17 @@ describe("useAuth", () => {
     describe("edge case", () => {
       // The marker is read from storage anyone on the page can write: a value that
       // is not a known intent must never become a redirect target.
+      // Hanya LOGIN yang mendarat di layar niat — reset password tidak (keputusan PM
+      // 21 Sep 2026, SOT §5.1): penanda forgot-pin tidak mengubah tujuannya.
+      test("reset password ignores a forgot-pin marker — it lands on /mint", async () => {
+        markReloginIntent("forgot-pin");
+        const { result } = renderHook(() => useAuth(), { wrapper: createWrapper() });
+        await act(async () => {
+          await result.current.resetPassword({ token: "valid-reset-token", newPassword: "NewPass123", confirmNewPassword: "NewPass123" });
+        });
+        expect(push).toHaveBeenCalledWith("/mint");
+      });
+
       test("a foreign value in the re-login marker is ignored — login lands on /mint", async () => {
         sessionStorage.setItem("usdx-relogin-intent", "https://evil.example");
         const { result } = renderHook(() => useAuth(), { wrapper: createWrapper() });

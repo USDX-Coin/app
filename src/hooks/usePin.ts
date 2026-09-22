@@ -43,9 +43,13 @@ export interface PinError {
   relogin?: true;
 }
 
+/** Jalur pemanggil `/set`: first-time set (bawaan) atau lupa-PIN (USDX-696). */
+export type PinSetFlow = "set" | "reset";
+
 // Pemetaan error set/change → kunci i18n + kolom. Diekspor untuk diuji tanpa
 // React. `null` = tidak perlu pesan inline (429 → hitung mundur yang bicara).
-export function mapPinError(error: unknown): PinError | null {
+// `flow` hanya membedakan REAUTH_REQUIRED — kode lain berarti sama di dua jalur.
+export function mapPinError(error: unknown, flow: PinSetFlow = "set"): PinError | null {
   if (!error) return null;
   if (isTooManyAttempts(error)) return null;
   if (isInvalidPin(error)) return { where: "current", key: "pin.errInvalid" };
@@ -56,6 +60,7 @@ export function mapPinError(error: unknown): PinError | null {
   // punya PIN → "gunakan Ubah PIN". Di jalur lupa-PIN (USDX-696) REAUTH_REQUIRED
   // berarti jendela sesi segar 5 menit lewat → login ulang (custodial-wallet.md §5.1).
   if (isReauthRequired(error)) {
+    if (flow === "reset") return { where: "form", key: "pin.errReloginToReset", relogin: true };
     return getReauthPinSet(error) === false
       ? { where: "form", key: "pin.errReloginToCreate", relogin: true }
       : { where: "form", key: "pin.errAlreadySet" };
@@ -97,6 +102,15 @@ export function usePin() {
     onError,
   });
 
+  // Lupa PIN (custodial-wallet.md §5.1): `/set` yang sama, body `{pin}` tanpa
+  // `currentPin` — sesi segar hasil login ulang yang membuktikan pemiliknya.
+  // Mutasi sendiri supaya error-nya dipetakan dengan konteks jalur ini.
+  const resetMutation = useMutation({
+    mutationFn: (pin: string) => apiSetPin({ pin }),
+    onSuccess,
+    onError,
+  });
+
   const changeMutation = useMutation({
     mutationFn: (req: ChangePinRequest) => apiChangePin(req),
     onSuccess,
@@ -108,13 +122,17 @@ export function usePin() {
     pinSet: typeof user?.pinSet === "boolean" ? user.pinSet : null,
     setPin: (pin: string) => setMutation.mutateAsync(pin),
     changePin: (req: ChangePinRequest) => changeMutation.mutateAsync(req),
+    resetPin: (pin: string) => resetMutation.mutateAsync(pin),
     isSettingPin: setMutation.isPending,
     isChangingPin: changeMutation.isPending,
+    isResettingPin: resetMutation.isPending,
     setPinError: mapPinError(setMutation.error),
     changePinError: mapPinError(changeMutation.error),
+    resetPinError: mapPinError(resetMutation.error, "reset"),
     resetErrors: () => {
       setMutation.reset();
       changeMutation.reset();
+      resetMutation.reset();
     },
     /** Sisa detik lockout `pin`; > 0 → tombol simpan terkunci. */
     cooldownSeconds: cooldown.remaining,

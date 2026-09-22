@@ -14,6 +14,12 @@
 // tidak segar → kalimat "login ulang dulu" + tombol Login ulang (useRelogin), yang
 // membawa user kembali ke dialog ini di Pengaturan sesudah login. 429 = hitung
 // mundur di tombol.
+//
+// Varian `reset` = "Buat PIN baru" jalur lupa-PIN (custodial-wallet.md §5.1
+// "Lupa PIN di web", USDX-696): dibuka di Pengaturan sesudah login ulang, akun
+// biasanya SUDAH punya PIN, body sama (`{pin}` tanpa `currentPin`) — sesi segar
+// yang membuktikan pemiliknya. REAUTH_REQUIRED di varian ini hanya satu arti:
+// jendela 5 menit lewat → login ulang lagi dengan niat `forgot-pin`.
 
 import { useState } from "react";
 import { KeyRound } from "lucide-react";
@@ -40,11 +46,19 @@ export interface PinSetupDialogProps {
   onOpenChange: (open: boolean) => void;
   /** Dipanggil setelah PIN tersimpan dan dialog ditutup. */
   onCreated?: () => void;
+  /** `create` = first-time set (bawaan); `reset` = Buat PIN baru, jalur lupa-PIN. */
+  variant?: "create" | "reset";
 }
 
-export function PinSetupDialog({ open, onOpenChange, onCreated }: PinSetupDialogProps) {
+export function PinSetupDialog({ open, onOpenChange, onCreated, variant = "create" }: PinSetupDialogProps) {
   const { t, lang } = useLang();
-  const { setPin, isSettingPin, setPinError, resetErrors, cooldownSeconds } = usePin();
+  const pinApi = usePin();
+  const { resetErrors, cooldownSeconds } = pinApi;
+  const isReset = variant === "reset";
+  const save = isReset ? pinApi.resetPin : pinApi.setPin;
+  const isSettingPin = isReset ? pinApi.isResettingPin : pinApi.isSettingPin;
+  const setPinError = isReset ? pinApi.resetPinError : pinApi.setPinError;
+  const copy = isReset ? "pin.reset" : "pin.setup";
   const relogin = useRelogin();
   const [pin, setPinValue] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -72,7 +86,7 @@ export function PinSetupDialog({ open, onOpenChange, onCreated }: PinSetupDialog
   function handleRelogin() {
     reset();
     onOpenChange(false);
-    relogin("create-pin");
+    relogin(isReset ? "forgot-pin" : "create-pin");
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -83,8 +97,8 @@ export function PinSetupDialog({ open, onOpenChange, onCreated }: PinSetupDialog
     setTouched(true);
     if (!isPinShape(pin) || confirm !== pin || isSettingPin || locked) return;
     try {
-      await setPin(pin);
-      toast.success(t("pin.setup.success"));
+      await save(pin);
+      toast.success(t(`${copy}.success`));
       reset();
       onOpenChange(false);
       onCreated?.();
@@ -102,8 +116,8 @@ export function PinSetupDialog({ open, onOpenChange, onCreated }: PinSetupDialog
               <KeyRound className="size-4" />
             </span>
             <div className="flex min-w-0 flex-col">
-              <DialogTitle>{t("pin.setup.title")}</DialogTitle>
-              <DialogDescription>{t("pin.setup.description")}</DialogDescription>
+              <DialogTitle>{t(`${copy}.title`)}</DialogTitle>
+              <DialogDescription>{t(`${copy}.description`)}</DialogDescription>
             </div>
           </DialogHeader>
 
@@ -165,7 +179,7 @@ export function PinSetupDialog({ open, onOpenChange, onCreated }: PinSetupDialog
                 duration: formatDuration(cooldownSeconds, lang),
               })}
             >
-              {t("pin.setup.submit")}
+              {t(`${copy}.submit`)}
             </Button>
           </DialogFooter>
         </form>

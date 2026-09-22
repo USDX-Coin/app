@@ -5,7 +5,7 @@ import {
   forceIndonesian,
   seedAccountPin,
   seedCustodialWallet,
-  seedStrictPinSet,
+  seedFreshPasswordAuth,
   MOCK_CUSTODIAL_WALLET_SUMMARY,
   MOCK_PIN,
   VIEWPORTS,
@@ -51,6 +51,8 @@ test.describe("Settings — transaction PIN", () => {
       await forceEnglish(page);
       await seedAccountPin(page, null);
       await seedCustodialWallet(page, { status: "ACTIVE", balance: "1000.00" });
+      // Right after a login — a wallet owner's first PIN needs a fresh session (USDX-698).
+      await seedFreshPasswordAuth(page);
       await loginViaStorage(page, { pinSet: false, custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
       await gotoSettings(page);
 
@@ -203,7 +205,6 @@ async function loginThroughForm(page: Page) {
 test.describe("Settings — create PIN needs a fresh login (backend USDX-698)", () => {
   test.beforeEach(async ({ page }) => {
     await forceEnglish(page);
-    await seedStrictPinSet(page);
     await seedAccountPin(page, null);
   });
 
@@ -266,6 +267,154 @@ test.describe("Settings — create PIN needs a fresh login (backend USDX-698)", 
       await page.reload();
       await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible({ timeout: 15000 });
       await expect(page.getByTestId("pin-setup-dialog")).toHaveCount(0);
+    });
+  });
+});
+
+// Forgot PIN (custodial-wallet.md §5.1 "Lupa PIN di web", USDX-696): "Forgot PIN?"
+// → Log in again → Settings with "Create a new PIN" open → POST /auth/pin/set {pin}
+// with no current PIN, allowed because the login just minted a fresh session.
+// The account has the demo PIN `MOCK_PIN`; `loginViaStorage` = a stale session.
+async function forgotFromChange(page: Page) {
+  const dialog = await openChange(page);
+  await dialog.getByRole("button", { name: "Forgot PIN?" }).click();
+  const confirm = page.getByTestId("forgot-pin-dialog");
+  await expect(confirm).toContainText("Log in again, then create a new PIN without needing your old one.");
+  return confirm;
+}
+
+async function createNewPin(page: Page, pin = NEW_PIN) {
+  const dialog = page.getByTestId("pin-setup-dialog");
+  await expect(dialog.getByRole("heading", { name: "Create a new PIN" })).toBeVisible({ timeout: 15000 });
+  await dialog.getByLabel("New PIN", { exact: true }).fill(pin);
+  await dialog.getByLabel("Repeat PIN", { exact: true }).fill(pin);
+  await dialog.getByRole("button", { name: "Save new PIN" }).click();
+  return dialog;
+}
+
+test.describe("Settings — forgot PIN (USDX-696)", () => {
+  test.beforeEach(async ({ page }) => {
+    await forceEnglish(page);
+    await loginViaStorage(page);
+  });
+
+  test.describe("positive", () => {
+    test("Change PIN → Forgot PIN? → log in again → Create a new PIN → saved; the old PIN no longer works", async ({
+      page,
+    }) => {
+      await gotoSettings(page);
+      const confirm = await forgotFromChange(page);
+      await confirm.getByRole("button", { name: "Log in again" }).click();
+      await loginThroughForm(page);
+
+      await expect(page).toHaveURL(/\/settings$/, { timeout: 15000 });
+      const dialog = await createNewPin(page);
+      await expect(page.getByText("New PIN saved. Your old PIN no longer works.")).toBeVisible();
+      await expect(dialog).toBeHidden();
+      await expect(pinRow(page).getByText("PIN set")).toBeVisible();
+
+      // The old PIN is refused by Change PIN; the new one is the account PIN now.
+      const change = await openChange(page);
+      await fillChange(change, MOCK_PIN, "111111");
+      await expect(change.getByText("Wrong PIN. Please try again.")).toBeVisible({ timeout: 10000 });
+      await fillChange(change, NEW_PIN, "111111");
+      await expect(page.getByText("PIN changed.")).toBeVisible();
+    });
+
+    test("locked out by five wrong PINs: the countdown dialog still offers Forgot PIN?, and the login clears the lockout", async ({
+      page,
+    }) => {
+      await gotoSettings(page);
+      const change = await openChange(page);
+      for (let i = 0; i < 5; i++) {
+        await fillChange(change, "000000");
+        await expect(change.getByText("Wrong PIN. Please try again.")).toBeVisible({ timeout: 10000 });
+      }
+      await fillChange(change, MOCK_PIN);
+      await expect(change.getByRole("button", { name: /Try again in 15 minutes/ })).toBeDisabled({ timeout: 10000 });
+
+      await change.getByRole("button", { name: "Forgot PIN?" }).click();
+      await page.getByTestId("forgot-pin-dialog").getByRole("button", { name: "Log in again" }).click();
+      await loginThroughForm(page);
+      await createNewPin(page);
+      await expect(page.getByText("New PIN saved. Your old PIN no longer works.")).toBeVisible();
+
+      // No countdown left: the new PIN works at once.
+      const again = await openChange(page);
+      await fillChange(again, NEW_PIN, "111111");
+      await expect(page.getByText("PIN changed.")).toBeVisible();
+    });
+  });
+
+  test.describe("negative", () => {
+    test("the 5-minute window has passed → 'log in again, then create your new PIN', never 'Change PIN'; the PIN is unchanged", async ({
+      page,
+    }) => {
+      await gotoSettings(page);
+      await (await forgotFromChange(page)).getByRole("button", { name: "Log in again" }).click();
+      await loginThroughForm(page);
+      await expect(page.getByTestId("pin-setup-dialog")).toBeVisible({ timeout: 15000 });
+      // The login was six minutes ago.
+      await page.evaluate(() =>
+        localStorage.setItem("usdx-mock-password-auth-at", String(Date.now() - 6 * 60 * 1000)),
+      );
+
+      const dialog = await createNewPin(page);
+      const error = dialog.getByTestId("pin-setup-error");
+      await expect(error).toContainText(
+        "For your security, log in again first, then create your new PIN within 5 minutes.",
+      );
+      await expect(error).not.toContainText("Change PIN");
+      expect(await page.evaluate(() => localStorage.getItem("usdx-mock-pin"))).toBeNull();
+
+      await error.getByRole("button", { name: "Log in again" }).click();
+      expect(await page.evaluate(() => sessionStorage.getItem("usdx-relogin-intent"))).toBe("forgot-pin");
+      await loginThroughForm(page);
+      await createNewPin(page);
+      await expect(page.getByText("New PIN saved. Your old PIN no longer works.")).toBeVisible();
+    });
+  });
+
+  test.describe("edge case", () => {
+    test("cancelling at either step changes nothing and leaves no marker; a plain login opens no dialog", async ({
+      page,
+    }) => {
+      await gotoSettings(page);
+      const confirm = await forgotFromChange(page);
+      await confirm.getByRole("button", { name: "Cancel" }).click();
+      await expect(confirm).toBeHidden();
+      expect(await page.evaluate(() => sessionStorage.getItem("usdx-relogin-intent"))).toBeNull();
+      await expect(page).toHaveURL(/\/settings$/);
+
+      // Second step: land on "Create a new PIN", then cancel it.
+      await page.getByTestId("pin-change-dialog").getByRole("button", { name: "Forgot PIN?" }).click();
+      await page.getByTestId("forgot-pin-dialog").getByRole("button", { name: "Log in again" }).click();
+      await loginThroughForm(page);
+      const dialog = page.getByTestId("pin-setup-dialog");
+      await expect(dialog.getByRole("heading", { name: "Create a new PIN" })).toBeVisible({ timeout: 15000 });
+      await dialog.getByRole("button", { name: "Cancel" }).click();
+      await expect(dialog).toBeHidden();
+      expect(await page.evaluate(() => sessionStorage.getItem("usdx-relogin-intent"))).toBeNull();
+      expect(await page.evaluate(() => localStorage.getItem("usdx-mock-pin"))).toBeNull();
+
+      await page.reload();
+      await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible({ timeout: 15000 });
+      await expect(page.getByTestId("pin-setup-dialog")).toHaveCount(0);
+    });
+
+    test("the marker does not cross tabs: a login in another tab lands on /mint with no dialog", async ({
+      page,
+      context,
+    }) => {
+      await gotoSettings(page);
+      await (await forgotFromChange(page)).getByRole("button", { name: "Log in again" }).click();
+      await expect(page).toHaveURL(/\/login/);
+
+      const other = await context.newPage();
+      await other.goto("/login");
+      await loginThroughForm(other);
+      await expect(other).toHaveURL(/\/mint$/, { timeout: 15000 });
+      await expect(other.getByTestId("pin-setup-dialog")).toHaveCount(0);
     });
   });
 });

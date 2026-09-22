@@ -22,7 +22,7 @@ import type { ChangePinRequest, SetPinRequest } from "./types";
 
 const PIN_KEY = "usdx-mock-pin";
 // Seam gerbang backend USDX-698 (lihat § set di bawah) + umur sesi password-auth.
-const STRICT_SET_KEY = "usdx-mock-pin-strict-set";
+const LEGACY_SET_KEY = "usdx-mock-pin-legacy-set";
 const PASSWORD_AUTH_AT_KEY = "usdx-mock-password-auth-at";
 // Jendela "sesi segar" pin.yaml § set (sama dengan backend).
 const FRESH_SESSION_MS = 5 * 60 * 1000;
@@ -39,7 +39,7 @@ interface MockPinRecord {
 
 let pinMemory: MockPinRecord | null = null;
 let pinFailures = 0;
-let strictSetMemory = false;
+let strictSetMemory = true;
 let passwordAuthAtMemory: number | null = null;
 
 function delay(ms: number): Promise<void> {
@@ -79,31 +79,32 @@ export function seedMockPin(pin: string | null): void {
   writeRecord({ pin });
 }
 
-// Kembalikan ke bawaan (PIN `MOCK_PIN`, lockout bersih, gerbang 698 mati, umur
+// Kembalikan ke bawaan (PIN `MOCK_PIN`, lockout bersih, gerbang 698 nyala, umur
 // sesi dilupakan).
 export function resetMockPin(): void {
   writeRecord(null);
   pinFailures = 0;
-  seedMockStrictPinSet(false);
+  seedMockStrictPinSet(true);
   writePasswordAuthAt(null);
 }
 
 // ── Seam gerbang first-time set (backend USDX-698, USDX-697) ────────────────
-// Mati (bawaan) = backend yang hidup hari ini: first-time set session-only, 401
-// REAUTH_REQUIRED tanpa `details`. Nyala = backend sesudah 698: first-time set di
-// akun ber-wallet custodial wajib sesi password-auth segar, dan REAUTH_REQUIRED
-// membawa `details.pinSet`. Disimpan di localStorage supaya Playwright bisa
-// menyalakannya (`seedStrictPinSet`).
+// Nyala (bawaan sejak 698 tayang di api-dev, dibalik di USDX-696) = backend
+// sekarang: first-time set di akun ber-wallet custodial wajib sesi password-auth
+// segar, dan REAUTH_REQUIRED membawa `details.pinSet`. Mati = backend lama:
+// first-time set session-only, 401 REAUTH_REQUIRED tanpa `details` — penanda
+// "usdx-mock-pin-legacy-set" di localStorage supaya Playwright bisa memerankannya
+// (`seedLegacyPinSet`).
 export function seedMockStrictPinSet(on: boolean): void {
   strictSetMemory = on;
   if (typeof localStorage === "undefined") return;
-  if (on) localStorage.setItem(STRICT_SET_KEY, "1");
-  else localStorage.removeItem(STRICT_SET_KEY);
+  if (on) localStorage.removeItem(LEGACY_SET_KEY);
+  else localStorage.setItem(LEGACY_SET_KEY, "1");
 }
 
 function isStrictPinSet(): boolean {
   if (typeof localStorage === "undefined") return strictSetMemory;
-  return localStorage.getItem(STRICT_SET_KEY) !== null;
+  return localStorage.getItem(LEGACY_SET_KEY) === null;
 }
 
 function writePasswordAuthAt(at: number | null) {
@@ -120,10 +121,12 @@ function readPasswordAuthAt(): number | null {
   return Number.isFinite(at) ? at : null;
 }
 
-// Login / reset password berhasil = sesi hasil password-auth (mock-api). Sesi
-// dari `loginViaStorage` Playwright tidak pernah lewat sini → basi.
+// Login / reset password / verifikasi email berhasil = sesi "segar" pin.yaml § set
+// (mock-api). Sesi dari `loginViaStorage` Playwright tidak pernah lewat sini → basi. Login sukses
+// juga membersihkan lockout `pin` (pin.yaml § verify — jalan keluar lupa-PIN).
 export function markMockPasswordAuth(at: number = Date.now()): void {
   writePasswordAuthAt(at);
+  pinFailures = 0;
 }
 
 // Unit test: sesi segar (password-auth barusan) atau basi.
@@ -171,14 +174,13 @@ export function requireAndVerifyMockPin(pin: string | undefined): void {
 
 // ── POST /api/v2/auth/pin/set (pin.yaml § set, USDX-651) ─────────────────────
 // First-time set: cukup sesi valid, `currentPin` diabaikan. Menimpa PIN yang
-// SUDAH ada butuh re-auth (USDX-328): sesi password-auth segar (< 5 menit) ATAU
-// `currentPin` benar. Gerbang 698 mati (bawaan): mock tidak memakai jam sesi,
-// hanya jalur `currentPin` yang diperankan — tanpa currentPin → 401
-// REAUTH_REQUIRED; salah → 401 INVALID_PIN (attempt dihitung, lockout-gated);
-// benar → PIN diganti. Gerbang nyala (`seedMockStrictPinSet`): sesi segar
-// dicek dulu (menimpa tanpa PIN lama = jalur lupa-PIN), first-time set di akun
-// ber-wallet custodial tanpa sesi segar → REAUTH_REQUIRED `details.pinSet:
-// false`, dan REAUTH_REQUIRED overwrite membawa `details.pinSet: true`.
+// SUDAH ada butuh re-auth (USDX-328): sesi password-auth segar (< 5 menit) dicek
+// dulu (menimpa tanpa PIN lama = jalur lupa-PIN, USDX-696), baru `currentPin` —
+// tanpa currentPin → 401 REAUTH_REQUIRED; salah → 401 INVALID_PIN (attempt
+// dihitung, lockout-gated); benar → PIN diganti. Gerbang 698 nyala
+// (`seedMockStrictPinSet`): first-time set di akun ber-wallet custodial tanpa sesi
+// segar → REAUTH_REQUIRED `details.pinSet: false`, dan REAUTH_REQUIRED overwrite
+// membawa `details.pinSet: true`.
 // Sukses selalu mereset lockout `pin`. Bentuk dicek dulu → 422 tanpa membakar
 // attempt.
 //
@@ -193,7 +195,7 @@ export async function mockSetPin(
     throw new ApiError(422, "VALIDATION_ERROR", "PIN harus 6 digit");
   }
   const strict = isStrictPinSet();
-  const fresh = strict && isSessionFresh();
+  const fresh = isSessionFresh();
   if (currentMockPin() === null) {
     if (strict && hasCustodialWallet && !fresh) {
       throw new ApiError(401, "REAUTH_REQUIRED", "Buat PIN butuh login ulang", { pinSet: false });

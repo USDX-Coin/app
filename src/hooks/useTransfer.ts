@@ -29,10 +29,11 @@
 // state lokal yang harus disinkronkan.
 
 import { useCallback, useMemo } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTransferStore } from "@/stores/transferStore";
 import { usePinSetCorrection } from "@/hooks/usePinSetCorrection";
 import { useCustodialWallet } from "@/hooks/useCustodialWallet";
+import { WALLET_TRANSFERS_KEY } from "@/hooks/useWalletTransfers";
 import { useCooldown, DEFAULT_COOLDOWN_SECONDS } from "@/hooks/useCooldown";
 import { transferCustodial } from "@/lib/api/wallet-api";
 import {
@@ -145,6 +146,7 @@ export function useTransfer(
   const wallet = useCustodialWallet();
   const pinCooldown = useCooldown();
   const setPinSet = usePinSetCorrection();
+  const queryClient = useQueryClient();
 
   const parsedAmount = parseAmount(store.amount);
   const addressError = store.to ? validateTransferAddress(store.to, wallet.address) : null;
@@ -183,6 +185,10 @@ export function useTransfer(
       store.setResult(accepted);
       // Saldo turun begitu tx masuk blok; segarkan di latar.
       wallet.invalidate();
+      // Riwayat yang dibuka < 15 s lalu masih dianggap segar — tanpa ini tombol
+      // "Riwayat transfer" di layar hasil menampilkan daftar lama, bahkan
+      // "Belum ada transfer" untuk transfer pertama (review app#79, USDX-701).
+      void queryClient.invalidateQueries({ queryKey: WALLET_TRANSFERS_KEY });
     },
     onError: (error) => {
       // Fakta akun, bukan state mutasi: salinan profil yang dikoreksi, supaya tetap

@@ -16,7 +16,9 @@ import { listWalletTransfers } from "@/lib/api/wallet-api";
 import { getRateLimitSeconds, isRateLimited } from "@/lib/api/errors";
 import type { ListWalletTransfersParams } from "@/lib/api/types";
 
-const WALLET_TRANSFERS_KEY = ["wallet-transfers"];
+// Diinvalidasi useTransfer (sesudah broadcast) dan useWalletTransferTracker (saat final),
+// supaya daftar tidak pernah tertinggal dari transfer yang baru dikirim (review app#79).
+export const WALLET_TRANSFERS_KEY = ["wallet-transfers"];
 export const RATE_LIMIT_RETRIES = 2;
 
 export function useWalletTransfers(params: ListWalletTransfersParams = {}) {

@@ -3,9 +3,10 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import { createWrapper, createCachingWrapper } from "../../helpers/test-utils";
 import { useTransfer, mapTransferError } from "@/hooks/useTransfer";
 import { useSession } from "@/hooks/useSession";
+import { useWalletTransfers } from "@/hooks/useWalletTransfers";
 import { useTransferStore } from "@/stores/transferStore";
 import { useAuthStore } from "@/stores/authStore";
-import { getCustodialWallet, transferCustodial } from "@/lib/api/wallet-api";
+import { getCustodialWallet, listWalletTransfers, transferCustodial } from "@/lib/api/wallet-api";
 import { getMe } from "@/lib/api/auth-api";
 import { ApiError } from "@/lib/api/client";
 import type { CustodialWallet, TransferAccepted, User } from "@/types";
@@ -14,8 +15,10 @@ vi.mock("@/lib/api/wallet-api", () => ({
   getCustodialWallet: vi.fn(),
   createCustodialWallet: vi.fn(),
   transferCustodial: vi.fn(),
+  listWalletTransfers: vi.fn(),
 }));
 const getWalletMock = vi.mocked(getCustodialWallet);
+const listTransfersMock = vi.mocked(listWalletTransfers);
 const transferMock = vi.mocked(transferCustodial);
 vi.mock("@/lib/api/auth-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api/auth-api")>()),
@@ -83,6 +86,7 @@ beforeEach(() => {
   transferMock.mockReset();
   transferMock.mockResolvedValue(ACCEPTED);
   getMeMock.mockReset();
+  listTransfersMock.mockReset();
 });
 
 describe("useTransfer", () => {
@@ -146,6 +150,27 @@ describe("useTransfer", () => {
         expect(s.step).toBe("done");
         expect(s.result).toEqual(ACCEPTED);
         expect(s.idempotencyKey).toBeNull(); // intent finished
+      });
+
+      test("a broadcast refreshes the cached transfer history — the new row shows at once (review app#79)", async () => {
+        // The history was opened moments ago and is still "fresh" (staleTime 15 s).
+        listTransfersMock.mockResolvedValue({ data: [], metadata: { page: 1, limit: 10, total: 0 } });
+        fillValidForm();
+        const Wrapper = createCachingWrapper();
+        const { result } = renderHook(
+          () => ({ transfer: useTransfer(t), history: useWalletTransfers({ page: 1, take: 10 }) }),
+          { wrapper: Wrapper },
+        );
+        await waitFor(() => expect(result.current.history.isSuccess).toBe(true));
+        await waitFor(() => expect(result.current.transfer.balanceUsdx).toBe(100));
+        expect(listTransfersMock).toHaveBeenCalledTimes(1);
+
+        await act(async () => {
+          await result.current.transfer.submitWithPin("123456");
+        });
+
+        // Without the invalidation the fresh cache is kept and the empty list stays.
+        await waitFor(() => expect(listTransfersMock).toHaveBeenCalledTimes(2));
       });
 
       test("the wallet balance is re-read after a broadcast", async () => {

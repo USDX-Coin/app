@@ -44,7 +44,7 @@ import { PagePagination } from "@/components/shared/PagePagination";
 import { TransferStatusBadge } from "@/components/transfer/TransferStatusBadge";
 import type { WalletTransfer } from "@/types";
 
-export const TRANSFER_HISTORY_PAGE_SIZE = 10;
+const TRANSFER_HISTORY_PAGE_SIZE = 10;
 
 type ListState = "data" | "empty" | "error" | "offline";
 

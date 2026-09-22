@@ -10,7 +10,7 @@ import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { listWalletTransfers } from "@/lib/api/wallet-api";
 import type { ListWalletTransfersParams } from "@/lib/api/types";
 
-export const WALLET_TRANSFERS_KEY = ["wallet-transfers"];
+const WALLET_TRANSFERS_KEY = ["wallet-transfers"];
 
 export function useWalletTransfers(params: ListWalletTransfersParams = {}) {
   return useQuery({

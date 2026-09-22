@@ -37,7 +37,7 @@ function isDeadId(error: unknown): boolean {
   return isWalletTransferNotFound(error) || isValidationError(error);
 }
 
-export function walletTransferKey(id: string | null) {
+function walletTransferKey(id: string | null) {
   return ["wallet-transfer", id];
 }
 

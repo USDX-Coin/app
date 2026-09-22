@@ -33,7 +33,7 @@ export type MockTransferOutcome =
   | "PENDING"
   | (string & {});
 
-export interface MockTransferRow extends WalletTransfer {
+interface MockTransferRow extends WalletTransfer {
   userId: string;
   // Epoch ms saat "watcher" memutuskan `outcome`. Null = sudah final / tak berubah.
   settleAt: number | null;

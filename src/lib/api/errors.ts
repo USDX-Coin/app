@@ -177,6 +177,13 @@ export function isWalletNotFound(error: unknown): boolean {
   return isApiError(error) && error.status === 404 && error.code === "WALLET_NOT_FOUND";
 }
 
+// 404 WALLET_TRANSFER_NOT_FOUND — GET /wallet/transfers/{id} (USDX-701): id basi,
+// salah, atau milik user lain (dijawab sama persis). Bukan kegagalan sistem — FE
+// tampilkan pesan netral + jalan kembali ke riwayat.
+export function isWalletTransferNotFound(error: unknown): boolean {
+  return isApiError(error) && error.status === 404 && error.code === "WALLET_TRANSFER_NOT_FOUND";
+}
+
 // 409 WALLET_ALREADY_EXISTS — POST /wallet saat wallet sudah ACTIVE. Satu user =
 // satu wallet; FE arahkan ke GET, bukan menawarkan onboarding lagi.
 export function isWalletAlreadyExists(error: unknown): boolean {

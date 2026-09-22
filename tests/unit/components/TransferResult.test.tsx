@@ -129,6 +129,19 @@ describe("TransferResult (tracker after send)", () => {
       expect(screen.queryByText("SETTLING")).not.toBeInTheDocument();
     });
 
+    test("a 202 without id (backend older than USDX-576) stays 'waiting' with the explorer link, no request", async () => {
+      // `TransferAccepted.id` is additive and not `required` in wallet.yaml.
+      const { id: _drop, ...legacy } = ACCEPTED;
+      void _drop;
+      renderResult(legacy as TransferAccepted);
+      await act(() => vi.advanceTimersByTimeAsync(TRANSFER_POLL_MS * 2));
+
+      expect(getMock).not.toHaveBeenCalled();
+      expect(statusOf()).toBe("PENDING");
+      expect(screen.getByRole("link", { name: "Lihat di explorer" })).toBeInTheDocument();
+      expect(screen.queryByTestId("transfer-status-check-failed")).not.toBeInTheDocument();
+    });
+
     test("a 200 replay with the same id keeps ONE tracker on that id", async () => {
       getMock.mockResolvedValue(detail());
       const { rerenderWith } = renderResult();

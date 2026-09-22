@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { LanguageProvider } from "@/providers/LanguageProvider";
 import { createWrapper } from "../../helpers/test-utils";
 import { ForgotPinLink } from "@/components/shared/ForgotPinLink";
@@ -43,7 +43,10 @@ describe("ForgotPinLink", () => {
       fireEvent.click(screen.getByRole("button", { name: "Lupa PIN?" }));
 
       const dialog = screen.getByRole("dialog");
-      expect(dialog).toHaveTextContent("Login ulang, lalu buat PIN baru tanpa PIN lama.");
+      // Satu kalimat (custodial-wallet.md §5.1; tiket: "dialog konfirmasi satu kalimat").
+      const sentence = within(dialog).getByText(/^Login ulang, lalu buat PIN baru/).textContent ?? "";
+      expect(sentence).toBe("Login ulang, lalu buat PIN baru tanpa perlu PIN lama.");
+      expect(sentence.match(/[.!?]/g)).toHaveLength(1);
       fireEvent.click(screen.getByRole("button", { name: "Login ulang" }));
 
       expect(reloginLanding()).toBe("/settings");

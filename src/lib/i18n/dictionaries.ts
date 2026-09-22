@@ -415,7 +415,7 @@ const en: Dict = {
   "pin.relogin": "Log in again",
   "pin.forgot.link": "Forgot PIN?",
   "pin.forgot.title": "Forgot your PIN?",
-  "pin.forgot.description": "Log in again, then create a new PIN without your old one. The new PIN replaces the old one right away.",
+  "pin.forgot.description": "Log in again, then create a new PIN without needing your old one.",
   "pin.inviteAfterWallet": "Your wallet is ready. Create your PIN now so you can send and withdraw from it.",
   "pin.errFailed": "Could not save the PIN. Please try again.",
   // The PIN_NOT_SET notice on the transfer/redeem path carries this button.
@@ -1465,7 +1465,7 @@ const id: Dict = {
   "pin.relogin": "Login ulang",
   "pin.forgot.link": "Lupa PIN?",
   "pin.forgot.title": "Lupa PIN?",
-  "pin.forgot.description": "Login ulang, lalu buat PIN baru tanpa PIN lama. PIN baru langsung menggantikan yang lama.",
+  "pin.forgot.description": "Login ulang, lalu buat PIN baru tanpa perlu PIN lama.",
   "pin.inviteAfterWallet": "Wallet Anda siap. Buat PIN sekarang supaya bisa mengirim dan mencairkan dari wallet ini.",
   "pin.errFailed": "PIN tidak tersimpan. Coba lagi.",
   "pin.createAction": "Buat PIN",

@@ -279,7 +279,7 @@ async function forgotFromChange(page: Page) {
   const dialog = await openChange(page);
   await dialog.getByRole("button", { name: "Forgot PIN?" }).click();
   const confirm = page.getByTestId("forgot-pin-dialog");
-  await expect(confirm).toContainText("Log in again, then create a new PIN without your old one.");
+  await expect(confirm).toContainText("Log in again, then create a new PIN without needing your old one.");
   return confirm;
 }
 

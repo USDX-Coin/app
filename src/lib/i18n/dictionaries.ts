@@ -440,9 +440,9 @@ const en: Dict = {
   "transfer.errInProgress": "This transfer is still being processed. Wait a moment, then press Send again — it won't be sent twice.",
   "transfer.errGate": "Your account isn't eligible to send yet.",
   "transfer.errGeneric": "Couldn't send the transfer. Please try again.",
-  // transfer custodial — screen copy (USDX-567). "Sent to the network", never
-  // "successful": 202 is proof of broadcast, not of on-chain settlement, and
-  // there is no endpoint yet to watch the confirmation (USDX-577).
+  // transfer custodial — screen copy (USDX-567). 202 is proof of broadcast, not of
+  // on-chain settlement: "successful" appears only once the tracker reads CONFIRMED
+  // from GET /api/v2/wallet/transfers/{id} (USDX-701, keys further down).
   "transfer.from": "From",
   "transfer.myWallet": "My custodial wallet",
   "transfer.balance": "Balance",
@@ -1519,9 +1519,9 @@ const id: Dict = {
   "transfer.errInProgress": "Transfer ini masih diproses. Tunggu sebentar, lalu tekan Kirim lagi — tidak akan terkirim dua kali.",
   "transfer.errGate": "Akun Anda belum bisa mengirim USDX.",
   "transfer.errGeneric": "Gagal mengirim transfer. Coba lagi.",
-  // transfer custodial — teks layar (USDX-567). "Dikirim ke jaringan", bukan
-  // "berhasil": 202 adalah bukti broadcast, bukan bukti settle on-chain, dan
-  // belum ada endpoint pemantau konfirmasinya (USDX-577).
+  // transfer custodial — teks layar (USDX-567). 202 adalah bukti broadcast, bukan
+  // bukti settle on-chain: "berhasil" baru muncul saat tracker membaca CONFIRMED dari
+  // GET /api/v2/wallet/transfers/{id} (USDX-701, kunci di bawah).
   "transfer.from": "Dari",
   "transfer.myWallet": "Wallet custodial saya",
   "transfer.balance": "Saldo",

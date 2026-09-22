@@ -522,6 +522,10 @@ export interface ConsumerTransaction {
   netPayoutIdr: string | null; // REDEEM: IDR received (gross − fee). Null for mint.
   effectiveRate: string; // snapshot rate (buy for mint, sell for redeem)
   chain: string;
+  // MINT: mint destination; REDEEM: burn source. Stored as created — casing is not
+  // guaranteed (a mint can be all lowercase), so compare case-insensitively.
+  // Additive (USDX-645): a backend without it → no custodial marker (USDX-653).
+  userAddress?: string;
   paymentStatus: MintPaymentStatus | null; // MINT only. Null for redeem.
   status: MintOrderStatus | RedeemStatus; // MINT → MintOrderStatus; REDEEM → RedeemStatus
   txHash: string | null; // MINT: on-chain tx. REDEEM: burn tx.

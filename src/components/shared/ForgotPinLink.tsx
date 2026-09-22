@@ -25,7 +25,12 @@ import { Button } from "@/components/ui/button";
 import { useRelogin } from "@/hooks/useRelogin";
 import { useLang } from "@/providers/LanguageProvider";
 
-export function ForgotPinLink() {
+export interface ForgotPinLinkProps {
+  /** Mis. selama PIN sedang dikirim — meninggalkan permintaan di tengah jalan tidak ditawarkan. */
+  disabled?: boolean;
+}
+
+export function ForgotPinLink({ disabled = false }: ForgotPinLinkProps) {
   const { t } = useLang();
   const relogin = useRelogin();
   const [open, setOpen] = useState(false);
@@ -38,6 +43,7 @@ export function ForgotPinLink() {
         size="sm"
         className="self-start px-0"
         data-testid="forgot-pin-link"
+        disabled={disabled}
         onClick={() => setOpen(true)}
       >
         {t("pin.forgot.link")}

@@ -280,6 +280,27 @@ describe("useTransfer", () => {
         10_000,
       );
 
+      test("a lost 202 then a 200 replay with the same key lands on the SAME tracker id (USDX-701)", async () => {
+        fillValidForm();
+        // First attempt: broadcast happened but the answer never arrived (network drop).
+        transferMock
+          .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+          .mockResolvedValueOnce({ ...ACCEPTED }); // 200 replay — identical, same id
+        const { result } = await renderReady();
+        await act(async () => {
+          await result.current.submitWithPin("123456");
+        });
+        expect(useTransferStore.getState().step).toBe("form");
+
+        await act(async () => {
+          await result.current.submitWithPin("123456");
+        });
+        expect(transferMock.mock.calls[1][1]).toBe(transferMock.mock.calls[0][1]);
+        const s = useTransferStore.getState();
+        expect(s.step).toBe("done");
+        expect(s.result?.id).toBe(ACCEPTED.id);
+      });
+
       test("IDEMPOTENCY_KEY_REUSED (FE bug) → key dropped, generic message", async () => {
         fillValidForm();
         const spy = vi.spyOn(console, "error").mockImplementation(() => {});

@@ -12,14 +12,23 @@ import {
   MoreHorizontal,
   ServerCrash,
   SlidersHorizontal,
+  Wallet,
   WifiOff,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTransactions } from "@/hooks/useTransactions";
+import { useCustodialWallet } from "@/hooks/useCustodialWallet";
 import { useRedeemStore } from "@/stores/redeemStore";
 import { getChainById } from "@/lib/chains";
 import { getFailureKey } from "@/lib/api/errors";
-import { formatDateTime, formatIDR, formatTokenAmount, truncateAddress, cn } from "@/lib/utils";
+import {
+  formatDateTime,
+  formatIDR,
+  formatTokenAmount,
+  isSameAddress,
+  truncateAddress,
+  cn,
+} from "@/lib/utils";
 import { useLang } from "@/providers/LanguageProvider";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -164,6 +173,14 @@ export function TransactionList() {
     type: typeParam[typeFilter],
   });
   const { data, isLoading, isError, error, isFetching, refetch } = query;
+
+  // "Wallet custodial saya" marker (USDX-653, custodial-wallet.md §5.2): the order
+  // has no custodial flag, so the row's `userAddress` is matched against the
+  // user's wallet address, case-insensitively — a mint may store it all
+  // lowercase. The address comes from the profile summary (`/auth/me`) or the
+  // shared wallet query; a user without a wallet triggers no request and gets no
+  // marker. Never a per-row detail call.
+  const custodialAddress = useCustodialWallet().address;
   const rows = data?.data ?? [];
   const total = data?.metadata.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -208,6 +225,22 @@ export function TransactionList() {
       <span className="flex items-center gap-2 text-foreground">
         <Icon className={cn("size-4 shrink-0", meta.color)} />
         {t(meta.key)}
+      </span>
+    );
+  }
+
+  function CustodialMarker({ tx }: { tx: ConsumerTransaction }) {
+    if (!isSameAddress(tx.userAddress, custodialAddress)) return null;
+    return (
+      <span
+        data-testid="tx-custodial-marker"
+        className="flex items-center gap-1 text-xs text-muted-text"
+      >
+        <Wallet className="size-3.5 shrink-0" aria-hidden />
+        {/* The mint review's label, word for word (USDX-653: "samakan dengan label
+            tujuan custodial di review mint") — one key, so the two never drift. The
+            row's type (Minting / Redeem) already says destination vs burn source. */}
+        {t("mint.destCustodial")}
       </span>
     );
   }
@@ -424,7 +457,12 @@ export function TransactionList() {
               {rows.map((tx) => (
                 <TableRow key={tx.id}>
                   <TableCell className="text-muted-text">{formatDateTime(tx.createdAt, lang)}</TableCell>
-                  <TableCell><TypeCell type={tx.type} /></TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-0.5">
+                      <TypeCell type={tx.type} />
+                      <CustodialMarker tx={tx} />
+                    </div>
+                  </TableCell>
                   <TableCell className="text-right"><AmountCell amount={tx.amount} /></TableCell>
                   <TableCell className="text-right tabular-nums text-foreground">{idrOrDash(subtotalValue(tx))}</TableCell>
                   {/* Total adalah angka yang benar-benar berpindah tangan —
@@ -459,7 +497,10 @@ export function TransactionList() {
                 <StatusPill tx={tx} />
               </div>
               <div className="flex items-center justify-between">
-                <TypeCell type={tx.type} />
+                <div className="flex flex-col gap-0.5">
+                  <TypeCell type={tx.type} />
+                  <CustodialMarker tx={tx} />
+                </div>
                 <AmountCell amount={tx.amount} />
               </div>
               <CardRow label={t("tx.subtotal")} value={idrOrDash(subtotalValue(tx))} />

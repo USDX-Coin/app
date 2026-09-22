@@ -16,7 +16,7 @@ tests/
   setup.ts              # Vitest setup (jest-dom matchers)
   unit/                 # Vitest — pure business logic
     validations.test.ts # validateEmail, validatePassword, validateAmount, validateAddress
-    utils.test.ts       # formatAmount, formatUSD, truncateAddress, parseAmount
+    utils.test.ts       # formatAmount, formatUSD, truncateAddress, isSameAddress, parseAmount
     stores/             # Zustand store state transitions
   integration/          # Playwright — page-level interactions
     login.spec.ts       # Login form, validation errors, credentials
@@ -24,6 +24,7 @@ tests/
     mint.spec.ts        # Mint form, chain selector, review panel
     transactions.spec.ts # Transaction table rendering
     profile.spec.ts     # User info display
+    history-custodial.spec.ts # /history "Wallet custodial saya" marker: to/from the wallet, manual address, no wallet, all-lowercase address, mobile cards (USDX-653)
     transfer-history.spec.ts # /send/history + detail: API order, 10 per page, empty ≠ error, unknown status = pending, neutral 404 (USDX-701)
     settings-pin.spec.ts # Settings → Account → transaction PIN: create, use at once on /send, change, lockout (USDX-651); create on a stale session → log in again → back to the dialog (USDX-697); forgot PIN from Change PIN: lockout, 5-minute window, cancel, per tab (USDX-696)
   e2e/                  # Playwright — full user flows

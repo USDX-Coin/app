@@ -121,9 +121,11 @@ function readPasswordAuthAt(): number | null {
 }
 
 // Login / reset password berhasil = sesi hasil password-auth (mock-api). Sesi
-// dari `loginViaStorage` Playwright tidak pernah lewat sini → basi.
+// dari `loginViaStorage` Playwright tidak pernah lewat sini → basi. Login sukses
+// juga membersihkan lockout `pin` (pin.yaml § verify — jalan keluar lupa-PIN).
 export function markMockPasswordAuth(at: number = Date.now()): void {
   writePasswordAuthAt(at);
+  pinFailures = 0;
 }
 
 // Unit test: sesi segar (password-auth barusan) atau basi.
@@ -171,14 +173,13 @@ export function requireAndVerifyMockPin(pin: string | undefined): void {
 
 // ── POST /api/v2/auth/pin/set (pin.yaml § set, USDX-651) ─────────────────────
 // First-time set: cukup sesi valid, `currentPin` diabaikan. Menimpa PIN yang
-// SUDAH ada butuh re-auth (USDX-328): sesi password-auth segar (< 5 menit) ATAU
-// `currentPin` benar. Gerbang 698 mati (bawaan): mock tidak memakai jam sesi,
-// hanya jalur `currentPin` yang diperankan — tanpa currentPin → 401
-// REAUTH_REQUIRED; salah → 401 INVALID_PIN (attempt dihitung, lockout-gated);
-// benar → PIN diganti. Gerbang nyala (`seedMockStrictPinSet`): sesi segar
-// dicek dulu (menimpa tanpa PIN lama = jalur lupa-PIN), first-time set di akun
-// ber-wallet custodial tanpa sesi segar → REAUTH_REQUIRED `details.pinSet:
-// false`, dan REAUTH_REQUIRED overwrite membawa `details.pinSet: true`.
+// SUDAH ada butuh re-auth (USDX-328): sesi password-auth segar (< 5 menit) dicek
+// dulu (menimpa tanpa PIN lama = jalur lupa-PIN, USDX-696), baru `currentPin` —
+// tanpa currentPin → 401 REAUTH_REQUIRED; salah → 401 INVALID_PIN (attempt
+// dihitung, lockout-gated); benar → PIN diganti. Gerbang 698 nyala
+// (`seedMockStrictPinSet`): first-time set di akun ber-wallet custodial tanpa sesi
+// segar → REAUTH_REQUIRED `details.pinSet: false`, dan REAUTH_REQUIRED overwrite
+// membawa `details.pinSet: true`.
 // Sukses selalu mereset lockout `pin`. Bentuk dicek dulu → 422 tanpa membakar
 // attempt.
 //
@@ -193,7 +194,7 @@ export async function mockSetPin(
     throw new ApiError(422, "VALIDATION_ERROR", "PIN harus 6 digit");
   }
   const strict = isStrictPinSet();
-  const fresh = strict && isSessionFresh();
+  const fresh = isSessionFresh();
   if (currentMockPin() === null) {
     if (strict && hasCustodialWallet && !fresh) {
       throw new ApiError(401, "REAUTH_REQUIRED", "Buat PIN butuh login ulang", { pinSet: false });

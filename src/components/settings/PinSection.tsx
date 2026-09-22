@@ -11,6 +11,8 @@
 // Juga layar tujuan tombol "Login ulang" di dialog Buat PIN (USDX-697,
 // custodial-wallet.md §5.1): sesudah login, penanda `create-pin` diambil di sini
 // dan dialog Buat PIN langsung terbuka — sesinya segar, jendela 5 menit berjalan.
+// Penanda `forgot-pin` (jalur lupa-PIN, USDX-696) membuka varian "Buat PIN baru"
+// — justru saat akun SUDAH punya PIN: menimpanya tanpa PIN lama adalah niatnya.
 
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +28,7 @@ export function PinSection() {
   const { pinSet } = usePin();
   const [setupOpen, setSetupOpen] = useState(false);
   const [changeOpen, setChangeOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
 
   // Sekali saat mount. Penanda selalu dibuang; dialog hanya dibuka bila akun
   // memang belum punya PIN — kalau sudah, "Buat PIN" di sesi segar justru menimpa
@@ -33,8 +36,10 @@ export function PinSection() {
   useEffect(() => {
     // Penanda hidup di sessionStorage — tidak terbaca saat render server, jadi
     // dialognya dibuka sesudah hidrasi.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (takeReloginIntent("create-pin") && pinSet !== true) setSetupOpen(true);
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (takeReloginIntent("forgot-pin")) setResetOpen(true);
+    else if (takeReloginIntent("create-pin") && pinSet !== true) setSetupOpen(true);
+    /* eslint-enable react-hooks/set-state-in-effect */
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sekali per mount, bukan tiap pinSet berubah
   }, []);
 
@@ -67,6 +72,7 @@ export function PinSection() {
 
       <PinSetupDialog open={setupOpen} onOpenChange={setSetupOpen} />
       <PinChangeDialog open={changeOpen} onOpenChange={setChangeOpen} />
+      <PinSetupDialog variant="reset" open={resetOpen} onOpenChange={setResetOpen} />
     </div>
   );
 }

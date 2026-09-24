@@ -58,3 +58,34 @@ describe("transfer tracker/history copy", () => {
     });
   });
 });
+
+// 503 NETWORK_CONGESTED (USDX-709, wallet.yaml § POST /wallet/transfer 503): kalimat
+// awam — jaringan padat, saldo aman, tidak ada yang terkirim — tanpa "gas", "POL",
+// atau "fee" (user tidak pernah melihat POL).
+describe("network-congested copy", () => {
+  const KEY = "transfer.errNetworkCongested";
+
+  describe("positive", () => {
+    test("exists in both languages and says nothing was sent", () => {
+      expect(dictionaries.en[KEY]).toMatch(/nothing was sent/i);
+      expect(dictionaries.id[KEY]).toMatch(/tidak ada yang terkirim/i);
+    });
+  });
+
+  describe("negative", () => {
+    test("no gas / POL / fee jargon", () => {
+      for (const lang of ["en", "id"] as const) {
+        expect(dictionaries[lang][KEY], lang).toBeTruthy();
+        expect(dictionaries[lang][KEY], lang).not.toMatch(/\b(gas|pol|fee|biaya)\b/i);
+      }
+    });
+  });
+
+  describe("edge case", () => {
+    test("does not blame the wallet service — that is the other 503", () => {
+      expect(dictionaries.en[KEY]).not.toBe(dictionaries.en["transfer.errServiceUnavailable"]);
+      expect(dictionaries.en[KEY]).not.toMatch(/wallet service/i);
+      expect(dictionaries.id[KEY]).not.toMatch(/layanan wallet/i);
+    });
+  });
+});

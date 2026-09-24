@@ -201,6 +201,19 @@ describe("mockTransferCustodial", () => {
       expect((await mockGetCustodialWallet()).balance).toBe("100.00");
     });
 
+    test("network congested → 503 NETWORK_CONGESTED once, nothing debited; the same-key retry goes through (USDX-709)", async () => {
+      seedMockCustodialWallet({ balance: "100.00", networkCongested: true });
+      await expect(mockTransferCustodial(req, KEY)).rejects.toMatchObject({
+        status: 503,
+        code: "NETWORK_CONGESTED",
+      });
+      expect((await mockGetCustodialWallet()).balance).toBe("100.00");
+      // Rejected before anything was signed: the key is not held, so the retry
+      // with the SAME key is a fresh attempt, not a 409 or a replay.
+      await expect(mockTransferCustodial(req, KEY)).resolves.toMatchObject({ amount: "25.00" });
+      expect((await mockGetCustodialWallet()).balance).toBe("75.00");
+    });
+
     test("limit seam → 422 TRANSFER_LIMIT_EXCEEDED with details", async () => {
       seedMockCustodialWallet({ transferLimit: { perTx: "10.00" } });
       await expect(mockTransferCustodial(req, KEY)).rejects.toMatchObject({

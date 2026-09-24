@@ -207,9 +207,10 @@ test.describe("Transfer Flow (custodial)", () => {
       const error = page.getByTestId("transfer-error");
       await expect(error).toContainText("The blockchain network is busy right now", { timeout: 15000 });
       await expect(error).toContainText("Your balance is safe and nothing was sent");
-      // Not the other 503, and not the offline sentence.
-      await expect(error).not.toContainText("wallet service");
-      await expect(error).not.toContainText("connect to the server");
+      // Not the other 503, not the offline sentence, not the generic 5xx one.
+      await expect(error).not.toContainText("The wallet service is temporarily unavailable");
+      await expect(error).not.toContainText("Can't reach the server");
+      await expect(error).not.toContainText("Our server is having trouble");
       await expect(pin).toBeHidden();
       await expect(page.getByTestId("transfer-result")).toHaveCount(0);
       const firstKey = await intentKey();
@@ -226,6 +227,21 @@ test.describe("Transfer Flow (custodial)", () => {
       await expect(page.getByTestId("transfer-balance")).toHaveText("975 USDX", { timeout: 15000 });
       await page.goto("/send/history");
       await expect(page.getByTestId("transfer-history-row")).toHaveCount(1, { timeout: 15000 });
+    });
+
+    test("503 WALLET_SERVICE_UNAVAILABLE keeps its own sentence — not the network-busy one (USDX-709)", async ({
+      page,
+    }) => {
+      await forceEnglish(page);
+      await seedCustodialWallet(page, { status: "ACTIVE", balance: "1000.00", serviceDown: true });
+      await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
+      const pin = await openPinDialog(page);
+      await pin.getByLabel("6-digit PIN").fill(MOCK_PIN);
+      await pin.getByRole("button", { name: "Send", exact: true }).click();
+      const error = page.getByTestId("transfer-error");
+      await expect(error).toContainText("The wallet service is temporarily unavailable", { timeout: 15000 });
+      await expect(error).not.toContainText("network is busy");
+      await expect(page.getByTestId("transfer-result")).toHaveCount(0);
     });
 
     test("429 RATE_LIMITED → the throttle toast, and the PIN dialog stays for a same-key retry", async ({

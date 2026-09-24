@@ -5,6 +5,7 @@ import {
   isWalletTransferNotFound,
   isWalletNotActive,
   isWalletServiceUnavailable,
+  isNetworkCongested,
   isInvalidPin,
   isPinNotSet,
   isTooManyAttempts,
@@ -41,6 +42,10 @@ describe("errors helpers — wallet custodial", () => {
       expect(
         isWalletServiceUnavailable(new ApiError(503, "WALLET_SERVICE_UNAVAILABLE", "x")),
       ).toBe(true);
+    });
+
+    test("isNetworkCongested matches 503 NETWORK_CONGESTED (USDX-709)", () => {
+      expect(isNetworkCongested(new ApiError(503, "NETWORK_CONGESTED", "x"))).toBe(true);
     });
 
     test("PIN helpers tell INVALID_PIN, PIN_NOT_SET and TOO_MANY_ATTEMPTS apart", () => {
@@ -109,6 +114,13 @@ describe("errors helpers — wallet custodial", () => {
 
     test("isInvalidPin does not match a 401 session error", () => {
       expect(isInvalidPin(new ApiError(401, "UNAUTHORIZED", "x"))).toBe(false);
+    });
+
+    test("the two 503s are told apart: NETWORK_CONGESTED ≠ WALLET_SERVICE_UNAVAILABLE", () => {
+      expect(isNetworkCongested(new ApiError(503, "WALLET_SERVICE_UNAVAILABLE", "x"))).toBe(false);
+      expect(isWalletServiceUnavailable(new ApiError(503, "NETWORK_CONGESTED", "x"))).toBe(false);
+      // Same code on another status is not the contract's 503.
+      expect(isNetworkCongested(new ApiError(500, "NETWORK_CONGESTED", "x"))).toBe(false);
     });
   });
 

@@ -437,6 +437,9 @@ const en: Dict = {
   "transfer.errWalletNotActive": "Your custodial wallet can't send right now ({status}). No transfer was made.",
   "transfer.errNoWallet": "You don't have a custodial wallet yet.",
   "transfer.errServiceUnavailable": "The wallet service is temporarily unavailable. Nothing was sent — try again in a moment.",
+  // 503 NETWORK_CONGESTED (USDX-709): network fees above the safety ceiling. Plain
+  // words only — no "gas", "POL" or "fee" (wallet.yaml § POST /wallet/transfer 503).
+  "transfer.errNetworkCongested": "The blockchain network is busy right now. Your balance is safe and nothing was sent — try again in a few minutes.",
   "transfer.errInProgress": "This transfer is still being processed. Wait a moment, then press Send again — it won't be sent twice.",
   "transfer.errGate": "Your account isn't eligible to send yet.",
   "transfer.errGeneric": "Couldn't send the transfer. Please try again.",
@@ -1516,6 +1519,9 @@ const id: Dict = {
   "transfer.errWalletNotActive": "Wallet custodial Anda belum bisa mengirim saat ini ({status}). Tidak ada transfer yang dibuat.",
   "transfer.errNoWallet": "Anda belum punya wallet custodial.",
   "transfer.errServiceUnavailable": "Layanan wallet sedang tidak tersedia. Tidak ada yang terkirim — coba lagi sebentar.",
+  // 503 NETWORK_CONGESTED (USDX-709): fee jaringan di atas plafon pengaman. Kalimat
+  // awam — tanpa "gas", "POL", atau "fee" (wallet.yaml § POST /wallet/transfer 503).
+  "transfer.errNetworkCongested": "Jaringan blockchain sedang padat. Saldo Anda aman dan tidak ada yang terkirim — coba lagi dalam beberapa menit.",
   "transfer.errInProgress": "Transfer ini masih diproses. Tunggu sebentar, lalu tekan Kirim lagi — tidak akan terkirim dua kali.",
   "transfer.errGate": "Akun Anda belum bisa mengirim USDX.",
   "transfer.errGeneric": "Gagal mengirim transfer. Coba lagi.",

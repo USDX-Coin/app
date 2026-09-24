@@ -342,6 +342,9 @@ export async function seedCustodialWallet(
         // 409 IDEMPOTENCY_KEY_IN_PROGRESS then settles. The account PIN is a
         // separate seam (`seedAccountPin`): it belongs to the account, not the wallet.
         serviceDown?: boolean;
+        // USDX-709: the NEXT transfer → 503 NETWORK_CONGESTED, then the network
+        // "calms down" so a same-key retry goes through.
+        networkCongested?: boolean;
         transferLimit?: { perTx?: string; daily?: string };
         slowFirstTransfer?: boolean;
         // USDX-701: the "watcher" verdict for the NEXT transfer (default CONFIRMED
@@ -368,6 +371,7 @@ export async function seedCustodialWallet(
           balance: s.status === "PROVISIONING" ? null : (s.balance === undefined ? "0.00" : s.balance),
           stuck: s.stuck ?? false,
           serviceDown: s.serviceDown ?? false,
+          networkCongested: s.networkCongested ?? false,
           transferLimit: s.transferLimit,
           slowFirstTransfer: s.slowFirstTransfer ?? false,
           transferOutcome: s.transferOutcome,

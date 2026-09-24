@@ -77,6 +77,9 @@ export interface MockCustodialState {
   // (PIN akun tidak di sini — lihat `mock-pin.ts`: PIN milik akun, bukan wallet.)
   // Zona kunci mati → transfer → 503 WALLET_SERVICE_UNAVAILABLE.
   serviceDown?: boolean;
+  // Jaringan padat (fee di atas plafon, §5.4) → transfer BERIKUTNYA → 503
+  // NETWORK_CONGESTED, lalu seam gugur: "reda" supaya retry dengan key sama lolos.
+  networkCongested?: boolean;
   // Plafon §6 (kosong = tanpa batas, seperti env backend).
   transferLimit?: { perTx?: string; daily?: string };
   // Transfer pertama tiap key menggantung dulu (409 IN_PROGRESS), lalu selesai.
@@ -438,6 +441,16 @@ export async function mockTransferCustodial(
       503,
       "WALLET_SERVICE_UNAVAILABLE",
       "Layanan wallet sedang tidak tersedia, coba lagi sebentar",
+    );
+  }
+  if (active.networkCongested) {
+    // Ditolak sebelum drip & tanda tangan → tidak ada baris yang dipegang; kunci
+    // bebas untuk retry. Sekali saja, lalu jaringan "reda".
+    writeCustodialState({ ...active, networkCongested: false });
+    throw new ApiError(
+      503,
+      "NETWORK_CONGESTED",
+      "Jaringan blockchain sedang padat, coba lagi beberapa menit lagi",
     );
   }
 

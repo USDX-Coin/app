@@ -212,6 +212,14 @@ export function isWalletServiceUnavailable(error: unknown): boolean {
   );
 }
 
+// 503 NETWORK_CONGESTED — fee jaringan Polygon melewati plafon pengaman, transfer
+// ditolak SEBELUM gas disiapkan dan ditandatangani (wallet.yaml § POST
+// /wallet/transfer 503, custodial-wallet.md §5.4 cek no.1). Aman di-retry dengan
+// Idempotency-Key yang SAMA. Bukan kesalahan layanan: user cukup menunggu.
+export function isNetworkCongested(error: unknown): boolean {
+  return isApiError(error) && error.status === 503 && error.code === "NETWORK_CONGESTED";
+}
+
 // 401 INVALID_PIN — PIN salah (pin.yaml; attempt dihitung ke lockout scope `pin`
 // yang dibagi /auth/pin/verify, /change, /wallet/transfer, POST /redeem). Bukan
 // sesi kedaluwarsa: pemanggil WAJIB `skipUnauthorizedHandler` supaya user tidak

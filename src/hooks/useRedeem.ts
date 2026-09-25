@@ -391,6 +391,7 @@ export function useRedeem() {
     twoFactorCooldownSeconds: stepUp.twoFactorCooldownSeconds,
     twoFactorSetupRequired: isCustodialSource && stepUp.twoFactorSetupRequired,
     outboundLockedUntil: isCustodialSource ? stepUp.lockedUntil : null,
+    stepUpBlocked: isCustodialSource && stepUp.blocked,
     // submit (create order → tracker → guarded burn / system-dispatched burn)
     submitRedeem,
     isCreating: createMutation.isPending,

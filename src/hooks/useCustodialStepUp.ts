@@ -95,6 +95,8 @@ export function useCustodialStepUp() {
     twoFactorSetupRequired: twoFactorEnabled === false,
     /** ISO 8601 selama transfer & redeem custodial ditahan; null bila tidak. */
     lockedUntil,
+    /** Salah satu di atas → tombol kirim/redeem dan langkah PIN dimatikan. */
+    blocked: twoFactorEnabled === false || lockedUntil !== null,
     /** Sisa detik lockout `2fa-stepup`. */
     twoFactorCooldownSeconds: cooldown.remaining,
     onError,

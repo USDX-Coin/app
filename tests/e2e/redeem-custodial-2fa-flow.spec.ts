@@ -81,6 +81,22 @@ test.describe("Redeem (custodial) — 2FA step-up", () => {
       await expect(page.getByRole("button", { name: "Redeem", exact: true })).toBeDisabled();
     });
 
+    test("the lock lands while the form is open (409) → the dialog closes and the Ringkasan shows the banner", async ({
+      page,
+    }) => {
+      await asUser(page, true);
+      const pin = await openPinDialog(page);
+      await page.evaluate((until) => {
+        localStorage.setItem("usdx-mock-outbound-lock", JSON.stringify({ until }));
+      }, new Date(Date.now() + 20 * 3_600_000).toISOString());
+      await pin.getByLabel("6-digit PIN").fill(MOCK_PIN);
+      await pin.getByLabel("Authenticator code").fill(MOCK_TOTP_CODE);
+      await pin.getByRole("button", { name: "Confirm & Burn" }).click();
+      await expect(pin).toBeHidden({ timeout: 15000 });
+      await expect(page.getByTestId("redeem-review-locked")).toContainText(/on hold until/);
+      await expect(page.getByRole("button", { name: "Continue to Confirmation" })).toBeDisabled();
+    });
+
     test("the external source is not held by the 2FA card", async ({ page }) => {
       await asUser(page, false);
       await fillForm(page);

@@ -5,6 +5,7 @@
 // belum dikenal DILEWATI (tidak dirender, tidak membuat halaman crash) — kontraknya
 // "abaikan/sembunyikan baris jenis tak dikenal". Paginasi tetap milik server.
 
+import { transferStatusOf } from "@/lib/wallet-transfer";
 import type { HistoryItem, HistoryItemType, TransferHistoryItem } from "@/types";
 
 export const HISTORY_ITEM_TYPES: readonly HistoryItemType[] = [
@@ -27,4 +28,10 @@ export function knownHistoryItems(rows: readonly unknown[]): HistoryItem[] {
 
 export function isTransferItem(item: HistoryItem): item is TransferHistoryItem {
   return item.type === "TRANSFER_IN" || item.type === "TRANSFER_OUT";
+}
+
+// Ada baris transfer yang masih "Menunggu konfirmasi" (status tak dikenal ikut —
+// ditampilkan sebagai PENDING oleh `transferStatusOf`)? Pemicu penyegaran /history.
+export function hasPendingTransfer(rows: readonly HistoryItem[]): boolean {
+  return rows.some((r) => isTransferItem(r) && transferStatusOf(r) === "PENDING");
 }

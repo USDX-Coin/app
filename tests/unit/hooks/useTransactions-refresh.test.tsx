@@ -45,6 +45,8 @@ describe("useTransactions — refresh while a transfer is pending", () => {
       });
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      // Reading `data` also subscribes the hook to it (TanStack tracked props), as the list does.
+      expect((result.current.data?.data[0] as { status: string }).status).toBe("PENDING");
       expect(listMock).toHaveBeenCalledTimes(1);
 
       await vi.advanceTimersByTimeAsync(HISTORY_REFRESH_MS + 50);
@@ -136,7 +138,8 @@ describe("useTransactions — refresh while a transfer is pending", () => {
       expect(result.current.data?.data).toHaveLength(1);
       await vi.advanceTimersByTimeAsync(HISTORY_REFRESH_MS + 50);
       expect(listMock).toHaveBeenCalledTimes(RATE_LIMIT_RETRIES + 2);
-      await vi.advanceTimersByTimeAsync(40_000);
+      // …and fires once the 40 s since the last 429 are up.
+      await vi.advanceTimersByTimeAsync(40_000 - HISTORY_REFRESH_MS);
       await waitFor(() => expect(listMock).toHaveBeenCalledTimes(RATE_LIMIT_RETRIES + 3));
     });
   });

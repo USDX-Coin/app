@@ -325,6 +325,31 @@ export function getTransferLimitDetails(error: unknown): TransferLimitDetails | 
   };
 }
 
+// ── 2FA TOTP (two-factor.yaml, USDX-714) ─────────────────────────────────────
+// Semua 401 di bawah adalah jawaban DI DALAM form, bukan sesi mati: endpoint
+// 2FA yang session-gated dipanggil dengan `skipUnauthorizedHandler` (pola PIN).
+
+// 401 INVALID_TWO_FACTOR_CODE — kode TOTP / backup code / OTP pemulihan email
+// salah atau kedaluwarsa (verify, disable ber-kode, verify-login, recovery).
+export function isInvalidTwoFactorCode(error: unknown): boolean {
+  return isApiError(error) && error.status === 401 && error.code === "INVALID_TWO_FACTOR_CODE";
+}
+
+// 401 TWO_FACTOR_CHALLENGE_EXPIRED — cookie challenge login langkah-1 (TTL 10
+// menit, sekali pakai) hilang/kedaluwarsa di verify-login atau pemulihan email.
+// Jalan keluarnya hanya login ulang dengan email + password.
+export function isTwoFactorChallengeExpired(error: unknown): boolean {
+  return (
+    isApiError(error) && error.status === 401 && error.code === "TWO_FACTOR_CHALLENGE_EXPIRED"
+  );
+}
+
+// 400 TWO_FACTOR_NOT_ENABLED — regenerate backup code saat 2FA belum aktif
+// (salinan `twoFactorEnabled` di klien basi).
+export function isTwoFactorNotEnabled(error: unknown): boolean {
+  return isApiError(error) && error.status === 400 && error.code === "TWO_FACTOR_NOT_ENABLED";
+}
+
 // Narrow to a specific SoT error code (e.g. PASSWORD_MISMATCH, WEAK_PASSWORD)
 // regardless of status, so call sites can route 400s to the right field.
 export function hasErrorCode(error: unknown, code: string): boolean {

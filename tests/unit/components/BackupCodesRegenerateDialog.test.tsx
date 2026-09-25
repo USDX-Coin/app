@@ -8,7 +8,9 @@ import { MOCK_BACKUP_CODES, resetMockTwoFactor, seedMockTwoFactor } from "@/lib/
 import type { User } from "@/types";
 
 // New backup codes (two-factor.yaml § regenerateBackupCodes, USDX-714): password →
-// the new set shown once → "Done" only after "I have saved" is ticked.
+// the new set shown once → "Done" only after "I have saved" is ticked. A new set =
+// the second factor replaced (custodial-wallet.md §6.1 no.6c, sot@6a55e6b): the
+// 24-hour hold is stated BEFORE the user confirms.
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
@@ -63,6 +65,15 @@ describe("BackupCodesRegenerateDialog", () => {
       fireEvent.click(screen.getByRole("checkbox", { name: "Saya sudah menyimpan backup code" }));
       fireEvent.click(done);
       await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    });
+  });
+
+  describe("positive — 24-hour hold", () => {
+    test("the hold warning is on screen before confirming, next to the password", () => {
+      renderDialog();
+      const warning = screen.getByTestId("backup-codes-regenerate-warning");
+      expect(warning).toHaveTextContent(/ditahan 24 jam/);
+      expect(screen.getByLabelText("Kata sandi")).toBeInTheDocument();
     });
   });
 

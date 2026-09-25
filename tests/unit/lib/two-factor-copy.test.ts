@@ -18,10 +18,11 @@ describe("two-factor copy", () => {
       expect(keysOf("en").length).toBeGreaterThan(0);
     });
 
-    test("both 24-hour hold warnings say 24 in both languages", () => {
+    test("every 24-hour hold warning says 24 in both languages", () => {
       for (const lang of ["en", "id"] as const) {
         expect(dictionaries[lang]["twoFactor.disable.warning"]).toMatch(/24/);
         expect(dictionaries[lang]["auth.2fa.recovery.lockWarning"]).toMatch(/24/);
+        expect(dictionaries[lang]["twoFactor.regenerate.warning"]).toMatch(/24/);
       }
     });
   });

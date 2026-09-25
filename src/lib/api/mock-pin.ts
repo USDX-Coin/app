@@ -148,7 +148,8 @@ export function verifyMockPin(pin: string): void {
       429,
       "TOO_MANY_ATTEMPTS",
       "Terlalu banyak percobaan PIN",
-      { retryAfterSeconds: MOCK_PIN_LOCKOUT_SECONDS },
+      // `scope` additive 25 Sep 2026 (wallet.yaml 429) — FE memilih kalimat darinya.
+      { retryAfterSeconds: MOCK_PIN_LOCKOUT_SECONDS, scope: "pin" },
       MOCK_PIN_LOCKOUT_SECONDS,
     );
   }

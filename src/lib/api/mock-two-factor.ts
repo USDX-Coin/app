@@ -46,6 +46,10 @@ const CHALLENGE_KEY = "usdx-mock-2fa-challenge";
 // kuncinya justru harus bertahan.
 const OUTBOUND_LOCK_KEY = "usdx-mock-outbound-lock";
 const OUTBOUND_LOCK_MS = 24 * 60 * 60 * 1000;
+// Seam "backend sebelum USDX-718": `twoFactorCode` dibuang diam-diam (whitelist
+// tanpa forbidNonWhitelisted), tanpa kunci dan tanpa `outboundLockedUntil` —
+// keadaan yang dihadapi FE ini selama urutan rilis §6.1 (FE dulu, baru BE).
+const LEGACY_STEP_UP_KEY = "usdx-mock-2fa-legacy";
 
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_SECONDS = 15 * 60;
@@ -182,6 +186,7 @@ export function resetMockTwoFactor(): void {
   writeState(null);
   writeChallenge(null);
   seedMockOutboundLock(null);
+  seedMockLegacyStepUp(false);
   verifyFailures = 0;
   recoveryFailures = 0;
   recoverySentAt = null;
@@ -335,6 +340,7 @@ export async function mockTwoFactorRecovery(req: TwoFactorRecoveryRequest): Prom
 // code yang lalu hangus). Anti pakai-ulang satu time-step TOTP (§6.1 no.5) tidak
 // diperankan: kode mock tetap — tiap transfer di test akan tertolak.
 export function verifyMockStepUpCode(code: string | undefined): void {
+  if (isMockLegacyStepUp()) return;
   const state = readState();
   if (!state?.enabled) {
     throw new ApiError(401, "TWO_FACTOR_SETUP_REQUIRED", "Aktifkan 2FA untuk mengirim atau redeem dari wallet ini.");
@@ -378,6 +384,7 @@ export function seedMockOutboundLock(until: string | null): void {
 // `GET /api/v2/wallet` `outboundLockedUntil`: null bila tidak terkunci, termasuk
 // kunci yang sudah lewat.
 export function mockOutboundLockedUntil(): string | null {
+  if (isMockLegacyStepUp()) return null;
   const until = readJson<{ until: string }>(OUTBOUND_LOCK_KEY, lockMemory === null ? null : { until: lockMemory })?.until;
   return until && Date.parse(until) > Date.now() ? until : null;
 }
@@ -392,4 +399,16 @@ export function assertMockOutboundNotLocked(): void {
     "Transfer & redeem ditahan karena 2FA baru dimatikan atau diganti.",
     { lockedUntil },
   );
+}
+
+let legacyMemory = false;
+
+// Unit/Playwright: `true` = backend sebelum USDX-718 (lihat LEGACY_STEP_UP_KEY).
+export function seedMockLegacyStepUp(on: boolean): void {
+  legacyMemory = on;
+  writeJson(LEGACY_STEP_UP_KEY, on ? true : null);
+}
+
+export function isMockLegacyStepUp(): boolean {
+  return readJson<boolean>(LEGACY_STEP_UP_KEY, legacyMemory || null) === true;
 }

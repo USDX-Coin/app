@@ -7,6 +7,7 @@ import {
   MOCK_CUSTODIAL_ADDRESS,
 } from "@/lib/api/mock-custodial-wallet";
 import { MOCK_PIN } from "@/lib/api/mock-pin";
+import { MOCK_TOTP_CODE, resetMockTwoFactor, seedMockTwoFactor } from "@/lib/api/mock-two-factor";
 
 // Redeem, custodial burn path (redeem.yaml § burnMode, custodial-wallet.md §5.3,
 // USDX-565/567). `burnMode` is decided by the backend from `userAddress`; the
@@ -21,10 +22,13 @@ const base = {
   bankAccountNumber: "1234563210",
   bankAccountName: "SINGGIH BRILIAN TARA",
 };
-const custodialReq = { ...base, userAddress: MOCK_CUSTODIAL_ADDRESS, pin: MOCK_PIN };
+const custodialReq = { ...base, userAddress: MOCK_CUSTODIAL_ADDRESS, pin: MOCK_PIN, twoFactorCode: MOCK_TOTP_CODE };
 
 beforeEach(() => {
   resetMockCustodialWallet();
+  // 2FA wajib sejak §6.1 (USDX-717) — alurnya sendiri diuji di mock-custodial-stepup.test.
+  resetMockTwoFactor();
+  seedMockTwoFactor(true);
 });
 
 describe("mockCreateRedeemOrder — custodial", () => {

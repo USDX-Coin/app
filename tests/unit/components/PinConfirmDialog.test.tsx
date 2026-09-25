@@ -186,6 +186,24 @@ describe("PinConfirmDialog — authenticator code", () => {
       expect(screen.getByRole("button", { name: "Konfirmasi" })).toBeDisabled();
     });
 
+    test("reopened after the caller closed it (a Ringkasan error), the code field starts empty — a used code cannot approve another intent", () => {
+      const Wrapper = createWrapper();
+      const ui = (open: boolean) => (
+        <Wrapper>
+          <LanguageProvider>
+            <PinConfirmDialog open={open} onOpenChange={() => {}} onSubmit={() => {}} />
+          </LanguageProvider>
+        </Wrapper>
+      );
+      const { rerender } = render(ui(true));
+      fireEvent.click(screen.getByRole("button", { name: "Pakai backup code" }));
+      fireEvent.change(screen.getByLabelText("Backup code"), { target: { value: "AbC12-xYz89" } });
+      rerender(ui(false));
+      rerender(ui(true));
+      const code = screen.getByLabelText("Kode authenticator") as HTMLInputElement;
+      expect(code.value).toBe("");
+    });
+
     test("switching between app code and backup code clears what was typed", () => {
       renderDialog();
       fireEvent.change(screen.getByLabelText("Kode authenticator"), { target: { value: "492817" } });

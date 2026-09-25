@@ -89,7 +89,7 @@ describe("TransferResult (tracker after send)", () => {
 
       const link = screen.getByRole("link", { name: "Lihat di explorer" });
       expect(link).toHaveAttribute("href", `https://polygonscan.com/tx/${ACCEPTED.txHash}`);
-      expect(screen.getByRole("link", { name: /Riwayat transfer/ })).toHaveAttribute("href", "/send/history");
+      expect(screen.getByRole("link", { name: /Riwayat transfer/ })).toHaveAttribute("href", "/history?type=TRANSFER_OUT");
     });
   });
 

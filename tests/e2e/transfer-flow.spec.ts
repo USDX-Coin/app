@@ -100,8 +100,10 @@ test.describe("Transfer Flow (custodial)", () => {
       });
       const hash = await result.getByRole("link", { name: "View on explorer" }).getAttribute("href");
 
-      // Riwayat terpadu (USDX-713): the tracker's history link is /history, tab "Outgoing".
-      await result.getByRole("link", { name: "Transfer history" }).click();
+      // Riwayat terpadu (USDX-713): no "Transfer history" button on /send any more — the
+      // tracker's "Back to history" lands on /history, tab "Outgoing".
+      await expect(result.getByRole("link", { name: "Transfer history" })).toHaveCount(0);
+      await result.getByRole("link", { name: "Back to history" }).click();
       await expect(page).toHaveURL(/\/history\?type=TRANSFER_OUT$/);
       await expect(page.getByRole("tab", { name: "Outgoing" })).toHaveAttribute("aria-selected", "true");
       const rows = page.getByTestId("history-transfer-row");
@@ -136,7 +138,7 @@ test.describe("Transfer Flow (custodial)", () => {
         timeout: 15000,
       });
       // 3. Well inside the 15 s staleTime of the cached empty list.
-      await result.getByRole("link", { name: "Transfer history" }).click();
+      await result.getByRole("link", { name: "Back to history" }).click();
       await expect(page.getByTestId("history-transfer-row")).toHaveCount(1, { timeout: 15000 });
       await expect(page.getByText("Nothing matches this filter")).toHaveCount(0);
     });

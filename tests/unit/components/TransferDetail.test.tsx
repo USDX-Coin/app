@@ -34,7 +34,7 @@ describe("TransferDetail", () => {
 
       await waitFor(() => expect(screen.getByTestId("transfer-status")).toHaveAttribute("data-status", "CONFIRMED"));
       expect(screen.getByText("Transfer berhasil")).toBeInTheDocument();
-      expect(screen.getByRole("link", { name: /Kembali ke riwayat transfer/ })).toHaveAttribute("href", "/history?type=TRANSFER_OUT");
+      expect(screen.getByRole("link", { name: "Kembali ke riwayat" })).toHaveAttribute("href", "/history?type=TRANSFER_OUT");
       expect(getMock).toHaveBeenCalledWith(FX.confirmed.id);
     });
 
@@ -56,7 +56,7 @@ describe("TransferDetail", () => {
 
       await waitFor(() => expect(screen.getByTestId("transfer-detail-not-found")).toBeInTheDocument());
       expect(screen.getByText("Transfer tidak ditemukan")).toBeInTheDocument();
-      expect(screen.getByRole("link", { name: /Kembali ke riwayat transfer/ })).toHaveAttribute("href", "/history?type=TRANSFER_OUT");
+      expect(screen.getByRole("link", { name: "Kembali ke riwayat" })).toHaveAttribute("href", "/history?type=TRANSFER_OUT");
       expect(screen.queryByTestId("transfer-detail-error")).not.toBeInTheDocument();
     });
 

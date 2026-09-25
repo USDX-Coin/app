@@ -89,7 +89,7 @@ test.describe("Unified history — custodial transfers", () => {
       await expect(page.getByTestId("transfer-status")).toHaveAttribute("data-status", "FAILED", { timeout: 15000 });
       await expect(page.getByTestId("transfer-failure-reason")).toHaveText("Rejected by the USDX token contract");
 
-      await page.getByRole("link", { name: "Back to transfer history" }).click();
+      await page.getByRole("link", { name: "Back to history" }).click();
       await expect(page).toHaveURL(/\/history\?type=TRANSFER_OUT$/);
       await expect(tab(page, "Outgoing")).toHaveAttribute("aria-selected", "true", { timeout: 15000 });
       await expect(transferRows(page)).toHaveCount(2);
@@ -144,7 +144,7 @@ test.describe("Unified history — custodial transfers", () => {
       const notFound = page.getByTestId("transfer-detail-not-found");
       await expect(notFound).toBeVisible({ timeout: 15000 });
       await expect(page.getByTestId("transfer-detail-error")).toHaveCount(0);
-      await notFound.getByRole("link", { name: "Back to transfer history" }).click();
+      await notFound.getByRole("link", { name: "Back to history" }).click();
       await expect(page).toHaveURL(/\/history\?type=TRANSFER_OUT$/);
     });
 

@@ -3,9 +3,9 @@
 // verify), matikan (password ATAU kode TOTP), regenerate backup code, login
 // langkah 2 di atas challenge, dan pemulihan via email.
 //
-// Kode yang diterima mock (TOTP asli butuh secret + jam; tidak berguna di test):
-// `MOCK_TOTP_CODE` = kode authenticator yang "sedang tampil", `MOCK_BACKUP_CODES` =
-// set backup code bawaan, `MOCK_RECOVERY_OTP` = OTP di email pemulihan.
+// Kode yang diterima mock (TOTP asli butuh secret + jam; tidak berguna di test)
+// ada di mock-two-factor-fixtures.ts — `MOCK_TOTP_CODE`, `MOCK_BACKUP_CODES`,
+// `MOCK_RECOVERY_OTP` (diekspor ulang di sini untuk unit test).
 //
 // 2FA milik AKUN (`user.twoFactorEnabled`, users.yaml § User), seperti PIN di
 // mock-pin.ts. State di localStorage ("usdx-mock-two-factor") supaya bertahan
@@ -23,6 +23,12 @@
 // mockSetPin, supaya modul ini tidak mengimpor mock-api (impor melingkar).
 
 import { ApiError } from "./client";
+import {
+  MOCK_BACKUP_CODES,
+  MOCK_RECOVERY_OTP,
+  MOCK_TOTP_CODE,
+  MOCK_TOTP_SECRET,
+} from "./mock-two-factor-fixtures";
 import type { TwoFactorEnrollment } from "@/types";
 import type {
   DisableTwoFactorRequest,
@@ -31,24 +37,10 @@ import type {
   TwoFactorRecoveryRequest,
 } from "./types";
 
+export { MOCK_BACKUP_CODES, MOCK_RECOVERY_OTP, MOCK_TOTP_CODE };
+
 const STATE_KEY = "usdx-mock-two-factor";
 const CHALLENGE_KEY = "usdx-mock-2fa-challenge";
-
-export const MOCK_TOTP_CODE = "246810";
-export const MOCK_RECOVERY_OTP = "135790";
-export const MOCK_BACKUP_CODES = [
-  "K7QM2-X8WP4",
-  "R3TN9-B2LC6",
-  "H5VD1-Q9ZK3",
-  "M8PX4-T6GJ2",
-  "W2CF7-N4YR8",
-  "D9LS3-J1HB5",
-  "F6ZA8-C3MV7",
-  "P4GE2-V7XQ1",
-  "Y1BK6-S5DT9",
-  "U3HW5-L8NA2",
-];
-const MOCK_TOTP_SECRET = "JBSWY3DPEHPK3PXP";
 
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_SECONDS = 15 * 60;

@@ -292,7 +292,7 @@ function maybeThrowRateLimited(): void {
 
 // Id user sesi (kunci idempotensi hanya berlaku untuk pemiliknya). Mock hanya
 // punya satu akun demo; sesi yang diseed Playwright dibaca dari `usdx-auth`.
-function currentMockUserId(): string {
+export function currentMockUserId(): string {
   if (typeof localStorage === "undefined") return "usr_1";
   try {
     const raw = localStorage.getItem("usdx-auth");

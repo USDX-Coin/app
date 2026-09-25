@@ -16,7 +16,7 @@
 // Fixture tiga status ada di mock-wallet-transfer-fixtures.ts (hanya tipe, supaya
 // suite Playwright bisa mengimpornya).
 
-import type { TransferAccepted, WalletTransfer } from "@/types";
+import type { TransferAccepted, TransferHistoryItem, WalletTransfer } from "@/types";
 import type { Paginated } from "./client";
 import { ApiError } from "./client";
 
@@ -158,6 +158,29 @@ export function listMockWalletTransfers(
     data: mine.slice(start, start + take).map(toWalletTransfer),
     metadata: { page, limit: take, total: mine.length },
   };
+}
+
+// Baris TRANSFER_OUT riwayat terpadu `GET /api/v2/transactions` (USDX-713): baris
+// buku besar yang sama, bentuk transactions.yaml § TransferHistoryItem — `createdAt`
+// = `submittedAt` (kunci urutan), pihak lain = tujuan.
+export function listMockTransferOutHistory(userId: string): TransferHistoryItem[] {
+  return settledLedger()
+    .filter((r) => r.userId === userId)
+    .map((r) => ({
+      id: r.id,
+      type: "TRANSFER_OUT",
+      amount: r.amount,
+      amountWei: r.amountWei,
+      chain: r.chain,
+      userAddress: r.from,
+      counterpartyAddress: r.to,
+      txHash: r.txHash,
+      status: r.status,
+      failureReason: r.failureReason,
+      blockNumber: r.blockNumber,
+      createdAt: r.submittedAt,
+      updatedAt: r.finalizedAt ?? r.submittedAt,
+    }));
 }
 
 export function getMockWalletTransfer(userId: string, id: string): WalletTransfer {

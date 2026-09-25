@@ -41,6 +41,11 @@ export { MOCK_BACKUP_CODES, MOCK_RECOVERY_OTP, MOCK_TOTP_CODE };
 
 const STATE_KEY = "usdx-mock-two-factor";
 const CHALLENGE_KEY = "usdx-mock-2fa-challenge";
+// Kunci uang keluar custodial (`users.custodial_outbound_locked_until`, §6.1 no.6):
+// terpisah dari STATE_KEY karena mematikan 2FA menghapus state itu, sedangkan
+// kuncinya justru harus bertahan.
+const OUTBOUND_LOCK_KEY = "usdx-mock-outbound-lock";
+const OUTBOUND_LOCK_MS = 24 * 60 * 60 * 1000;
 
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_SECONDS = 15 * 60;
@@ -61,6 +66,7 @@ interface MockChallenge {
 }
 
 let stateMemory: MockTwoFactorState | null = null;
+let lockMemory: string | null = null;
 let challengeMemory: MockChallenge | null = null;
 let verifyFailures = 0;
 let recoveryFailures = 0;
@@ -175,6 +181,7 @@ export function seedMockTwoFactorChallengeExpired(): void {
 export function resetMockTwoFactor(): void {
   writeState(null);
   writeChallenge(null);
+  seedMockOutboundLock(null);
   verifyFailures = 0;
   recoveryFailures = 0;
   recoverySentAt = null;
@@ -230,6 +237,8 @@ export async function mockEnableTwoFactor(
   if (!passwordOk) throw wrongPassword();
   verifyFailures = 0;
   const current = readState();
+  // Enable ulang saat 2FA SUDAH aktif = secret lama diganti di titik ini (§6.1 no.6d).
+  if (current?.enabled) lockOutbound();
   writeState({
     enabled: current?.enabled ?? false,
     pending: true,
@@ -264,6 +273,7 @@ export async function mockDisableTwoFactor(
   else if (!passwordOk) throw wrongPassword();
   verifyFailures = 0;
   writeState(null);
+  lockOutbound();
 }
 
 // ── POST /api/v2/auth/2fa/backup-codes/regenerate ────────────────────────────
@@ -281,6 +291,7 @@ export async function mockRegenerateBackupCodes(
   regenerations += 1;
   const backupCodes = MOCK_BACKUP_CODES.map((c) => `${c.slice(0, 6)}${regenerations}${c.slice(7)}`);
   writeState({ ...state, backupCodes });
+  lockOutbound();
   return { backupCodes };
 }
 
@@ -315,6 +326,7 @@ export async function mockTwoFactorRecovery(req: TwoFactorRecoveryRequest): Prom
   recoveryFailures = 0;
   writeState(null);
   writeChallenge(null);
+  lockOutbound();
 }
 
 // ── Step-up transfer & redeem custodial (custodial-wallet.md §6.1, USDX-717) ──
@@ -348,4 +360,36 @@ export function verifyMockStepUpCode(code: string | undefined): void {
     writeState({ ...state, backupCodes: state.backupCodes.filter((c) => c !== trimmed) });
   }
   stepUpFailures = 0;
+}
+
+// ── Kunci 24 jam uang keluar custodial (§6.1 no.6, USDX-717) ─────────────────
+// Dipasang di keempat jalur "faktor kedua dimatikan atau diganti" di atas; event
+// berikutnya memperpanjang dari saat itu. Aktivasi pertama tidak mengunci.
+function lockOutbound(): void {
+  seedMockOutboundLock(new Date(Date.now() + OUTBOUND_LOCK_MS).toISOString());
+}
+
+// Unit/Playwright: pasang (ISO 8601) atau lepas (`null`) kunci.
+export function seedMockOutboundLock(until: string | null): void {
+  lockMemory = until;
+  writeJson(OUTBOUND_LOCK_KEY, until === null ? null : { until });
+}
+
+// `GET /api/v2/wallet` `outboundLockedUntil`: null bila tidak terkunci, termasuk
+// kunci yang sudah lewat.
+export function mockOutboundLockedUntil(): string | null {
+  const until = readJson<{ until: string }>(OUTBOUND_LOCK_KEY, lockMemory === null ? null : { until: lockMemory })?.until;
+  return until && Date.parse(until) > Date.now() ? until : null;
+}
+
+// Transfer & redeem custodial selama terkunci → 409 CUSTODIAL_OUTBOUND_LOCKED.
+export function assertMockOutboundNotLocked(): void {
+  const lockedUntil = mockOutboundLockedUntil();
+  if (lockedUntil === null) return;
+  throw new ApiError(
+    409,
+    "CUSTODIAL_OUTBOUND_LOCKED",
+    "Transfer & redeem ditahan karena 2FA baru dimatikan atau diganti.",
+    { lockedUntil },
+  );
 }

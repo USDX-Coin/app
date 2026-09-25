@@ -6,8 +6,10 @@ import {
   seedAccountPin,
   seedCustodialWallet,
   seedFreshPasswordAuth,
+  seedTwoFactor,
   MOCK_CUSTODIAL_WALLET_SUMMARY,
   MOCK_PIN,
+  MOCK_TOTP_CODE,
   VIEWPORTS,
 } from "../helpers/playwright-utils";
 
@@ -51,9 +53,14 @@ test.describe("Settings — transaction PIN", () => {
       await forceEnglish(page);
       await seedAccountPin(page, null);
       await seedCustodialWallet(page, { status: "ACTIVE", balance: "1000.00" });
+      await seedTwoFactor(page, true); // 2FA wajib uang keluar custodial (USDX-717)
       // Right after a login — a wallet owner's first PIN needs a fresh session (USDX-698).
       await seedFreshPasswordAuth(page);
-      await loginViaStorage(page, { pinSet: false, custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
+      await loginViaStorage(page, {
+        pinSet: false,
+        custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY,
+        twoFactorEnabled: true,
+      });
       await gotoSettings(page);
 
       const row = pinRow(page);
@@ -81,6 +88,7 @@ test.describe("Settings — transaction PIN", () => {
       await page.getByRole("button", { name: "Continue to PIN" }).click();
       const pin = page.getByRole("dialog").filter({ hasText: "Confirm with PIN" });
       await pin.getByLabel("6-digit PIN").fill(NEW_PIN);
+      await pin.getByLabel("Authenticator code").fill(MOCK_TOTP_CODE);
       await pin.getByRole("button", { name: "Send", exact: true }).click();
       await expect(page.getByTestId("transfer-result")).toBeVisible({ timeout: 15000 });
     });

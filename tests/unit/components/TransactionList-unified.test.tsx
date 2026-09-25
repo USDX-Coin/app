@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { LanguageProvider } from "@/providers/LanguageProvider";
 import { createWrapper } from "../../helpers/test-utils";
@@ -6,6 +6,8 @@ import { TransactionList } from "@/components/transactions/TransactionList";
 import { listTransactions } from "@/lib/api/transactions-api";
 import { getCustodialWallet } from "@/lib/api/wallet-api";
 import { useAuthStore } from "@/stores/authStore";
+import { ApiError } from "@/lib/api/client";
+import { HISTORY_REFRESH_MS } from "@/hooks/useTransactions";
 import {
   MOCK_INCOMING_TRANSFER_FIXTURES as IN,
   MOCK_WALLET_TRANSFER_FIXTURES as OUT,
@@ -234,6 +236,61 @@ describe("TransactionList — unified history", () => {
       renderList();
 
       expect(await screen.findByText("Mint, redeem, dan transfer USDX Anda akan muncul di sini.")).toBeInTheDocument();
+    });
+  });
+});
+
+// Keputusan PR app#82 (review PM): penyegaran latar yang gagal TIDAK mengosongkan daftar yang
+// sedang dibaca — error-state hanya bila belum ada data sama sekali.
+describe("TransactionList — failed refresh", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  describe("positive", () => {
+    test("a refresh answered 5xx keeps the rows on screen, with no 'Riwayat gagal dimuat'", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      listMock
+        .mockResolvedValueOnce({ data: [IN.pending], metadata: { page: 1, limit: 10, total: 1 } })
+        .mockRejectedValue(new ApiError(500, "INTERNAL_ERROR", "x"));
+      renderList();
+
+      expect(await tableRow("Masuk")).toHaveTextContent("Menunggu konfirmasi");
+      // The 15 s refresh fires, fails, is retried once (1 s) and fails for good.
+      await vi.advanceTimersByTimeAsync(HISTORY_REFRESH_MS + 50);
+      await vi.advanceTimersByTimeAsync(1_100);
+      await waitFor(() => expect(listMock).toHaveBeenCalledTimes(3));
+
+      expect(await tableRow("Masuk")).toHaveTextContent("Menunggu konfirmasi");
+      expect(screen.queryByText("Riwayat gagal dimuat")).toBeNull();
+    });
+  });
+
+  describe("negative", () => {
+    test("a failed FIRST load (no data yet) is still the error state", async () => {
+      listMock.mockRejectedValue(new ApiError(500, "INTERNAL_ERROR", "x"));
+      renderList();
+
+      expect(await screen.findByText("Riwayat gagal dimuat", {}, { timeout: 3_000 })).toBeInTheDocument();
+      expect(screen.queryByRole("table")).toBeNull();
+    });
+  });
+
+  describe("edge case", () => {
+    test("a refresh answered 429 (after its Retry-After retries) keeps the rows too", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      listMock
+        .mockResolvedValueOnce({ data: [IN.pending], metadata: { page: 1, limit: 10, total: 1 } })
+        .mockRejectedValue(new ApiError(429, "RATE_LIMITED", "x", undefined, 1));
+      renderList();
+
+      await tableRow("Masuk");
+      await vi.advanceTimersByTimeAsync(HISTORY_REFRESH_MS + 50);
+      await vi.advanceTimersByTimeAsync(2_200); // two Retry-After (1 s) retries
+      await waitFor(() => expect(listMock).toHaveBeenCalledTimes(4));
+
+      expect(await tableRow("Masuk")).toHaveTextContent("Menunggu konfirmasi");
+      expect(screen.queryByText("Riwayat gagal dimuat")).toBeNull();
     });
   });
 });

@@ -6,7 +6,7 @@
 //
 //   Keluar — tujuan (alamat, dipendekkan), jumlah, status; FAILED tetap tampil dengan
 //            kalimat tracker USDX-701 ("USDX tidak berpindah, aman kirim ulang").
-//            Membuka detail/tracker /send/history/[id] (id = WalletTransfer.id).
+//            Seluruh baris membuka detail/tracker /send/history/[id] (id = WalletTransfer.id).
 //   Masuk  — pengirim (ALAMAT SAJA, tidak pernah nama user lain), jumlah, status.
 //            Menu baris = buka explorer + salin hash (pola mint/redeem); tanpa detail.
 //
@@ -15,6 +15,7 @@
 // wallet custodial user sendiri, `userAddress` hanya informasi.
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowDownLeft, ArrowUpRight, ChevronRight } from "lucide-react";
 import { getChainById } from "@/lib/chains";
 import { formatDateTime, truncateAddress, cn } from "@/lib/utils";
@@ -62,10 +63,23 @@ function Status({ item }: { item: TransferHistoryItem }) {
   );
 }
 
+// Baris Keluar bisa diklik di mana saja (AC USDX-713) — kecuali di kontrol di dalamnya
+// (salin hash, tautan explorer, "Lihat detail"), yang tetap mengerjakan tugasnya sendiri.
+// Tautan "Lihat detail" tetap ada untuk keyboard dan pembaca layar.
+function opensDetail(target: EventTarget): boolean {
+  return !(target instanceof Element && target.closest("a, button"));
+}
+
 export function TransferTableRow({ item }: { item: TransferHistoryItem }) {
   const { t, lang } = useLang();
+  const router = useRouter();
+  const outgoing = item.type === "TRANSFER_OUT";
   return (
-    <TableRow data-testid="history-transfer-row">
+    <TableRow
+      data-testid="history-transfer-row"
+      className={cn(outgoing && "cursor-pointer")}
+      onClick={outgoing ? (e) => opensDetail(e.target) && router.push(detailHref(item)) : undefined}
+    >
       <TableCell className="text-muted-text">{formatDateTime(item.createdAt, lang)}</TableCell>
       <TableCell>
         <DirectionCell item={item} />
@@ -84,7 +98,7 @@ export function TransferTableRow({ item }: { item: TransferHistoryItem }) {
         <Status item={item} />
       </TableCell>
       <TableCell className="w-14 text-right">
-        {item.type === "TRANSFER_OUT" ? (
+        {outgoing ? (
           <Button variant="link" size="sm" className="h-auto px-0" asChild>
             <Link href={detailHref(item)}>{t("tx.transferDetail")}</Link>
           </Button>

@@ -9,7 +9,7 @@ import {
   VIEWPORTS,
 } from "../helpers/playwright-utils";
 
-// Pengaturan → Akun → 2FA (custodial-wallet.md §6.1 "Web", two-factor.yaml,
+// Pengaturan → Keamanan → 2FA (custodial-wallet.md §6.1 "Web", two-factor.yaml,
 // USDX-714). Runs against the mock backend: the account's 2FA lives in the
 // "usdx-mock-two-factor" seam (`seedTwoFactor`), the mock accepts `MOCK_TOTP_CODE`
 // as the authenticator's current code.

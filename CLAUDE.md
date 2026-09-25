@@ -245,7 +245,7 @@ Test helpers in `tests/helpers/`:
 | `/redeem` | Yes | SC | Redeem USDX to bank |
 | `/history` | Yes | SC | Unified history (USDX-713, `custodial-wallet.md` §5.7): tabs Semua · Minting · Redeem · Masuk · Keluar over `GET /api/v2/transactions` (Semua = `includeTransfers=true`, the rest = `type`), the active tab mirrored in `?type=` (unknown = Semua). Outgoing rows open `/send/history/[id]`; incoming rows show the sender address only + the explorer/copy-hash menu. Refreshes every 15 s while a transfer is PENDING. Mint/redeem rows to/from the user's custodial wallet carry the mint review's "Wallet custodial saya" marker — `TransactionItem.userAddress` matched case-insensitively, no per-row detail call (USDX-653); transfer rows never do |
 | `/profile` | Yes | SC | User info + verification badge |
-| `/settings` | Yes | SC | Pengaturan: custodial "USDX wallet" (offer — the "Buatkan saya wallet" button on builds with `env.walletCreateEnabled` ON = dev + mock, the "Segera hadir" pill everywhere else incl. production, USDX-699 / address + QR + balance / status) + Account card with the transaction PIN (create / change, USDX-651) and 2FA (turn on / off, new backup codes, USDX-714) + link to Profile (USDX-566; switch: `custodial-wallet.md` §1 amandemen 14 Sep + 21 Sep 2026) |
+| `/settings` | Yes | SC | Pengaturan: custodial "USDX wallet" (offer — the "Buatkan saya wallet" button on builds with `env.walletCreateEnabled` ON = dev + mock, the "Segera hadir" pill everywhere else incl. production, USDX-699 / address + QR + balance / status) + Account card with the transaction PIN (create / change, USDX-651) + link to Profile + Security card ("Keamanan") with 2FA (turn on / off, new backup codes, USDX-714) (USDX-566; switch: `custodial-wallet.md` §1 amandemen 14 Sep + 21 Sep 2026) |
 | `/onboarding/wallet` | Yes | SC | "Dikasih wallet" step (USDX-566). **No longer reached from verify-email** — that redirect is off in every environment (verify-email lands on `/mint`, `custodial-wallet.md` §1 amandemen 14 Sep 2026); only a direct URL opens it. Same offer as Settings (button or pill by `env.walletCreateEnabled`, USDX-699). "Not now" → `/mint` |
 | `/bridge` | Yes | SC | ComingSoon (gated — no bridge backend yet; sidebar teaser) |
 | `/send` | Yes | SC | Custodial transfer (`TransferPageContent`) for users with `user.custodialWallet`; ComingSoon for everyone else (no external-wallet send backend) |
@@ -302,7 +302,7 @@ Test helpers in `tests/helpers/`:
   starts right after a login arms `seedFreshPasswordAuth(page)` (Playwright)
 - **2FA TOTP (USDX-714, `custodial-wallet.md` §6.1, `two-factor.yaml`)** — required for money
   leaving the custodial wallet (enforced by backend USDX-718; the transfer/redeem code field is
-  USDX-717). The web can now turn it on/off and regenerate backup codes (Settings → Account)
+  USDX-717). The web can now turn it on/off and regenerate backup codes (Settings → Security)
   and log in to a 2FA account (`login` → `{ twoFactorRequired }` → code screen →
   `verify-login`; email recovery). `user.twoFactorEnabled` in the auth store is what screens
   read; every change goes through `hooks/useProfileCorrection` (store + `/auth/me` cache).

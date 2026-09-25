@@ -26,7 +26,7 @@ tests/
     profile.spec.ts     # User info display
     history-custodial.spec.ts # /history "Wallet custodial saya" marker: to/from the wallet, manual address, no wallet, all-lowercase address, mobile cards (USDX-653)
     transfer-history.spec.ts # Unified /history transfers (USDX-713): tabs + ?type=, incoming vs outgoing rows, detail and back to "Keluar", /send/history redirect, no "Transfer history" button, 10 per page, unknown status = pending, neutral 404 (USDX-701)
-    settings-2fa.spec.ts # Settings → Account → 2FA: turn on (QR + backup codes + code), wrong code, turn off with the 24-hour warning, new backup codes, copy not stale after /auth/me, 375px ID (USDX-714)
+    settings-2fa.spec.ts # Settings → Security → 2FA: turn on (QR + backup codes + code), wrong code, turn off with the 24-hour warning, new backup codes, copy not stale after /auth/me, 375px ID (USDX-714)
     settings-pin.spec.ts # Settings → Account → transaction PIN: create, use at once on /send, change, lockout (USDX-651); create on a stale session → log in again → back to the dialog (USDX-697); forgot PIN from Change PIN: lockout, 5-minute window, cancel, per tab (USDX-696)
   e2e/                  # Playwright — full user flows
     auth-flow.spec.ts   # Register -> logout -> login

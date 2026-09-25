@@ -13,7 +13,7 @@ components/
   mint/        # Mint flow: MintForm, MintReview, ChainSelector
   redeem/      # Redeem flow: RedeemForm, RedeemReview, RedeemStatus (tracker), BankSelect, BankAccountPicker + AddBankAccountModal (bank book, USDX-261). Custodial source switch + PIN dialog in the review (USDX-567)
   wallet/      # Custodial wallet (USDX-566): CustodialWalletOffer, CustodialWalletPanel, ReceiveAddress (QR + copy), CustodialWalletSection (offer-or-panel), CustodialBalanceCard (sidebar), WalletOnboardingContent
-  settings/    # SettingsPageContent — Pengaturan is a real page since USDX-566; PinSection = the transaction PIN row in the Account card (USDX-651); TwoFactorSection + TwoFactorEnableDialog / TwoFactorDisableDialog / BackupCodesRegenerateDialog + BackupCodesPanel + TwoFactorPasswordField = the 2FA row (USDX-714)
+  settings/    # SettingsPageContent — Pengaturan is a real page since USDX-566; PinSection = the transaction PIN row in the Account card (USDX-651); TwoFactorSection + TwoFactorEnableDialog / TwoFactorDisableDialog / BackupCodesRegenerateDialog + BackupCodesPanel + TwoFactorPasswordField = the 2FA row in the Security card (USDX-714)
   transfer/    # Custodial transfer (USDX-567): TransferPageContent (custodial owner → form, else ComingSoon), TransferForm, TransferReview, TransferResult (= confirmation tracker, USDX-701). History (USDX-701): TransferDetail (/send/history/[id]), TransferStatusPanel + TransferStatusBadge (shared by tracker, detail and the /history rows). The transfer LIST lives in /history since USDX-713 (`transactions/TransferHistoryRow`); `/send/history` redirects there
   transactions/ profile/ system/
 ```

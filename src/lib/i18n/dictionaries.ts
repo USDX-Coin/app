@@ -1068,6 +1068,7 @@ const en: Dict = {
   // 2FA TOTP (two-factor.yaml, USDX-714). Required for money leaving the USDX
   // wallet (custodial-wallet.md §6.1). "Authenticator" = Google Authenticator or
   // a similar app; never "TOTP" on screen.
+  "settings.security.title": "Security",
   "settings.2fa.title": "Two-step verification (2FA)",
   "settings.2fa.desc": "A code from Google Authenticator on top of your PIN. Required to send or withdraw from your USDX wallet.",
   "settings.2fa.on": "On",
@@ -2215,6 +2216,7 @@ const id: Dict = {
   // 2FA TOTP (two-factor.yaml, USDX-714). Wajib untuk uang keluar wallet USDX
   // (custodial-wallet.md §6.1). "Authenticator" = Google Authenticator atau
   // aplikasi sejenis; kata "TOTP" tidak pernah tampil di layar.
+  "settings.security.title": "Keamanan",
   "settings.2fa.title": "Verifikasi dua langkah (2FA)",
   "settings.2fa.desc": "Kode dari Google Authenticator sebagai pengaman tambahan selain PIN. Wajib untuk mengirim dan redeem dari wallet USDX.",
   "settings.2fa.on": "Aktif",

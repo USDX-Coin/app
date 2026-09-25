@@ -1,6 +1,6 @@
 "use client";
 
-// Baris "Verifikasi dua langkah (2FA)" di kartu Akun halaman Pengaturan
+// Baris "Verifikasi dua langkah (2FA)" di kartu Keamanan halaman Pengaturan
 // (custodial-wallet.md §6.1 "Web", USDX-714). 2FA wajib untuk transfer & redeem
 // wallet custodial; sebelum ini web tidak punya jalan untuk mengaktifkannya.
 // Status dibaca dari salinan profil `user.twoFactorEnabled` (GET /auth/me, users.yaml
@@ -28,7 +28,7 @@ export function TwoFactorSection() {
     <div
       data-slot="settings-2fa"
       data-two-factor={twoFactorEnabled === null ? "unknown" : String(twoFactorEnabled)}
-      className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between"
+      className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
     >
       <div className="flex min-w-0 flex-col gap-1">
         <div className="flex flex-wrap items-center gap-2">

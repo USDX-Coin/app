@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { UserRound, Wallet } from "lucide-react";
+import { ShieldCheck, UserRound, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -15,9 +15,10 @@ import { useLang } from "@/providers/LanguageProvider";
  * wallet: an existing user without one sees the same "dikasih wallet" offer as
  * onboarding, one who has it sees the receiving address (copy + QR), status
  * and balance. The Account card holds the transaction PIN (create / change,
- * USDX-651) — the approval every custodial transfer and redeem needs — and 2FA
- * (turn on / off, new backup codes, USDX-714), required on top of it. Password,
- * language and theme still live on /profile, and the card says so instead of
+ * USDX-651) — the approval every custodial transfer and redeem needs. The Security
+ * card ("Keamanan", `custodial-wallet.md` §6.1 "Web") holds 2FA (turn on / off, new
+ * backup codes, USDX-714), required on top of the PIN. Password, language and
+ * theme still live on /profile, and the Account card says so instead of
  * duplicating them.
  */
 export function SettingsPageContent() {
@@ -48,6 +49,13 @@ export function SettingsPageContent() {
             </Button>
           </div>
           <PinSection />
+        </Card>
+
+        <Card data-slot="settings-security">
+          <h2 className="flex items-center gap-2 text-base font-semibold">
+            <ShieldCheck className="size-4" aria-hidden />
+            {t("settings.security.title")}
+          </h2>
           <TwoFactorSection />
         </Card>
       </div>

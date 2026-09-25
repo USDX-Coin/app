@@ -20,6 +20,11 @@ export interface User {
   // → arahkan user membuat PIN dulu, jangan buka dialog PIN yang pasti gagal.
   // Opsional: sesi yang di-persist sebelum field ini ada tidak membawanya.
   pinSet?: boolean;
+  // 2FA TOTP aktif di akun (users.yaml § User.twoFactorEnabled, USDX-314). WAJIB
+  // untuk transfer & redeem custodial (custodial-wallet.md §6.1). Salinan di klien
+  // dikoreksi seketika sesudah aktivasi/matikan (`useProfileCorrection`) supaya
+  // layar uang tidak membaca status basi. Opsional: sesi lama tidak membawanya.
+  twoFactorEnabled?: boolean;
   // Wallet custodial user (users.yaml § User → `custodialWallet`, USDX-607/566).
   // `null` = user tidak punya (mayoritas non-custodial). Ini yang menentukan
   // routing: tawarkan "dikasih wallet" atau tampilkan saldo — TANPA memanggil
@@ -206,6 +211,22 @@ export interface BankAccount {
 export interface AuthResponse {
   user: User;
   token: string;
+}
+
+// Login langkah 1 pada akun ber-2FA (auth.yaml § loginV2): 200 TANPA token —
+// BUKAN login sukses. Token baru terbit di `POST /auth/2fa/verify-login`.
+export interface TwoFactorRequired {
+  twoFactorRequired: true;
+}
+
+export type LoginResult = AuthResponse | TwoFactorRequired;
+
+// POST /api/v2/auth/2fa/enable (two-factor.yaml § TwoFactorEnroll). `totpUri` =
+// otpauth:// untuk QR — dirender LOKAL, tidak pernah dikirim ke layanan pihak
+// ketiga. `backupCodes` sekali pakai, ditampilkan SEKALI.
+export interface TwoFactorEnrollment {
+  totpUri: string;
+  backupCodes: string[];
 }
 
 // Result of POST /api/v2/auth/register — no session issued (user must verify email first).

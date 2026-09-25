@@ -5,7 +5,7 @@ vi.mock("@/lib/env", () => ({
   env: { apiBaseUrl: "", useMock: false },
 }));
 
-import { logout, changePassword, setPin, changePin } from "@/lib/api/auth-api";
+import { login, logout, changePassword, setPin, changePin } from "@/lib/api/auth-api";
 import { configureApiClient } from "@/lib/api/client";
 
 function jsonResponse(status: number, payload: unknown): Response {
@@ -210,6 +210,58 @@ describe("changePin", () => {
         code: "TOO_MANY_ATTEMPTS",
         retryAfterSeconds: 900,
       });
+    });
+  });
+});
+
+// Login langkah 1 (auth.yaml § loginV2): akun ber-2FA dibalas 200
+// `{ twoFactorRequired: true }` TANPA token — itu BUKAN login sukses (GAP 22 Sep,
+// USDX-714). Sebelumnya setiap 200 dibaca sebagai AuthTokenV2.
+describe("login", () => {
+  const body = { email: "demo@usdx.com", password: "Demo1234" };
+
+  describe("positive", () => {
+    test("AuthTokenV2 → the session the app stores", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(200, {
+          status: "success",
+          data: { accessToken: "tok", sessionId: "sid", user: { id: "usr_1", email: body.email } },
+        }),
+      );
+
+      await expect(login(body)).resolves.toEqual({
+        token: "tok",
+        user: { id: "usr_1", email: body.email },
+      });
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe("/api/v2/auth/login");
+      expect((init.headers as Headers).get("Authorization")).toBeNull();
+    });
+
+    test("{ twoFactorRequired: true } → the 2FA step, no session", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(200, { status: "success", data: { twoFactorRequired: true } }),
+      );
+
+      await expect(login(body)).resolves.toEqual({ twoFactorRequired: true });
+    });
+  });
+
+  describe("edge case", () => {
+    test("twoFactorRequired other than literal true is not the 2FA branch", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(200, {
+          status: "success",
+          data: {
+            accessToken: "tok",
+            sessionId: "sid",
+            twoFactorRequired: false,
+            user: { id: "usr_1" },
+          },
+        }),
+      );
+
+      await expect(login(body)).resolves.toMatchObject({ token: "tok" });
     });
   });
 });

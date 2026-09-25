@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { CustodialWalletOffer } from "@/components/wallet/CustodialWalletOffer";
 import { CustodialWalletPanel } from "@/components/wallet/CustodialWalletPanel";
 import { PinNotSetNotice } from "@/components/shared/PinNotSetNotice";
+import { TwoFactorSetupNotice } from "@/components/shared/TwoFactorSetupNotice";
 import { useCustodialWallet } from "@/hooks/useCustodialWallet";
+import { useTwoFactor } from "@/hooks/useTwoFactor";
 import { useSession } from "@/hooks/useSession";
 import { useLang } from "@/providers/LanguageProvider";
 
@@ -32,6 +34,11 @@ interface CustodialWalletSectionProps {
  * USDX-697): the session is still fresh at this moment, so creating the PIN needs
  * no re-login — later it may (pin.yaml § set). Not forced; a wallet that already
  * existed gets no invite (Settings → PIN is its home).
+ *
+ * The same moment invites the user to turn on 2FA when it is off (USDX-714,
+ * `custodial-wallet.md` §6.1): 2FA is required to send or withdraw, and turning it
+ * on now shrinks the window in which someone else could enroll first (residual
+ * risk no.9). Unknown status (older session) → no invite.
  */
 export function CustodialWalletSection({ variant, onSkip, continueHref }: CustodialWalletSectionProps) {
   const { t } = useLang();
@@ -39,6 +46,7 @@ export function CustodialWalletSection({ variant, onSkip, continueHref }: Custod
   // missing from an older session) does not decide which half renders.
   useSession();
   const wallet = useCustodialWallet({ poll: true });
+  const { twoFactorEnabled } = useTwoFactor();
   const [createdHere, setCreatedHere] = useState(false);
 
   function create() {
@@ -62,6 +70,9 @@ export function CustodialWalletSection({ variant, onSkip, continueHref }: Custod
       <CustodialWalletPanel wallet={wallet} readyHeading={variant === "onboarding"} />
       {createdHere && wallet.status === "ACTIVE" && wallet.pinSet === false && (
         <PinNotSetNotice tone="info" messageKey="pin.inviteAfterWallet" data-testid="wallet-pin-invite" />
+      )}
+      {createdHere && wallet.status === "ACTIVE" && twoFactorEnabled === false && (
+        <TwoFactorSetupNotice messageKey="twoFactor.inviteAfterWallet" data-testid="wallet-2fa-invite" />
       )}
       {variant === "onboarding" && continueHref && wallet.status === "ACTIVE" && (
         <Button variant="brand" size="lg" asChild className="w-full sm:w-auto sm:self-start">

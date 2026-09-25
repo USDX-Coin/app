@@ -26,6 +26,7 @@ tests/
     profile.spec.ts     # User info display
     history-custodial.spec.ts # /history "Wallet custodial saya" marker: to/from the wallet, manual address, no wallet, all-lowercase address, mobile cards (USDX-653)
     transfer-history.spec.ts # Unified /history transfers (USDX-713): tabs + ?type=, incoming vs outgoing rows, detail and back to "Keluar", /send/history redirect, no "Transfer history" button, 10 per page, unknown status = pending, neutral 404 (USDX-701)
+    settings-2fa.spec.ts # Settings → Security → 2FA: turn on (QR + backup codes + code), wrong code, turn off with the 24-hour warning, new backup codes with the same warning, copy not stale after /send + /auth/me, 375px ID (USDX-714)
     settings-pin.spec.ts # Settings → Account → transaction PIN: create, use at once on /send, change, lockout (USDX-651); create on a stale session → log in again → back to the dialog (USDX-697); forgot PIN from Change PIN: lockout, 5-minute window, cancel, per tab (USDX-696)
   e2e/                  # Playwright — full user flows
     auth-flow.spec.ts   # Register -> logout -> login
@@ -35,6 +36,7 @@ tests/
     transfer-flow.spec.ts         # Custodial transfer: form -> Ringkasan -> PIN -> tracker PENDING -> CONFIRMED/FAILED, stuck stays waiting, row in /history "Keluar" (USDX-567/701/713)
     history-unified-flow.spec.ts  # Unified /history: incoming PENDING -> Successful without reload (15 s refresh), no-wallet user, unknown ?type= (USDX-713)
     redeem-custodial-flow.spec.ts # Custodial redeem: PIN, no wallet dialog, tracker to payout (USDX-567)
+    two-factor-flow.spec.ts       # Login on a 2FA account: code / backup code (single use), forgot-PIN re-login still lands on Settings after the code, email recovery with the 24-hour warning, expired challenge (USDX-714)
     pin-flow.spec.ts              # PIN created from the transfer/redeem notice, stale-copy PIN_NOT_SET (USDX-651); every create door asks to log in again under backend USDX-698 (USDX-697); forgot PIN from a locked transfer PIN dialog → new PIN approves, old refused (USDX-696)
   audit-ui/             # node + Playwright — measurement, NOT assertions
     sweep-auth.js       # Every authed page x 4 viewports: overflow, out-of-bounds
@@ -111,6 +113,10 @@ beforeEach(() => {
   what the next sent transfer becomes (default CONFIRMED after 3.5 s). Never arm
   `seedWallet` (the external-wallet seam) in a custodial
   spec: proving "no wallet dialog" needs the external wallet to be absent
+- **2FA** (USDX-714): `seedTwoFactor(page, true)` turns the account's 2FA on in the mock (once
+  per tab) — pair it with `twoFactorEnabled: true` on `loginViaStorage`. The mock accepts
+  `MOCK_TOTP_CODE` / `MOCK_BACKUP_CODES` / `MOCK_RECOVERY_OTP`; `expireTwoFactorChallenge(page)`
+  ends the login step-1 challenge while the code screen is open
 - Unit tests mock all data — no network, no DOM rendering for store tests
 - Playwright tests use `{ timeout: 15000 }` on key assertions for SSR hydration
 - `type="email"` inputs have native browser validation — test with valid-format emails

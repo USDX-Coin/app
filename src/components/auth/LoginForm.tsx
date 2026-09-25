@@ -14,10 +14,12 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group";
 import { LinkInline } from "@/components/ui/link-inline";
+import { TwoFactorLoginStep } from "@/components/auth/TwoFactorLoginStep";
 import { useAuth } from "@/hooks/useAuth";
 import { useCooldown, DEFAULT_COOLDOWN_SECONDS } from "@/hooks/useCooldown";
 import { useLang } from "@/providers/LanguageProvider";
 import { translateValidation, validateEmail } from "@/lib/validations";
+import { isTwoFactorRequired } from "@/lib/api/auth-api";
 import {
   getFailureText,
   getRateLimitSeconds,
@@ -43,6 +45,10 @@ export function LoginForm() {
   const [needsVerification, setNeedsVerification] = useState(false);
   // 403 ACCOUNT_SUSPENDED (auth.yaml loginV2) — distinct banner, not a generic toast.
   const [suspended, setSuspended] = useState(false);
+  // Akun ber-2FA (auth.yaml § loginV2, USDX-714): password benar → layar kode.
+  // `challengeExpired` = kembali dari layar kode karena challenge 10 menit habis.
+  const [twoFactorStep, setTwoFactorStep] = useState(false);
+  const [challengeExpired, setChallengeExpired] = useState(false);
   const cooldown = useCooldown();
 
   async function handleSubmit(e: React.FormEvent) {
@@ -56,8 +62,10 @@ export function LoginForm() {
     setErrors({});
     setNeedsVerification(false);
     setSuspended(false);
+    setChallengeExpired(false);
     try {
-      await login({ email, password });
+      const result = await login({ email, password });
+      if (isTwoFactorRequired(result)) setTwoFactorStep(true);
     } catch (err) {
       if (isEmailNotVerified(err)) {
         setNeedsVerification(true);
@@ -104,6 +112,20 @@ export function LoginForm() {
     router.push(`/register/check-email?email=${encodeURIComponent(email)}`);
   }
 
+  if (twoFactorStep) {
+    return (
+      <TwoFactorLoginStep
+        email={email}
+        password={password}
+        onBack={() => setTwoFactorStep(false)}
+        onExpired={() => {
+          setTwoFactorStep(false);
+          setChallengeExpired(true);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1.5">
@@ -138,6 +160,12 @@ export function LoginForm() {
           {email
             ? t("auth.login.needsVerificationBody", { email })
             : t("auth.login.needsVerificationBodyNoEmail")}
+        </Alert>
+      )}
+
+      {challengeExpired && (
+        <Alert tone="warning" data-testid="two-factor-expired">
+          {t("auth.2fa.expired")}
         </Alert>
       )}
 

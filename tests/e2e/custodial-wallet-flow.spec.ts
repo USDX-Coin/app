@@ -142,8 +142,12 @@ test.describe("Custodial wallet flow", () => {
       await expect(page.getByText("Your wallet is being set up")).toBeVisible({ timeout: 10000 });
       await expect(page.getByText("Receiving address")).toBeVisible({ timeout: 20000 });
       await expect(page.locator('[data-slot="receive-address-value"]')).toHaveCount(1);
-      // Scoped to main: Next's route announcer outside it also has role=alert.
-      await expect(page.getByRole("main").getByRole("alert")).toHaveCount(0);
+      // Scoped to main: Next's route announcer outside it also has role=alert. The
+      // only alert is the "turn on 2FA" invite for a wallet created here (USDX-714) —
+      // no error state.
+      const alerts = page.getByRole("main").getByRole("alert");
+      await expect(page.getByTestId("wallet-2fa-invite")).toBeVisible();
+      await expect(alerts).toHaveCount(1);
     });
   });
 });

@@ -73,6 +73,31 @@ export interface ChangePinRequest {
   newPin: string;
 }
 
+// ── 2FA TOTP (openapi two-factor.yaml, USDX-714) ───────────────────────────
+// Field `code` di semua body di bawah = rahasia (TOTP / backup code / OTP email):
+// tidak pernah dicatat di log / analytics klien (custodial-wallet.md §6.1 "Log").
+
+// POST /api/v2/auth/2fa/enable dan /backup-codes/regenerate — password-gated.
+export interface TwoFactorPasswordRequest {
+  password: string;
+}
+
+// POST /api/v2/auth/2fa/verify (finalisasi enroll, TOTP 6 digit) dan
+// /verify-login (TOTP atau backup code).
+export interface TwoFactorCodeRequest {
+  code: string;
+}
+
+// POST /api/v2/auth/2fa/disable — konfirmasi SALAH SATU: password ATAU kode TOTP
+// (either/or, keputusan PM — tidak diperketat).
+export type DisableTwoFactorRequest = { password: string } | { code: string };
+
+// POST /api/v2/auth/2fa/recovery/email — tanpa `code` = kirim OTP ke email;
+// dengan `code` = verifikasi OTP → 2FA dimatikan (tanpa token; login ulang).
+export interface TwoFactorRecoveryRequest {
+  code?: string;
+}
+
 // ── KYC (openapi kyc.yaml — consumer) ──────────────────────────────────────
 // `IdentityType` hidup di `@/lib/kyc/identity` bersama daftar nilai + validasinya,
 // dan di-re-export di sini supaya modul yang hanya bicara soal bentuk wire tidak

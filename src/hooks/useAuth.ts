@@ -4,6 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/authStore";
 import * as authApi from "@/lib/api/auth-api";
+import { recoverTwoFactorViaEmail, verifyTwoFactorLogin } from "@/lib/api/two-factor-api";
 import { reloginLanding } from "@/lib/auth/relogin-intent";
 import type {
   LoginRequest,
@@ -27,17 +28,43 @@ import type {
 //
 // A login that follows a "Login ulang" button (lib/auth/relogin-intent, USDX-697)
 // lands on that intent's screen instead of /mint; the screen takes the intent.
+//
+// 2FA (USDX-714, auth.yaml § loginV2): on a 2FA account `login` answers
+// `{ twoFactorRequired }` and does nothing else; `verifyTwoFactorLogin` is the step
+// that issues the session and lands.
 
 export function useAuth() {
   const router = useRouter();
   const { user, isAuthenticated, setAuth, logout: storeLogout } = useAuthStore();
 
+  // Akun ber-2FA: langkah 1 hanya `{ twoFactorRequired }` — belum ada sesi, jadi
+  // store dan navigasi tidak disentuh; pemanggil (LoginForm) menampilkan layar kode.
   const loginMutation = useMutation({
     mutationFn: (req: LoginRequest) => authApi.login(req),
+    onSuccess: (data) => {
+      if (authApi.isTwoFactorRequired(data)) return;
+      setAuth(data.user, data.token);
+      router.push(reloginLanding() ?? "/mint");
+    },
+  });
+
+  // Login langkah 2 (two-factor.yaml § verifyLogin): INI login-nya — sesi + pendaratan
+  // yang sama dengan login biasa, termasuk niat login ulang (lupa-PIN / Buat PIN).
+  const verifyTwoFactorLoginMutation = useMutation({
+    mutationFn: (code: string) => verifyTwoFactorLogin({ code }),
     onSuccess: (data) => {
       setAuth(data.user, data.token);
       router.push(reloginLanding() ?? "/mint");
     },
+  });
+
+  // Pemulihan via email (two-factor.yaml § recoveryEmail): kirim OTP, lalu
+  // verifikasi → 2FA mati. Tidak ada token di sini — pemanggil login ulang.
+  const requestRecoveryMutation = useMutation({
+    mutationFn: () => recoverTwoFactorViaEmail(),
+  });
+  const confirmRecoveryMutation = useMutation({
+    mutationFn: (code: string) => recoverTwoFactorViaEmail(code),
   });
 
   const registerMutation = useMutation({
@@ -87,6 +114,9 @@ export function useAuth() {
     user,
     isAuthenticated,
     login: loginMutation.mutateAsync,
+    verifyTwoFactorLogin: verifyTwoFactorLoginMutation.mutateAsync,
+    requestTwoFactorRecovery: requestRecoveryMutation.mutateAsync,
+    confirmTwoFactorRecovery: confirmRecoveryMutation.mutateAsync,
     register: registerMutation.mutateAsync,
     verifyEmail: verifyEmailMutation.mutateAsync,
     resendVerification: resendVerificationMutation.mutateAsync,
@@ -95,6 +125,9 @@ export function useAuth() {
     changePassword: changePasswordMutation.mutateAsync,
     logout,
     loginLoading: loginMutation.isPending,
+    verifyTwoFactorLoginLoading: verifyTwoFactorLoginMutation.isPending,
+    requestTwoFactorRecoveryLoading: requestRecoveryMutation.isPending,
+    confirmTwoFactorRecoveryLoading: confirmRecoveryMutation.isPending,
     registerLoading: registerMutation.isPending,
     verifyEmailLoading: verifyEmailMutation.isPending,
     resendVerificationLoading: resendVerificationMutation.isPending,

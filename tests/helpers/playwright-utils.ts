@@ -3,6 +3,11 @@ import {
   MOCK_INCOMING_TRANSFER_FIXTURES,
   MOCK_WALLET_TRANSFER_FIXTURES,
 } from "../../src/lib/api/mock-wallet-transfer-fixtures";
+import {
+  MOCK_BACKUP_CODES as TWO_FACTOR_BACKUP_CODES,
+  MOCK_RECOVERY_OTP as TWO_FACTOR_RECOVERY_OTP,
+  MOCK_TOTP_CODE as TWO_FACTOR_TOTP_CODE,
+} from "../../src/lib/api/mock-two-factor-fixtures";
 
 const AUTH_STATE = {
   state: {
@@ -26,6 +31,8 @@ const AUTH_STATE = {
       },
       // users.yaml § User.pinSet (USDX-567): the custodial money paths need a PIN.
       pinSet: true,
+      // users.yaml § User.twoFactorEnabled (USDX-714): off unless `seedTwoFactor(page, true)`.
+      twoFactorEnabled: false,
     },
     token: "mock-token",
     isAuthenticated: true,
@@ -496,4 +503,43 @@ export async function seedIncomingTransfers(
     },
     { r: rows as Record<string, unknown>[], confirmAfterMs: opts.confirmAfterMs ?? null },
   );
+}
+
+// ── 2FA TOTP (USDX-714) ─────────────────────────────────────────────────────
+/** Codes the mock 2FA accepts: authenticator code, backup codes, email OTP. */
+export const MOCK_TOTP_CODE = TWO_FACTOR_TOTP_CODE;
+export const MOCK_BACKUP_CODES = TWO_FACTOR_BACKUP_CODES;
+export const MOCK_RECOVERY_OTP = TWO_FACTOR_RECOVERY_OTP;
+
+/**
+ * Arm the account's 2FA in the mock (mock-two-factor "usdx-mock-two-factor"):
+ * `true` = on with `MOCK_BACKUP_CODES`, `false` = off (the default). Pair `true`
+ * with `twoFactorEnabled: true` on `loginViaStorage` — the first render reads the
+ * persisted profile, the mock `/me` reads the seam. Applied ONCE per tab: the flow
+ * under test turns it on/off. Call before the first page.goto().
+ */
+export async function seedTwoFactor(page: Page, enabled: boolean) {
+  await page.addInitScript(
+    ({ on, codes }) => {
+      if (sessionStorage.getItem("usdx-mock-two-factor-seeded")) return;
+      sessionStorage.setItem("usdx-mock-two-factor-seeded", "1");
+      if (!on) {
+        localStorage.removeItem("usdx-mock-two-factor");
+        return;
+      }
+      localStorage.setItem(
+        "usdx-mock-two-factor",
+        JSON.stringify({ enabled: true, pending: false, backupCodes: codes }),
+      );
+    },
+    { on: enabled, codes: MOCK_BACKUP_CODES },
+  );
+}
+
+/** The login step-1 challenge (10 min) ran out — call while on the code screen. */
+export async function expireTwoFactorChallenge(page: Page) {
+  await page.evaluate(() => {
+    const raw = localStorage.getItem("usdx-mock-2fa-challenge");
+    if (raw) localStorage.setItem("usdx-mock-2fa-challenge", JSON.stringify({ ...JSON.parse(raw), expiresAt: 0 }));
+  });
 }

@@ -6,16 +6,12 @@ import {
   ArrowDown,
   ArrowDownToLine,
   ArrowUpFromLine,
-  Copy,
-  ExternalLink,
   History,
-  MoreHorizontal,
   ServerCrash,
   SlidersHorizontal,
   Wallet,
   WifiOff,
 } from "lucide-react";
-import { toast } from "sonner";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useCustodialWallet } from "@/hooks/useCustodialWallet";
 import { useRedeemStore } from "@/stores/redeemStore";
@@ -25,9 +21,7 @@ import { isTransferItem } from "@/lib/history-item";
 import {
   formatDateTime,
   formatIDR,
-  formatTokenAmount,
   isSameAddress,
-  truncateAddress,
   cn,
 } from "@/lib/utils";
 import { useLang } from "@/providers/LanguageProvider";
@@ -43,12 +37,6 @@ import {
 } from "@/components/ui/empty";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   Table,
   TableBody,
   TableCell,
@@ -57,9 +45,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TransactionListSkeleton } from "@/components/transactions/TransactionListSkeleton";
 import { PagePagination } from "@/components/shared/PagePagination";
+import { AmountCell, RowActions, TxHashCell } from "@/components/transactions/HistoryCells";
 import type {
   ConsumerOrderType,
   ConsumerTransaction,
@@ -118,14 +106,6 @@ function subtotalValue(tx: ConsumerTransaction): string | null {
 }
 function totalValue(tx: ConsumerTransaction): string | null {
   return tx.type === "REDEEM" ? tx.netPayoutIdr : tx.totalPayIdr;
-}
-
-// Block explorer tx link for the order's chain, or null when the chain has no
-// known explorer or the tx hasn't landed on-chain yet (txHash null).
-function explorerTxUrl(chain: string, txHash: string | null): string | null {
-  if (!txHash) return null;
-  const url = getChainById(chain)?.explorerUrl;
-  return url ? `${url}/tx/${txHash}` : null;
 }
 
 // UI filter value → API `type` param. Union mint + redeem (USDX-244).
@@ -208,11 +188,6 @@ export function TransactionList() {
     { value: "redeem", label: t("tx.redeem") },
   ];
 
-  function copy(text: string) {
-    navigator.clipboard.writeText(text);
-    toast.success(t("toast.copied"));
-  }
-
   function changeFilter(next: string) {
     setTypeFilter(next);
     setPage(1);
@@ -247,50 +222,6 @@ export function TransactionList() {
     );
   }
 
-  function AmountCell({ amount }: { amount: string }) {
-    return (
-      <span className="flex items-center justify-end gap-1.5 tabular-nums text-foreground">
-        <img src="/image/usdx-coin.svg" alt="" className="size-4 rounded-full" />
-        {formatTokenAmount(amount, lang)}
-      </span>
-    );
-  }
-
-  function TxHashCell({ tx }: { tx: ConsumerTransaction }) {
-    const url = explorerTxUrl(tx.chain, tx.txHash);
-    if (!tx.txHash) return <span className="text-muted-text">—</span>;
-    return (
-      <span className="flex items-center gap-1 text-foreground">
-        {url ? (
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary-text underline-offset-4 hover:underline"
-          >
-            {truncateAddress(tx.txHash, 4)}
-          </a>
-        ) : (
-          truncateAddress(tx.txHash, 4)
-        )}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => copy(tx.txHash!)}
-              aria-label={t("common.copy")}
-              className="text-muted-text"
-            >
-              <Copy className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{t("common.copy")}</TooltipContent>
-        </Tooltip>
-      </span>
-    );
-  }
-
   function StatusPill({ tx }: { tx: ConsumerTransaction }) {
     const isRedeem = tx.type === "REDEEM";
     const status = isRedeem
@@ -300,53 +231,6 @@ export function TransactionList() {
       ? redeemStatusLabelKey[status as RedeemStatus]
       : statusLabelKey[status as BadgeKey];
     return <StatusBadge status={status}>{t(labelKey)}</StatusBadge>;
-  }
-
-  /**
-   * Menu ⋯ per baris (Figma 8). Figma memasang tiga entri: "Lihat detail",
-   * "Buka di explorer", "Salin hash". "Lihat detail" butuh Sheet detail +
-   * Steps timeline yang belum ada di produk, jadi ia TIDAK dirender — entri
-   * menu yang tidak membuka apa pun lebih buruk daripada menu berisi dua.
-   *
-   * Dua entri yang tersisa sama-sama butuh tx hash. Baris yang belum mendarat
-   * on-chain karena itu tidak dapat pemicu sama sekali, bukan tombol yang
-   * membuka menu kosong. Kolomnya tetap ada supaya lebar tabel tidak bergoyang
-   * antar baris.
-   */
-  function RowActions({ tx }: { tx: ConsumerTransaction }) {
-    const url = explorerTxUrl(tx.chain, tx.txHash);
-    if (!tx.txHash) return null;
-    return (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={t("tx.rowActions")}
-            className="text-muted-text"
-          >
-            <MoreHorizontal className="size-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
-          {url && (
-            // `asChild` is stripped by the Animate UI item, so this cannot be an
-            // `<a>`; `noopener` is passed explicitly instead of inherited from
-            // `rel`.
-            <DropdownMenuItem
-              onSelect={() => window.open(url, "_blank", "noopener,noreferrer")}
-            >
-              <ExternalLink />
-              {t("tx.openExplorer")}
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuItem onSelect={() => copy(tx.txHash!)}>
-            <Copy />
-            {t("tx.copyHash")}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    );
   }
 
   function chainLabel(chain: string) {
@@ -472,7 +356,7 @@ export function TransactionList() {
                       dari Subtotal di sebelahnya. */}
                   <TableCell className="text-right font-medium tabular-nums text-foreground">{idrOrDash(totalValue(tx))}</TableCell>
                   <TableCell className="text-foreground">{chainLabel(tx.chain)}</TableCell>
-                  <TableCell><TxHashCell tx={tx} /></TableCell>
+                  <TableCell><TxHashCell chain={tx.chain} txHash={tx.txHash} /></TableCell>
                   <TableCell className="w-[212px]">
                     <div className="flex items-center gap-2">
                       <StatusPill tx={tx} />
@@ -483,7 +367,7 @@ export function TransactionList() {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="w-14 text-right"><RowActions tx={tx} /></TableCell>
+                  <TableCell className="w-14 text-right"><RowActions chain={tx.chain} txHash={tx.txHash} /></TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -510,7 +394,7 @@ export function TransactionList() {
               <CardRow label={t("tx.chain")} value={chainLabel(tx.chain)} />
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-text">{t("tx.txHash")}</span>
-                <TxHashCell tx={tx} />
+                <TxHashCell chain={tx.chain} txHash={tx.txHash} />
               </div>
               {tx.type === "REDEEM" && tx.status === "AWAITING_BURN" && (
                 <Button className="mt-1 w-full" onClick={() => continueBurn(tx.id)}>

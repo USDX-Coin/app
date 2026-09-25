@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
+import { mockListConsumerTransactions } from "@/lib/api/mock-api";
 import {
   mockGetWalletTransfer,
-  mockListWalletTransfers,
   mockTransferCustodial,
   resetMockCustodialWallet,
   seedMockCustodialWallet,
@@ -31,11 +31,16 @@ function send(key = KEY, amount = "25") {
   return mockTransferCustodial({ to: TO, amount, pin: MOCK_PIN }, key);
 }
 
-describe("mockListWalletTransfers", () => {
+// Daftar transfer keluar kini dibaca lewat riwayat terpadu `GET /api/v2/transactions`
+// type=TRANSFER_OUT (USDX-713) — buku besar yang sama dengan tracker.
+const outgoing = (params: { page?: number; take?: number } = {}) =>
+  mockListConsumerTransactions({ ...params, type: "TRANSFER_OUT" });
+
+describe("mock ledger → /transactions TRANSFER_OUT", () => {
   describe("positive", () => {
     test("returns the account's transfers newest first with the pagination envelope", async () => {
       seedMockWalletTransfers([FX.dropped, FX.confirmed, FX.pending, FX.reverted]);
-      const page = await mockListWalletTransfers({});
+      const page = await outgoing();
       expect(page.data.map((t) => t.id)).toEqual([
         FX.pending.id,
         FX.confirmed.id,
@@ -47,7 +52,7 @@ describe("mockListWalletTransfers", () => {
 
     test("paginates with page/take", async () => {
       seedMockWalletTransfers([FX.dropped, FX.confirmed, FX.pending, FX.reverted]);
-      const second = await mockListWalletTransfers({ page: 2, take: 3 });
+      const second = await outgoing({ page: 2, take: 3 });
       expect(second.data.map((t) => t.id)).toEqual([FX.dropped.id]);
       expect(second.metadata).toEqual({ page: 2, limit: 3, total: 4 });
     });
@@ -55,69 +60,53 @@ describe("mockListWalletTransfers", () => {
     test("a broadcast transfer appears with the SAME id the 202 returned, as PENDING", async () => {
       seedMockCustodialWallet();
       const accepted = await send();
-      const page = await mockListWalletTransfers({});
+      const page = await outgoing();
       expect(page.data).toHaveLength(1);
       expect(page.data[0]).toMatchObject({
         id: accepted.id,
+        type: "TRANSFER_OUT",
         txHash: accepted.txHash,
         status: "PENDING",
         failureReason: null,
         blockNumber: null,
-        finalizedAt: null,
       });
     });
 
-    test("wire items carry only contract fields (no mock bookkeeping)", async () => {
+    test("wire items carry only TransferHistoryItem fields (no mock bookkeeping)", async () => {
       seedMockWalletTransfers([FX.confirmed]);
-      const [item] = (await mockListWalletTransfers({})).data;
+      const [item] = (await outgoing()).data;
       expect(Object.keys(item).sort()).toEqual(
         [
           "amount",
           "amountWei",
           "blockNumber",
           "chain",
+          "counterpartyAddress",
+          "createdAt",
           "failureReason",
-          "finalizedAt",
-          "from",
           "id",
           "status",
-          "submittedAt",
-          "to",
           "txHash",
+          "type",
+          "updatedAt",
+          "userAddress",
         ].sort(),
       );
     });
   });
 
   describe("negative", () => {
-    test("take outside 1..50 → 422 VALIDATION_ERROR", async () => {
-      await expect(mockListWalletTransfers({ take: 51 })).rejects.toMatchObject({
-        status: 422,
-        code: "VALIDATION_ERROR",
-      });
-      await expect(mockListWalletTransfers({ page: 0 })).rejects.toMatchObject({ status: 422 });
-    });
-
-    test("throttle seam → 429 RATE_LIMITED with Retry-After", async () => {
-      localStorage.setItem("usdx-mock-ratelimit", "2");
-      await expect(mockListWalletTransfers({})).rejects.toMatchObject({
-        status: 429,
-        code: "RATE_LIMITED",
-        retryAfterSeconds: 2,
-      });
-    });
-
     test("another user's transfers are not listed", async () => {
       seedMockWalletTransfers([FX.confirmed], "usr_other");
-      const page = await mockListWalletTransfers({});
+      const page = await outgoing();
       expect(page.data).toEqual([]);
       expect(page.metadata.total).toBe(0);
     });
   });
 
   describe("edge case", () => {
-    test("a user without a wallet gets 200 with an empty list, not 404", async () => {
-      const page = await mockListWalletTransfers({});
+    test("a user without a wallet gets an empty list, not an error", async () => {
+      const page = await outgoing();
       expect(page).toEqual({ data: [], metadata: { page: 1, limit: 10, total: 0 } });
     });
 
@@ -126,7 +115,7 @@ describe("mockListWalletTransfers", () => {
       const first = await send();
       const replay = await send();
       expect(replay.id).toBe(first.id);
-      expect((await mockListWalletTransfers({})).data).toHaveLength(1);
+      expect((await outgoing()).data).toHaveLength(1);
     });
   });
 });

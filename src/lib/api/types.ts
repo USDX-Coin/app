@@ -264,8 +264,3 @@ export interface ListTransactionsParams {
   includeTransfers?: boolean;
 }
 
-// GET /api/v2/wallet/transfers (wallet.yaml § transfers, USDX-701).
-export interface ListWalletTransfersParams {
-  page?: number;
-  take?: number; // 1..50, default 10
-}

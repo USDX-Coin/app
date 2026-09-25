@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { TransferStatusPanel } from "@/components/transfer/TransferStatusPanel";
 import { useWalletTransferTracker } from "@/hooks/useWalletTransferTracker";
 import { useLang } from "@/providers/LanguageProvider";
+import { OUTGOING_HISTORY_HREF } from "@/lib/history-item";
 import type { TransferAccepted, WalletTransfer } from "@/types";
 
 interface TransferResultProps {
@@ -50,7 +51,7 @@ export function TransferResult({ result, onAgain }: TransferResultProps) {
             {t("transfer.again")}
           </Button>
           <Button variant="outline" size="lg" asChild>
-            <Link href="/send/history">
+            <Link href={OUTGOING_HISTORY_HREF}>
               <History />
               {t("transfer.history.link")}
             </Link>

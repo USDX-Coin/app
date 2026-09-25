@@ -35,3 +35,7 @@ export function isTransferItem(item: HistoryItem): item is TransferHistoryItem {
 export function hasPendingTransfer(rows: readonly HistoryItem[]): boolean {
   return rows.some((r) => isTransferItem(r) && transferStatusOf(r) === "PENDING");
 }
+
+// Riwayat transfer keluar = /history tab Keluar (§5.7). Tujuan tautan balik tracker,
+// detail, dan redirect route lama /send/history.
+export const OUTGOING_HISTORY_HREF = "/history?type=TRANSFER_OUT";

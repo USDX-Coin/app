@@ -105,10 +105,12 @@ describe("useCustodialStepUp", () => {
   });
 
   describe("negative", () => {
-    test("2FA on, or unknown (session saved before the field existed) → no setup card", () => {
+    test("2FA on, or unknown (session saved before the field existed) → no setup card, nothing blocked", () => {
       expect(render().result.current.twoFactorSetupRequired).toBe(false);
       useAuthStore.setState({ user: { ...USER, twoFactorEnabled: undefined } });
-      expect(render().result.current.twoFactorSetupRequired).toBe(false);
+      const { result } = render();
+      expect(result.current.twoFactorSetupRequired).toBe(false);
+      expect(result.current.blocked).toBe(false);
     });
 
     test("a lock in the past, or no field (backend before USDX-718), is not a lock", async () => {
@@ -127,6 +129,23 @@ describe("useCustodialStepUp", () => {
   });
 
   describe("edge case", () => {
+    test("a 409 lock seen by one hook instance reaches the other (redeem form + Ringkasan) via the wallet cache", async () => {
+      const until = inAnHour();
+      const { result } = renderHook(
+        () => ({ review: useCustodialStepUp(), form: useCustodialStepUp() }),
+        { wrapper: createWrapper() },
+      );
+      await waitFor(() => expect(getWalletMock).toHaveBeenCalled());
+      await waitFor(() => expect(result.current.form.lockedUntil).toBeNull());
+      act(() => {
+        result.current.review.onError(
+          new ApiError(409, "CUSTODIAL_OUTBOUND_LOCKED", "x", { lockedUntil: until }),
+        );
+      });
+      expect(result.current.form.lockedUntil).toBe(until);
+      expect(result.current.form.blocked).toBe(true);
+    });
+
     test("the lock lifts by itself when its time passes — no reload", async () => {
       const until = new Date(Date.now() + 400).toISOString();
       getWalletMock.mockResolvedValue({ ...WALLET, outboundLockedUntil: until });

@@ -17,6 +17,13 @@
 // backend dengan 422 tanpa membakar attempt, tapi lebih baik tidak berangkat.
 // Kolomnya `PinField` (bersama layar buat/ubah PIN, USDX-651). Di bawahnya
 // tautan "Lupa PIN?" (USDX-696) — tetap ada saat terkunci hitung mundur.
+//
+// Di bawah PIN: kolom "Kode authenticator" (custodial-wallet.md §6.1, USDX-717) —
+// 2FA wajib untuk uang keluar custodial, dikirim sebagai `twoFactorCode` di body
+// yang sama. Bawaannya 6 digit dari aplikasi; "Pakai backup code" menggantinya
+// dengan kolom backup code (huruf + angka + strip). Galat kode (`twoFactorErrorKey`)
+// dan lockout scope `2fa-stepup` (`twoFactorCooldownSeconds`) tampil di kolom
+// kode; PIN yang sudah diketik tidak dikosongkan. Nilai kode tidak pernah dicatat.
 
 import { useState } from "react";
 import { KeyRound } from "lucide-react";
@@ -31,6 +38,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { PinField, isPinShape } from "@/components/shared/PinField";
+import { TwoFactorCodeField, isTotpShape } from "@/components/shared/TwoFactorCodeField";
 import { PinNotSetNotice } from "@/components/shared/PinNotSetNotice";
 import { ForgotPinLink } from "@/components/shared/ForgotPinLink";
 import { formatDuration } from "@/lib/utils";
@@ -41,13 +49,17 @@ export interface PinConfirmDialogProps {
   onOpenChange: (open: boolean) => void;
   /** Apa yang sedang disetujui — mis. "Kirim 25 USDX ke 0x5aAe…BeAed". */
   description?: React.ReactNode;
-  /** Dipanggil dengan PIN 6 digit; pemanggil yang mengirimnya ke API. */
-  onSubmit: (pin: string) => void;
+  /** Dipanggil dengan PIN 6 digit + kode authenticator/backup code; pemanggil yang mengirim keduanya ke API. */
+  onSubmit: (pin: string, twoFactorCode: string) => void;
   isSubmitting?: boolean;
   /** Kunci i18n error dari pemanggil (pin.errInvalid, pin.errNotSet, …). */
   errorKey?: string | null;
   /** Sisa detik lockout `pin` (429 TOO_MANY_ATTEMPTS). > 0 → tombol terkunci. */
   cooldownSeconds?: number;
+  /** Kunci i18n galat kode 2FA (stepUp.errInvalid, stepUp.errRequired). */
+  twoFactorErrorKey?: string | null;
+  /** Sisa detik lockout `2fa-stepup` (429 `details.scope`). > 0 → kolom kode + tombol terkunci. */
+  twoFactorCooldownSeconds?: number;
   /** Akun belum punya PIN (401 PIN_NOT_SET / `user.pinSet === false`) → notice + tombol Buat PIN (USDX-651). */
   pinNotSet?: boolean;
   confirmLabel?: React.ReactNode;
@@ -61,18 +73,30 @@ export function PinConfirmDialog({
   isSubmitting = false,
   errorKey = null,
   cooldownSeconds = 0,
+  twoFactorErrorKey = null,
+  twoFactorCooldownSeconds = 0,
   pinNotSet = false,
   confirmLabel,
 }: PinConfirmDialogProps) {
   const { t, lang } = useLang();
   const [pin, setPin] = useState("");
+  const [code, setCode] = useState("");
+  const [useBackup, setUseBackup] = useState(false);
   const [touched, setTouched] = useState(false);
 
   const locked = cooldownSeconds > 0;
+  const codeLocked = twoFactorCooldownSeconds > 0;
   const formatError = touched && !isPinShape(pin) ? t("pin.errFormat") : null;
   const serverError = errorKey ? t(errorKey) : null;
   const inlineError = formatError ?? serverError;
-  const canSubmit = isPinShape(pin) && !isSubmitting && !locked && !pinNotSet;
+  const codeReady = useBackup ? code !== "" : isTotpShape(code);
+  const codeFormatError =
+    touched && !codeReady ? t(useBackup ? "stepUp.errBackupRequired" : "stepUp.errFormat") : null;
+  const codeError = codeLocked
+    ? t("stepUp.errLocked", { time: formatDuration(twoFactorCooldownSeconds, lang) })
+    : (codeFormatError ?? (twoFactorErrorKey ? t(twoFactorErrorKey) : null));
+  const canSubmit =
+    isPinShape(pin) && codeReady && !isSubmitting && !locked && !codeLocked && !pinNotSet;
 
   function handleOpenChange(next: boolean) {
     // Jangan bisa ditutup di tengah permintaan: PIN sudah berangkat bersama body,
@@ -80,6 +104,8 @@ export function PinConfirmDialog({
     if (!next && isSubmitting) return;
     if (!next) {
       setPin("");
+      setCode("");
+      setUseBackup(false);
       setTouched(false);
     }
     onOpenChange(next);
@@ -89,7 +115,12 @@ export function PinConfirmDialog({
     e.preventDefault();
     setTouched(true);
     if (!canSubmit) return;
-    onSubmit(pin);
+    onSubmit(pin, code);
+  }
+
+  function toggleBackup() {
+    setCode("");
+    setUseBackup((v) => !v);
   }
 
   return (
@@ -126,6 +157,26 @@ export function PinConfirmDialog({
                   }
                 />
                 <ForgotPinLink disabled={isSubmitting} />
+                <TwoFactorCodeField
+                  id="pin-confirm-2fa"
+                  kind={useBackup ? "any" : "totp"}
+                  label={t(useBackup ? "stepUp.backupLabel" : "stepUp.codeLabel")}
+                  value={code}
+                  onChange={setCode}
+                  disabled={isSubmitting || codeLocked}
+                  hint={t(useBackup ? "stepUp.backupHint" : "stepUp.codeHint")}
+                  error={codeError}
+                />
+                <Button
+                  type="button"
+                  variant="link"
+                  size="sm"
+                  className="self-start px-0"
+                  onClick={toggleBackup}
+                  disabled={isSubmitting}
+                >
+                  {t(useBackup ? "stepUp.useApp" : "stepUp.useBackup")}
+                </Button>
               </>
             )}
           </DialogBody>

@@ -5,6 +5,7 @@ import {
   seedCustodialWallet,
   seedTwoFactor,
   seedOutboundLock,
+  seedWallet,
   MOCK_CUSTODIAL_WALLET_SUMMARY,
   MOCK_PIN,
   MOCK_TOTP_CODE,
@@ -97,11 +98,34 @@ test.describe("Redeem (custodial) — 2FA step-up", () => {
       await expect(page.getByRole("button", { name: "Continue to Confirmation" })).toBeDisabled();
     });
 
-    test("the external source is not held by the 2FA card", async ({ page }) => {
-      await asUser(page, false);
-      await fillForm(page);
-      await page.getByTestId("redeem-source-external").click();
-      await expect(page.getByTestId("redeem-2fa-required")).toHaveCount(0);
-    });
+    // AC#6 "Redeem SELF_SIGN tidak berubah" (review app#84): the 2FA card, the lock
+    // banner AND the disabled button belong to the custodial source only — an owner
+    // whose 2FA is off or whose custodial money out is on hold still redeems from an
+    // external wallet, all the way to the Ringkasan.
+    for (const held of ["2FA off", "24-hour lock"] as const) {
+      test(`the external source is not held by the ${held}: Redeem enabled, Ringkasan reachable`, async ({
+        page,
+      }) => {
+        await asUser(page, held !== "2FA off");
+        if (held === "24-hour lock") {
+          await seedOutboundLock(page, new Date(Date.now() + 20 * 3_600_000).toISOString());
+        }
+        await seedWallet(page); // external wallet connect resolves to a mock address
+        await fillForm(page);
+        await page.getByTestId("redeem-source-external").click();
+
+        await expect(page.getByTestId("redeem-2fa-required")).toHaveCount(0);
+        await expect(page.getByTestId("redeem-locked")).toHaveCount(0);
+        const redeem = page.getByRole("button", { name: "Redeem", exact: true });
+        await expect(redeem).toBeEnabled();
+        await redeem.click(); // contextual connect
+        await redeem.click(); // connected → Ringkasan
+        const summary = page.getByRole("dialog").filter({ hasText: "Transaction Summary" });
+        await expect(summary).toBeVisible();
+        await expect(summary.getByTestId("redeem-review-2fa-required")).toHaveCount(0);
+        await expect(summary.getByTestId("redeem-review-locked")).toHaveCount(0);
+        await expect(summary.getByRole("button", { name: "Continue to Confirmation" })).toBeEnabled();
+      });
+    }
   });
 });

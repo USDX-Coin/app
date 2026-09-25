@@ -310,13 +310,24 @@ describe("useRedeem — custodial 2FA step-up", () => {
       expect(useRedeemStore.getState().pinOpen).toBe(true);
     });
 
+    test("external source + 24-hour lock → nothing blocked, no banner data (AC#6, review app#84)", async () => {
+      getWalletMock.mockResolvedValue({ ...WALLET, outboundLockedUntil: new Date(Date.now() + 3_600_000).toISOString() });
+      const { result } = renderHook(() => useRedeem(), { wrapper: createWrapper() });
+      await waitFor(() => expect(result.current.stepUpBlocked).toBe(true));
+      act(() => result.current.setSource("external"));
+      expect(result.current.stepUpBlocked).toBe(false);
+      expect(result.current.outboundLockedUntil).toBeNull();
+    });
+
     test("the external source never sends a code and ignores the 2FA guard", async () => {
       useAuthStore.setState({ user: { ...USER, twoFactorEnabled: false } });
       const { result } = renderHook(() => useRedeem(), { wrapper: createWrapper() });
       await waitFor(() => expect(result.current.custodialAvailable).toBe(true));
       expect(result.current.twoFactorSetupRequired).toBe(true);
+      expect(result.current.stepUpBlocked).toBe(true);
       act(() => result.current.setSource("external"));
       expect(result.current.twoFactorSetupRequired).toBe(false);
+      expect(result.current.stepUpBlocked).toBe(false);
     });
 
     test("redeemErrorKey leaves 2FA codes to the dialog and the guard", () => {

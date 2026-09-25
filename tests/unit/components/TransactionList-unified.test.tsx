@@ -16,9 +16,10 @@ import type { HistoryItem, TransferHistoryItem, User } from "@/types";
 // Redeem · Masuk · Keluar, filter di URL, baris transfer masuk/keluar.
 
 const replace = vi.fn();
+const push = vi.fn();
 let search = "";
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace }),
+  useRouter: () => ({ push, replace }),
   useSearchParams: () => new URLSearchParams(search),
 }));
 vi.mock("@/lib/api/transactions-api", () => ({ listTransactions: vi.fn() }));
@@ -85,6 +86,7 @@ async function tableRow(text: string) {
 beforeEach(() => {
   search = "";
   replace.mockReset();
+  push.mockReset();
   listMock.mockReset();
   vi.mocked(getCustodialWallet).mockReset();
   useAuthStore.setState({ user: USER, isAuthenticated: true, token: "t" });
@@ -159,6 +161,17 @@ describe("TransactionList — unified history", () => {
       expect(screen.queryByTestId("tx-custodial-marker")).toBeNull();
     });
 
+    // AC: "Klik baris Keluar → halaman detail /send/history/[id]" — the whole row, not only
+    // the "Lihat detail" link.
+    test("clicking anywhere on an outgoing row opens its detail", async () => {
+      serve([outgoingFailed]);
+      renderList();
+
+      const row = await tableRow("Keluar");
+      fireEvent.click(within(row).getByText("Gagal"));
+      expect(push).toHaveBeenCalledWith(`/send/history/${outgoingFailed.id}`);
+    });
+
     test("the mobile card of an outgoing transfer opens its detail", async () => {
       serve([outgoingFailed]);
       renderList();
@@ -191,6 +204,24 @@ describe("TransactionList — unified history", () => {
   });
 
   describe("edge case", () => {
+    test("the copy button inside an outgoing row copies without leaving the page", async () => {
+      Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+      serve([outgoingFailed]);
+      renderList();
+
+      const row = await tableRow("Keluar");
+      fireEvent.click(within(row).getByRole("button", { name: "Salin" }));
+      expect(push).not.toHaveBeenCalled();
+    });
+
+    test("an incoming row is not a link to anywhere", async () => {
+      serve([IN.confirmed]);
+      renderList();
+
+      fireEvent.click(within(await tableRow("Masuk")).getByText("Berhasil"));
+      expect(push).not.toHaveBeenCalled();
+    });
+
     test("a transfer status the app does not know reads as pending", async () => {
       serve([{ ...IN.confirmed, status: "FINALIZING" }]);
       renderList();

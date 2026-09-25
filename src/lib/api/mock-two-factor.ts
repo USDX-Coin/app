@@ -66,6 +66,9 @@ let verifyFailures = 0;
 let recoveryFailures = 0;
 let recoverySentAt: number | null = null;
 let regenerations = 0;
+// Scope lockout `2fa-stepup` (custodial-wallet.md §6.1 no.4) — terpisah dari
+// `2fa-verify` dan dari scope `pin`; dibagi transfer + redeem custodial.
+let stepUpFailures = 0;
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -176,6 +179,7 @@ export function resetMockTwoFactor(): void {
   recoveryFailures = 0;
   recoverySentAt = null;
   regenerations = 0;
+  stepUpFailures = 0;
 }
 
 // ── Login langkah 1 (dipanggil mockLogin untuk akun ber-2FA) ─────────────────
@@ -311,4 +315,37 @@ export async function mockTwoFactorRecovery(req: TwoFactorRecoveryRequest): Prom
   recoveryFailures = 0;
   writeState(null);
   writeChallenge(null);
+}
+
+// ── Step-up transfer & redeem custodial (custodial-wallet.md §6.1, USDX-717) ──
+// Memerankan penegak backend USDX-718, dipanggil mock transfer/redeem SESUDAH PIN:
+// 2FA aktif? → kode ada? → lockout `2fa-stepup`? → kode valid (TOTP, atau backup
+// code yang lalu hangus). Anti pakai-ulang satu time-step TOTP (§6.1 no.5) tidak
+// diperankan: kode mock tetap — tiap transfer di test akan tertolak.
+export function verifyMockStepUpCode(code: string | undefined): void {
+  const state = readState();
+  if (!state?.enabled) {
+    throw new ApiError(401, "TWO_FACTOR_SETUP_REQUIRED", "Aktifkan 2FA untuk mengirim atau redeem dari wallet ini.");
+  }
+  const trimmed = code?.trim() ?? "";
+  if (!trimmed) {
+    throw new ApiError(401, "TWO_FACTOR_CODE_REQUIRED", "Kode authenticator wajib diisi.");
+  }
+  if (stepUpFailures >= MAX_ATTEMPTS) {
+    throw new ApiError(
+      429,
+      "TOO_MANY_ATTEMPTS",
+      "Terlalu banyak kode authenticator yang salah. Coba lagi nanti.",
+      { retryAfterSeconds: LOCKOUT_SECONDS, scope: "2fa-stepup" },
+      LOCKOUT_SECONDS,
+    );
+  }
+  if (TOTP_PATTERN.test(trimmed) ? trimmed !== MOCK_TOTP_CODE : !state.backupCodes.includes(trimmed)) {
+    stepUpFailures += 1;
+    throw wrongCode();
+  }
+  if (!TOTP_PATTERN.test(trimmed)) {
+    writeState({ ...state, backupCodes: state.backupCodes.filter((c) => c !== trimmed) });
+  }
+  stepUpFailures = 0;
 }

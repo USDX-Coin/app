@@ -1423,7 +1423,7 @@ export async function mockGetRedeemOrder(id: string): Promise<RedeemOrderDetail>
 }
 
 // ── Mock W3: redeem rows in the union history list (USDX-244) ───────────────
-// `GET /v2/transactions` is union mint + redeem. Map any redeem orders created
+// `GET /v2/transactions` unions mint + redeem (+ transfers, USDX-713). Map any redeem orders created
 // this session, plus a few seeded rows (various RedeemStatus) so /history shows
 // redeem in mock dev before the user redeems. REDEEM rows fill grossIdr +
 // netPayoutIdr + status (RedeemStatus); txHash = burn hash.

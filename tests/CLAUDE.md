@@ -25,14 +25,15 @@ tests/
     transactions.spec.ts # Transaction table rendering
     profile.spec.ts     # User info display
     history-custodial.spec.ts # /history "Wallet custodial saya" marker: to/from the wallet, manual address, no wallet, all-lowercase address, mobile cards (USDX-653)
-    transfer-history.spec.ts # /send/history + detail: API order, 10 per page, empty ≠ error, unknown status = pending, neutral 404 (USDX-701)
+    transfer-history.spec.ts # Unified /history transfers (USDX-713): tabs + ?type=, incoming vs outgoing rows, detail and back to "Keluar", /send/history redirect, no "Transfer history" button, 10 per page, unknown status = pending, neutral 404 (USDX-701)
     settings-pin.spec.ts # Settings → Account → transaction PIN: create, use at once on /send, change, lockout (USDX-651); create on a stale session → log in again → back to the dialog (USDX-697); forgot PIN from Change PIN: lockout, 5-minute window, cancel, per tab (USDX-696)
   e2e/                  # Playwright — full user flows
     auth-flow.spec.ts   # Register -> logout -> login
     mint-flow.spec.ts   # Login -> mint -> review -> cross-origin checkout handoff
     redeem-flow.spec.ts # Login -> redeem -> connect wallet prompt
     custodial-wallet-flow.spec.ts # Register -> verify -> /mint -> wallet step -> create -> ACTIVE -> receives USDX -> balance; Settings activation; decline (USDX-566; the mock build has env.walletCreateEnabled ON, USDX-699 — the production pill is unit-tested in CustodialWalletOffer.test)
-    transfer-flow.spec.ts         # Custodial transfer: form -> Ringkasan -> PIN -> tracker PENDING -> CONFIRMED/FAILED, stuck stays waiting, history row (USDX-567/701)
+    transfer-flow.spec.ts         # Custodial transfer: form -> Ringkasan -> PIN -> tracker PENDING -> CONFIRMED/FAILED, stuck stays waiting, row in /history "Keluar" (USDX-567/701/713)
+    history-unified-flow.spec.ts  # Unified /history: incoming PENDING -> Successful without reload (15 s refresh), no-wallet user, unknown ?type= (USDX-713)
     redeem-custodial-flow.spec.ts # Custodial redeem: PIN, no wallet dialog, tracker to payout (USDX-567)
     pin-flow.spec.ts              # PIN created from the transfer/redeem notice, stale-copy PIN_NOT_SET (USDX-651); every create door asks to log in again under backend USDX-698 (USDX-697); forgot PIN from a locked transfer PIN dialog → new PIN approves, old refused (USDX-696)
   audit-ui/             # node + Playwright — measurement, NOT assertions
@@ -104,8 +105,9 @@ beforeEach(() => {
   creating a PIN on the `loginViaStorage` session (stale) is refused with "log in again";
   a login through the form is fresh (USDX-697), and `seedFreshPasswordAuth(page)` stands
   for "logged in moments ago" (also what lets the forgot-PIN overwrite through).
-  Transfer history (USDX-701): `seedWalletTransfers(page, [WALLET_TRANSFER_FIXTURES.…])`
-  fills the mock ledger once per tab; `transferOutcome` on `seedCustodialWallet` decides
+  Transfer history (USDX-701/713): `seedWalletTransfers(page, [WALLET_TRANSFER_FIXTURES.…])`
+  fills the outgoing ledger and `seedIncomingTransfers(page, [INCOMING_TRANSFER_FIXTURES.…],
+  { confirmAfterMs })` the incoming one, once per tab; both show up in `/history`; `transferOutcome` on `seedCustodialWallet` decides
   what the next sent transfer becomes (default CONFIRMED after 3.5 s). Never arm
   `seedWallet` (the external-wallet seam) in a custodial
   spec: proving "no wallet dialog" needs the external wallet to be absent

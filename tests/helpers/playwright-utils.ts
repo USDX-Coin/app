@@ -543,3 +543,29 @@ export async function expireTwoFactorChallenge(page: Page) {
     if (raw) localStorage.setItem("usdx-mock-2fa-challenge", JSON.stringify({ ...JSON.parse(raw), expiresAt: 0 }));
   });
 }
+
+/**
+ * Money out of the custodial wallet is held for 24 hours (mock-two-factor
+ * "usdx-mock-outbound-lock", custodial-wallet.md §6.1 no.6, USDX-717): `until` is
+ * an ISO time (GET /wallet `outboundLockedUntil`, transfer/redeem → 409
+ * CUSTODIAL_OUTBOUND_LOCKED), `null` = no lock. Applied ONCE per tab: turning 2FA
+ * off inside the flow sets it too. Call before the first page.goto().
+ */
+export async function seedOutboundLock(page: Page, until: string | null) {
+  await page.addInitScript((u) => {
+    if (sessionStorage.getItem("usdx-mock-outbound-lock-seeded")) return;
+    sessionStorage.setItem("usdx-mock-outbound-lock-seeded", "1");
+    if (u === null) localStorage.removeItem("usdx-mock-outbound-lock");
+    else localStorage.setItem("usdx-mock-outbound-lock", JSON.stringify({ until: u }));
+  }, until);
+}
+
+/**
+ * The backend BEFORE USDX-718 (mock-two-factor "usdx-mock-2fa-legacy"): it drops
+ * `twoFactorCode` silently — no 2FA check, no lock, no `outboundLockedUntil`. What
+ * the web meets during the release order of §6.1 (FE first). Call before the first
+ * page.goto().
+ */
+export async function seedLegacyStepUp(page: Page) {
+  await page.addInitScript(() => localStorage.setItem("usdx-mock-2fa-legacy", "true"));
+}

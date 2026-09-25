@@ -42,7 +42,13 @@ import {
   type MockTransferOutcome,
 } from "./mock-wallet-transfers";
 import { isMockPinSet, resetMockPin, verifyMockPin } from "./mock-pin";
-import { isMockTwoFactorEnabled } from "./mock-two-factor";
+import {
+  assertMockOutboundNotLocked,
+  isMockLegacyStepUp,
+  isMockTwoFactorEnabled,
+  mockOutboundLockedUntil,
+  verifyMockStepUpCode,
+} from "./mock-two-factor";
 import { USDX_DECIMALS } from "@/lib/constants";
 import { uuidv7 } from "@/lib/uuid";
 
@@ -192,6 +198,8 @@ function toCustodialWallet(state: MockCustodialState): CustodialWallet {
     balanceWei: readable ? String(Math.round(Number(state.balance) * 10 ** USDX_DECIMALS)) : null,
     balanceAt: readable ? new Date().toISOString() : null,
     createdAt: state.createdAt,
+    // §6.1 no.6 (USDX-717); backend lama tidak mengirim field ini sama sekali.
+    ...(isMockLegacyStepUp() ? {} : { outboundLockedUntil: mockOutboundLockedUntil() }),
   };
 }
 
@@ -380,8 +388,9 @@ export async function mockTransferCustodial(
     throw new ApiError(422, "VALIDATION_ERROR", "Tidak bisa transfer ke wallet sendiri");
   }
 
-  // 2. PIN (lockout scope `pin`).
+  // 2. PIN (lockout scope `pin`), lalu 2FA (§6.1: lockout scope `2fa-stepup`).
   verifyMockPin(req.pin);
+  verifyMockStepUpCode(req.twoFactorCode);
 
   // 3. Replay / kunci idempotensi — SEBELUM pre-check yang bergantung keadaan
   //    dunia (saldo sudah turun karena transfer pertamanya berhasil).
@@ -405,6 +414,7 @@ export async function mockTransferCustodial(
     }
     if (held.result) return held.result; // replay → hasil identik (200)
   }
+  assertMockOutboundNotLocked(); // kunci 24 jam §6.1 no.6 — SESUDAH replay
 
   // 4. Status salinan kerja → plafon → blacklist → saldo.
   const active = requireActiveCustodialWallet()!;

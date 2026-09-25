@@ -8,6 +8,7 @@ import {
   MOCK_CUSTODIAL_ADDRESS,
 } from "@/lib/api/mock-custodial-wallet";
 import { MOCK_PIN, seedMockPin } from "@/lib/api/mock-pin";
+import { MOCK_TOTP_CODE, resetMockTwoFactor, seedMockTwoFactor } from "@/lib/api/mock-two-factor";
 
 // Mock layer for the custodial wallet (wallet.yaml, USDX-567): GET /api/v2/wallet
 // + POST /api/v2/wallet/transfer with the contract's idempotency semantics. The
@@ -20,6 +21,9 @@ const KEY_2 = "0193abcd-2c4d-7abc-91ff-9a7fcd0d2bf2";
 
 beforeEach(() => {
   resetMockCustodialWallet();
+  // 2FA wajib sejak §6.1 (USDX-717) — alurnya sendiri diuji di mock-custodial-stepup.test.
+  resetMockTwoFactor();
+  seedMockTwoFactor(true);
 });
 
 describe("mockGetCustodialWallet", () => {
@@ -72,7 +76,7 @@ describe("mockGetCustodialWallet", () => {
 });
 
 describe("mockTransferCustodial", () => {
-  const req = { to: TO, amount: "25", pin: MOCK_PIN };
+  const req = { to: TO, amount: "25", pin: MOCK_PIN, twoFactorCode: MOCK_TOTP_CODE };
 
   describe("positive", () => {
     test("broadcasts and debits the balance", async () => {

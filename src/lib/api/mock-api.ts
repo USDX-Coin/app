@@ -59,9 +59,11 @@ import { listMockTransferOutHistory } from "./mock-wallet-transfers";
 import { listMockIncomingTransfers } from "./mock-incoming-transfers";
 import { markMockPasswordAuth, requireAndVerifyMockPin } from "./mock-pin";
 import {
+  assertMockOutboundNotLocked,
   isMockTwoFactorEnabled,
   startMockTwoFactorChallenge,
   takeMockTwoFactorLogin,
+  verifyMockStepUpCode,
 } from "./mock-two-factor";
 import { ApiError, type Paginated } from "./client";
 import { validatePassword, validateAddress } from "@/lib/validations";
@@ -1196,11 +1198,14 @@ export async function mockCreateRedeemOrder(
   // Dua jalur burn — `burnMode` ditentukan di sini, dari kecocokan `userAddress`
   // dengan wallet custodial user (redeem.yaml § redeemV2Create). Urutan gate
   // jalur custodial (keputusan review backend#315, sama dengan /wallet/transfer):
-  // validasi bentuk → `pin` wajib (422) → PIN diverifikasi (401/429) →
+  // validasi bentuk → `pin` wajib (422) → PIN diverifikasi (401/429) → kode 2FA
+  // (401/429) → kunci 24 jam (409 CUSTODIAL_OUTBOUND_LOCKED) →
   // 409 WALLET_NOT_ACTIVE — semuanya SEBELUM rate limit / pre-check / inquiry.
   const burnMode: BurnMode = isMockCustodialAddress(req.userAddress) ? "CUSTODIAL" : "SELF_SIGN";
   if (burnMode === "CUSTODIAL") {
     requireAndVerifyMockPin(req.pin);
+    verifyMockStepUpCode(req.twoFactorCode); // 2FA wajib §6.1 (USDX-717)
+    assertMockOutboundNotLocked(); // kunci 24 jam §6.1 no.6
     requireActiveCustodialWallet();
   }
   maybeThrowRateLimited(); // 429 RATE_LIMITED seam (USDX-252)

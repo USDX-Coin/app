@@ -17,6 +17,7 @@ import {
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { PinNotSetNotice } from "@/components/shared/PinNotSetNotice";
+import { StepUpNotices } from "@/components/shared/StepUpNotices";
 import { useLang } from "@/providers/LanguageProvider";
 import { formatAmount, truncateAddress } from "@/lib/utils";
 import { getChainById } from "@/lib/chains";
@@ -53,6 +54,12 @@ export function TransferReview({ transfer }: TransferReviewProps) {
     formErrorVars,
     walletBlocked,
     pinNotSet,
+    twoFactorSetupRequired,
+    outboundLockedUntil,
+    // 2FA wajib + kunci 24 jam (custodial-wallet.md §6.1, USDX-717): keduanya bisa
+    // baru ketahuan di sini (401 SETUP_REQUIRED / 409 OUTBOUND_LOCKED menutup dialog
+    // PIN) — kartu/banner yang sama dengan form, dan langkah PIN tidak dibuka.
+    stepUpBlocked,
   } = transfer;
 
   return (
@@ -88,6 +95,13 @@ export function TransferReview({ transfer }: TransferReviewProps) {
               sampai PIN ada, dialog PIN yang pasti gagal tidak dibuka. */}
           {pinNotSet && <PinNotSetNotice data-testid="transfer-pin-not-set" />}
 
+          <StepUpNotices
+            setupRequired={twoFactorSetupRequired}
+            lockedUntil={outboundLockedUntil}
+            action="send"
+            testIdPrefix="transfer-review"
+          />
+
           {formErrorKey && (
             <Alert tone="danger" data-testid="transfer-error">
               {t(formErrorKey, formErrorVars)}
@@ -112,7 +126,7 @@ export function TransferReview({ transfer }: TransferReviewProps) {
             size="lg"
             className="flex-1"
             onClick={openPin}
-            disabled={walletBlocked || pinNotSet}
+            disabled={walletBlocked || pinNotSet || stepUpBlocked}
             loading={isSubmitting}
             loadingLabel={t("common.processing")}
           >

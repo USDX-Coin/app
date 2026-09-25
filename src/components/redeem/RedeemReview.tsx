@@ -29,6 +29,7 @@ import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { PinConfirmDialog } from "@/components/shared/PinConfirmDialog";
 import { PinNotSetNotice } from "@/components/shared/PinNotSetNotice";
+import { StepUpNotices } from "@/components/shared/StepUpNotices";
 import { useRedeem } from "@/hooks/useRedeem";
 import { formatAmount, formatIDR, truncateAddress } from "@/lib/utils";
 import { getChainById } from "@/lib/chains";
@@ -79,6 +80,14 @@ export function RedeemReview({ open, onOpenChange }: RedeemReviewProps) {
     pinErrorKey,
     pinNotSet,
     pinCooldownSeconds,
+    twoFactorErrorKey,
+    twoFactorCooldownSeconds,
+    twoFactorSetupRequired,
+    outboundLockedUntil,
+    // Custodial only (the hook reports none of these on the external source): 2FA
+    // required + 24-hour lock (custodial-wallet.md §6.1, USDX-717) — same card/banner
+    // as the form, and the PIN step is not opened while either holds.
+    stepUpBlocked,
   } = useRedeem();
 
   const selectedChain = getChainById(REDEEM_CHAIN_ID);
@@ -98,10 +107,11 @@ export function RedeemReview({ open, onOpenChange }: RedeemReviewProps) {
     submitRedeem().catch(() => {});
   }
 
-  function handlePin(pin: string) {
-    // PIN failures stay in the dialog (`pinErrorKey`); others close it and show
-    // in this summary via `createErrorKey`.
-    submitRedeem(pin).catch(() => {});
+  function handlePin(pin: string, twoFactorCode: string) {
+    // PIN and 2FA-code failures stay in the dialog (`pinErrorKey`,
+    // `twoFactorErrorKey`); others close it and show in this summary via
+    // `createErrorKey` (or the 2FA card / lock banner).
+    submitRedeem(pin, twoFactorCode).catch(() => {});
   }
 
   return (
@@ -162,6 +172,13 @@ export function RedeemReview({ open, onOpenChange }: RedeemReviewProps) {
               PIN dialog that must fail is not opened. */}
           {isCustodialSource && pinNotSet && <PinNotSetNotice data-testid="redeem-pin-not-set" />}
 
+          <StepUpNotices
+            setupRequired={twoFactorSetupRequired}
+            lockedUntil={outboundLockedUntil}
+            action="redeem"
+            testIdPrefix="redeem-review"
+          />
+
           {/* Precondition gate (week3.md § Precondition connect-wallet, USDX-259):
               wrong network blocks with a switch prompt; insufficient USDX blocks;
               low POL is a non-blocking warning. On the custodial source the hook
@@ -220,7 +237,7 @@ export function RedeemReview({ open, onOpenChange }: RedeemReviewProps) {
             className="flex-1"
             onClick={handleConfirm}
             // WALLET_NOT_ACTIVE: no retry — the status does not change by pressing again.
-            disabled={!canBurn || walletBlocked || (isCustodialSource && pinNotSet)}
+            disabled={!canBurn || walletBlocked || (isCustodialSource && pinNotSet) || stepUpBlocked}
             loading={isCreating}
             loadingLabel={t("common.processing")}
           >
@@ -241,6 +258,8 @@ export function RedeemReview({ open, onOpenChange }: RedeemReviewProps) {
           isSubmitting={isCreating}
           errorKey={pinErrorKey}
           cooldownSeconds={pinCooldownSeconds}
+          twoFactorErrorKey={twoFactorErrorKey}
+          twoFactorCooldownSeconds={twoFactorCooldownSeconds}
           pinNotSet={pinNotSet}
           confirmLabel={t("btn.confirmBurn")}
         />

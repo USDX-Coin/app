@@ -9,6 +9,7 @@ import {
 import { MOCK_TRANSFER_CONFIRM_MS, seedMockWalletTransfers } from "@/lib/api/mock-wallet-transfers";
 import { MOCK_WALLET_TRANSFER_FIXTURES as FX } from "@/lib/api/mock-wallet-transfer-fixtures";
 import { MOCK_PIN } from "@/lib/api/mock-pin";
+import { MOCK_TOTP_CODE, resetMockTwoFactor, seedMockTwoFactor } from "@/lib/api/mock-two-factor";
 
 // Mock riwayat & status transfer custodial (wallet.yaml § transfers / transfer-detail,
 // USDX-701). Satu-satunya backend yang dilihat suite Playwright offline, jadi urutan,
@@ -20,6 +21,8 @@ const UNKNOWN_ID = "0193abce-11aa-7bcd-8e01-5c2f0a9d4eff";
 
 beforeEach(() => {
   resetMockCustodialWallet();
+  resetMockTwoFactor();
+  seedMockTwoFactor(true); // 2FA wajib sejak §6.1 (USDX-717)
   localStorage.removeItem("usdx-mock-ratelimit");
 });
 
@@ -28,7 +31,7 @@ afterEach(() => {
 });
 
 function send(key = KEY, amount = "25") {
-  return mockTransferCustodial({ to: TO, amount, pin: MOCK_PIN }, key);
+  return mockTransferCustodial({ to: TO, amount, pin: MOCK_PIN, twoFactorCode: MOCK_TOTP_CODE }, key);
 }
 
 // Daftar transfer keluar kini dibaca lewat riwayat terpadu `GET /api/v2/transactions`

@@ -5,6 +5,8 @@ import {
   seedCustodialWallet,
   MOCK_CUSTODIAL_WALLET_SUMMARY,
   MOCK_PIN,
+  seedTwoFactor,
+  MOCK_TOTP_CODE,
 } from "../helpers/playwright-utils";
 
 // Redeem from the custodial wallet (USDX-567, custodial-wallet.md §5.3): no
@@ -14,7 +16,8 @@ import {
 test.beforeEach(async ({ page }) => {
   await forceEnglish(page);
   await seedCustodialWallet(page, { status: "ACTIVE", balance: "500.00" });
-  await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
+  await seedTwoFactor(page, true); // 2FA wajib uang keluar custodial (USDX-717)
+  await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY, twoFactorEnabled: true });
 });
 
 async function fillBank(page: import("@playwright/test").Page) {
@@ -52,6 +55,7 @@ test.describe("Redeem Flow (custodial)", () => {
       const pin = page.getByRole("dialog").filter({ hasText: "Confirm with PIN" });
       await expect(pin).toBeVisible();
       await pin.getByLabel("6-digit PIN").fill(MOCK_PIN);
+      await pin.getByLabel("Authenticator code").fill(MOCK_TOTP_CODE);
       await pin.getByRole("button", { name: "Confirm & Burn" }).click();
 
       // Tracker: the system is processing; no burn button, no connect.
@@ -85,6 +89,7 @@ test.describe("Redeem Flow (custodial)", () => {
       await page.getByRole("button", { name: "Continue to Confirmation" }).click();
       const pin = page.getByRole("dialog").filter({ hasText: "Confirm with PIN" });
       await pin.getByLabel("6-digit PIN").fill("000000");
+      await pin.getByLabel("Authenticator code").fill(MOCK_TOTP_CODE);
       await pin.getByRole("button", { name: "Confirm & Burn" }).click();
       await expect(pin.getByText("Wrong PIN. Please try again.")).toBeVisible({ timeout: 15000 });
       await expect(page.getByText(/Simulation mode/)).toHaveCount(0);

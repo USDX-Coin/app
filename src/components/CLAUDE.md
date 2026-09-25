@@ -7,7 +7,7 @@ components/
   ui/          # Design system. OURS — hand-written wrappers, meant to be edited.
   animate-ui/  # Animate UI primitives (motion + Radix). Registry files, edit sparingly.
   layout/      # App layout: AuthLayout, Sidebar, Logo, ThemeToggle
-  shared/      # Cross-feature: PageHeader, PagePagination (server-paginated lists), ComingSoonPage, RouteErrorState, PinConfirmDialog (USDX-567), PinField + PinSetupDialog + PinChangeDialog + PinNotSetNotice (USDX-651), ForgotPinLink (USDX-696), TwoFactorCodeField + TwoFactorSetupNotice (2FA, USDX-714)
+  shared/      # Cross-feature: PageHeader, PagePagination (server-paginated lists), ComingSoonPage, RouteErrorState, PinConfirmDialog (USDX-567), PinField + PinSetupDialog + PinChangeDialog + PinNotSetNotice (USDX-651), ForgotPinLink (USDX-696), TwoFactorCodeField + TwoFactorSetupNotice (2FA, USDX-714), OutboundLockNotice + StepUpNotices (2FA on the money paths, USDX-717)
   auth/        # Login (+ TwoFactorLoginStep: code screen + email recovery, USDX-714), Register, Forgot/Reset password, CheckEmail, VerifyEmail
   kyc/         # KYC form: identity + CDD blocks, document dropzones
   mint/        # Mint flow: MintForm, MintReview, ChainSelector
@@ -77,7 +77,19 @@ components/
   does not call an API: the caller sends the PIN inside the transfer/redeem body and maps
   `401 INVALID_PIN` / `PIN_NOT_SET` / `429 TOO_MANY_ATTEMPTS` into `errorKey` /
   `pinNotSet` / `cooldownSeconds`. Non-PIN failures close the dialog and show in the
-  Ringkasan next to the figures.
+  Ringkasan next to the figures. Under the PIN sits the **"Kode authenticator"** field
+  (`TwoFactorCodeField`, 6 digits; "Pakai backup code" swaps in the backup-code field) —
+  `onSubmit(pin, twoFactorCode)`, both travel in the same body (`custodial-wallet.md` §6.1,
+  USDX-717). A wrong/missing code (`twoFactorErrorKey`) and the `2fa-stepup` lockout
+  (`twoFactorCooldownSeconds`, its own sentence) show under the code field; the typed PIN
+  is kept.
+- **2FA on the money paths (USDX-717)** — `shared/StepUpNotices` = the pair shown on the
+  transfer form + Ringkasan and the custodial redeem form + Ringkasan: `TwoFactorSetupNotice`
+  when `user.twoFactorEnabled === false` (activation dialog in place — the form opens again
+  without a reload) and `OutboundLockNotice` ("ditahan sampai [waktu lokal]") while
+  `outboundLockedUntil` is set (GET /wallet or a `409 CUSTODIAL_OUTBOUND_LOCKED`). Either
+  disables Send / Redeem / "Lanjut ke PIN" (`stepUpBlocked` from the hook). The external
+  redeem source is untouched.
 - **PIN create / change (USDX-651)** — `PinSetupDialog` (new PIN + repeat, `POST
   /auth/pin/set`) and `PinChangeDialog` (current + new + repeat, `POST /auth/pin/change`)
   own their calls through `hooks/usePin`; both share `PinField` (password + one-time-code

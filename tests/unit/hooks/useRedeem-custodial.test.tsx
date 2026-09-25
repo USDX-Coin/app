@@ -62,8 +62,10 @@ const USER: User = {
   createdAt: "2026-01-01T00:00:00Z",
   updatedAt: "2026-01-01T00:00:00Z",
   pinSet: true,
+  twoFactorEnabled: true,
   custodialWallet: { address: CUSTODIAL, status: "ACTIVE" },
 };
+const CODE = "492817";
 const WALLET: CustodialWallet = {
   address: CUSTODIAL,
   status: "ACTIVE",
@@ -129,10 +131,10 @@ describe("useRedeem — custodial source", () => {
       await waitFor(() => expect(result.current.isFormValid).toBe(true));
       act(() => result.current.openPin());
       await act(async () => {
-        await result.current.submitRedeem("123456");
+        await result.current.submitRedeem("123456", CODE);
       });
       expect(createMock).toHaveBeenCalledWith(
-        expect.objectContaining({ userAddress: CUSTODIAL, pin: "123456" }),
+        expect.objectContaining({ userAddress: CUSTODIAL, pin: "123456", twoFactorCode: CODE }),
       );
       const s = useRedeemStore.getState();
       expect(s.step).toBe("tracker");
@@ -158,7 +160,7 @@ describe("useRedeem — custodial source", () => {
       await waitFor(() => expect(result.current.isFormValid).toBe(true));
       act(() => result.current.openPin());
       await act(async () => {
-        await result.current.submitRedeem("000000").catch(() => undefined);
+        await result.current.submitRedeem("000000", CODE).catch(() => undefined);
       });
       await waitFor(() => expect(result.current.pinErrorKey).toBe("pin.errInvalid"));
       expect(result.current.createErrorKey).toBeNull(); // not duplicated in the summary
@@ -173,7 +175,7 @@ describe("useRedeem — custodial source", () => {
       await waitFor(() => expect(result.current.isFormValid).toBe(true));
       act(() => result.current.openPin());
       await act(async () => {
-        await result.current.submitRedeem("123456").catch(() => undefined);
+        await result.current.submitRedeem("123456", CODE).catch(() => undefined);
       });
       await waitFor(() => expect(result.current.createErrorKey).toBe("redeem.errWalletNotActive"));
       expect(useRedeemStore.getState().pinOpen).toBe(false);
@@ -193,7 +195,7 @@ describe("useRedeem — custodial source", () => {
       const { result } = renderHook(() => useRedeem(), { wrapper: createWrapper() });
       await waitFor(() => expect(result.current.isFormValid).toBe(true));
       await act(async () => {
-        await result.current.submitRedeem("123456").catch(() => undefined);
+        await result.current.submitRedeem("123456", CODE).catch(() => undefined);
       });
       await waitFor(() => expect(result.current.pinCooldownSeconds).toBe(900));
     });
@@ -238,7 +240,7 @@ describe("useRedeem — custodial source", () => {
       const { result } = renderHook(() => useRedeem(), { wrapper: createWrapper() });
       await waitFor(() => expect(result.current.isFormValid).toBe(true));
       await act(async () => {
-        await result.current.submitRedeem("123456");
+        await result.current.submitRedeem("123456", CODE);
       });
       expect(useRedeemStore.getState().step).toBe("tracker");
     });
@@ -248,6 +250,91 @@ describe("useRedeem — custodial source", () => {
       expect(redeemErrorKey(new ApiError(401, "PIN_NOT_SET", "x"))).toBeNull();
       expect(redeemErrorKey(new ApiError(429, "TOO_MANY_ATTEMPTS", "x"))).toBeNull();
       expect(redeemErrorKey(new ApiError(409, "WALLET_NOT_ACTIVE", "x"))).toBe("redeem.errWalletNotActive");
+    });
+  });
+});
+
+// 2FA wajib di redeem custodial (custodial-wallet.md §6.1, redeem.yaml, USDX-717):
+// pola yang sama dengan transfer — kode ikut di body create, galat kode tetap di
+// dialog PIN, SETUP_REQUIRED/OUTBOUND_LOCKED ke kartu/banner (bukan kalimat
+// Ringkasan), lockout 2fa-stepup punya hitung mundur sendiri. SELF_SIGN tidak berubah.
+describe("useRedeem — custodial 2FA step-up", () => {
+  async function submitFailing(error: ApiError) {
+    fillForm();
+    createMock.mockRejectedValueOnce(error);
+    const utils = renderHook(() => useRedeem(), { wrapper: createWrapper() });
+    await waitFor(() => expect(utils.result.current.isFormValid).toBe(true));
+    act(() => utils.result.current.openPin());
+    await act(async () => {
+      await utils.result.current.submitRedeem("123456", "000000").catch(() => undefined);
+    });
+    return utils;
+  }
+
+  describe("positive", () => {
+    test("wrong code → message under the code field, dialog stays open, nothing in the Ringkasan", async () => {
+      const { result } = await submitFailing(new ApiError(401, "INVALID_TWO_FACTOR_CODE", "x"));
+      await waitFor(() => expect(result.current.twoFactorErrorKey).toBe("stepUp.errInvalid"));
+      expect(result.current.createErrorKey).toBeNull();
+      expect(result.current.pinErrorKey).toBeNull();
+      expect(useRedeemStore.getState().pinOpen).toBe(true);
+    });
+  });
+
+  describe("negative", () => {
+    test("TWO_FACTOR_SETUP_REQUIRED → dialog closes, 2FA card, no Ringkasan error", async () => {
+      const { result } = await submitFailing(new ApiError(401, "TWO_FACTOR_SETUP_REQUIRED", "x"));
+      await waitFor(() => expect(result.current.twoFactorSetupRequired).toBe(true));
+      expect(useRedeemStore.getState().pinOpen).toBe(false);
+      expect(result.current.createErrorKey).toBeNull();
+    });
+
+    test("409 CUSTODIAL_OUTBOUND_LOCKED → dialog closes, lock banner data, no Ringkasan error", async () => {
+      const until = new Date(Date.now() + 3_600_000).toISOString();
+      const { result } = await submitFailing(
+        new ApiError(409, "CUSTODIAL_OUTBOUND_LOCKED", "x", { lockedUntil: until }),
+      );
+      await waitFor(() => expect(result.current.outboundLockedUntil).toBe(until));
+      expect(useRedeemStore.getState().pinOpen).toBe(false);
+      expect(result.current.createErrorKey).toBeNull();
+    });
+  });
+
+  describe("edge case", () => {
+    test("429 scope 2fa-stepup → code countdown, PIN countdown untouched, dialog open", async () => {
+      const { result } = await submitFailing(
+        new ApiError(429, "TOO_MANY_ATTEMPTS", "x", { scope: "2fa-stepup" }, 900),
+      );
+      await waitFor(() => expect(result.current.twoFactorCooldownSeconds).toBe(900));
+      expect(result.current.pinCooldownSeconds).toBe(0);
+      expect(useRedeemStore.getState().pinOpen).toBe(true);
+    });
+
+    test("external source + 24-hour lock → nothing blocked, no banner data (AC#6, review app#84)", async () => {
+      getWalletMock.mockResolvedValue({ ...WALLET, outboundLockedUntil: new Date(Date.now() + 3_600_000).toISOString() });
+      const { result } = renderHook(() => useRedeem(), { wrapper: createWrapper() });
+      await waitFor(() => expect(result.current.stepUpBlocked).toBe(true));
+      act(() => result.current.setSource("external"));
+      expect(result.current.stepUpBlocked).toBe(false);
+      expect(result.current.outboundLockedUntil).toBeNull();
+    });
+
+    test("the external source never sends a code and ignores the 2FA guard", async () => {
+      useAuthStore.setState({ user: { ...USER, twoFactorEnabled: false } });
+      const { result } = renderHook(() => useRedeem(), { wrapper: createWrapper() });
+      await waitFor(() => expect(result.current.custodialAvailable).toBe(true));
+      expect(result.current.twoFactorSetupRequired).toBe(true);
+      expect(result.current.stepUpBlocked).toBe(true);
+      act(() => result.current.setSource("external"));
+      expect(result.current.twoFactorSetupRequired).toBe(false);
+      expect(result.current.stepUpBlocked).toBe(false);
+    });
+
+    test("redeemErrorKey leaves 2FA codes to the dialog and the guard", () => {
+      expect(redeemErrorKey(new ApiError(401, "INVALID_TWO_FACTOR_CODE", "x"))).toBeNull();
+      expect(redeemErrorKey(new ApiError(401, "TWO_FACTOR_CODE_REQUIRED", "x"))).toBeNull();
+      expect(redeemErrorKey(new ApiError(401, "TWO_FACTOR_SETUP_REQUIRED", "x"))).toBeNull();
+      expect(redeemErrorKey(new ApiError(409, "CUSTODIAL_OUTBOUND_LOCKED", "x"))).toBeNull();
     });
   });
 });

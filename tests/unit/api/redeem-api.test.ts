@@ -6,6 +6,8 @@ vi.mock("@/lib/env", () => ({ env: { apiBaseUrl: "", useMock: false } }));
 import { createRedeemOrder, getRedeemOrder, reportBurnTx } from "@/lib/api/redeem-api";
 import { configureApiClient } from "@/lib/api/client";
 
+const onUnauthorized = vi.fn();
+
 function jsonResponse(status: number, payload: unknown): Response {
   return {
     ok: status >= 200 && status < 300,
@@ -21,7 +23,8 @@ const fetchMock = vi.fn();
 beforeEach(() => {
   fetchMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
-  configureApiClient({ getToken: () => "session-token", onUnauthorized: () => {} });
+  onUnauthorized.mockReset();
+  configureApiClient({ getToken: () => "session-token", onUnauthorized });
 });
 
 afterEach(() => {
@@ -71,6 +74,46 @@ describe("createRedeemOrder", () => {
         status: 422,
         code: "INVALID_BANK_ACCOUNT",
       });
+    });
+  });
+});
+
+// Jalur custodial (`pin` + `twoFactorCode` di body, redeem.yaml, custodial-wallet.md
+// §6.1, USDX-717): 401 INVALID_PIN / PIN_NOT_SET / TWO_FACTOR_* adalah jawaban di
+// dialog PIN, bukan sesi mati — salah ketik tidak boleh berakhir logout (pola
+// transferCustodial). Jalur SELF_SIGN tidak berubah.
+describe("createRedeemOrder — custodial", () => {
+  const custodialReq = { ...createReq, pin: "123456", twoFactorCode: "492817" };
+  const reject401 = (code: string) =>
+    jsonResponse(401, { status: "error", error: { code, message: "x" } });
+
+  describe("positive", () => {
+    test("sends pin + twoFactorCode in the body", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse(201, { status: "success", data: { id: "rdm_1" } }));
+      await createRedeemOrder(custodialReq);
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
+        pin: "123456",
+        twoFactorCode: "492817",
+      });
+    });
+  });
+
+  describe("negative", () => {
+    test.each(["INVALID_PIN", "PIN_NOT_SET", "TWO_FACTOR_SETUP_REQUIRED", "TWO_FACTOR_CODE_REQUIRED", "INVALID_TWO_FACTOR_CODE"])(
+      "401 %s is an inline error — the global logout handler is NOT fired",
+      async (code) => {
+        fetchMock.mockResolvedValueOnce(reject401(code));
+        await expect(createRedeemOrder(custodialReq)).rejects.toMatchObject({ status: 401, code });
+        expect(onUnauthorized).not.toHaveBeenCalled();
+      },
+    );
+  });
+
+  describe("edge case", () => {
+    test("SELF_SIGN (no pin) keeps the global 401 handler", async () => {
+      fetchMock.mockResolvedValueOnce(reject401("UNAUTHORIZED"));
+      await expect(createRedeemOrder(createReq)).rejects.toMatchObject({ status: 401 });
+      expect(onUnauthorized).toHaveBeenCalledTimes(1);
     });
   });
 });

@@ -6,6 +6,8 @@ import {
   seedRateLimit,
   MOCK_CUSTODIAL_WALLET_SUMMARY,
   MOCK_PIN,
+  seedTwoFactor,
+  MOCK_TOTP_CODE,
 } from "../helpers/playwright-utils";
 
 // Transfer from the custodial wallet (USDX-567, wallet.yaml § POST
@@ -36,7 +38,8 @@ test.describe("Transfer Flow (custodial)", () => {
     test.beforeEach(async ({ page }) => {
       await forceEnglish(page);
       await seedCustodialWallet(page, { status: "ACTIVE", balance: "1000.00" });
-      await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
+      await seedTwoFactor(page, true); // 2FA wajib uang keluar custodial (USDX-717)
+      await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY, twoFactorEnabled: true });
     });
 
     test("form → Ringkasan → PIN → 202 → tracker PENDING → CONFIRMED, balance refreshed", async ({
@@ -51,6 +54,7 @@ test.describe("Transfer Flow (custodial)", () => {
 
       const pin = await openPinDialog(page);
       await pin.getByLabel("6-digit PIN").fill(MOCK_PIN);
+      await pin.getByLabel("Authenticator code").fill(MOCK_TOTP_CODE);
       await pin.getByRole("button", { name: "Send", exact: true }).click();
 
       const result = page.getByTestId("transfer-result");
@@ -79,11 +83,14 @@ test.describe("Transfer Flow (custodial)", () => {
     }) => {
       const pin = await openPinDialog(page);
       await pin.getByLabel("6-digit PIN").fill("000000");
+      await pin.getByLabel("Authenticator code").fill(MOCK_TOTP_CODE);
       await pin.getByRole("button", { name: "Send", exact: true }).click();
       await expect(pin.getByText("Wrong PIN. Please try again.")).toBeVisible({ timeout: 15000 });
       await expect(page.getByTestId("transfer-result")).toHaveCount(0);
 
       await pin.getByLabel("6-digit PIN").fill(MOCK_PIN);
+
+      await pin.getByLabel("Authenticator code").fill(MOCK_TOTP_CODE);
       await pin.getByRole("button", { name: "Send", exact: true }).click();
       await expect(page.getByTestId("transfer-result")).toBeVisible({ timeout: 15000 });
     });
@@ -93,6 +100,7 @@ test.describe("Transfer Flow (custodial)", () => {
     }) => {
       const pin = await openPinDialog(page, "12");
       await pin.getByLabel("6-digit PIN").fill(MOCK_PIN);
+      await pin.getByLabel("Authenticator code").fill(MOCK_TOTP_CODE);
       await pin.getByRole("button", { name: "Send", exact: true }).click();
       const result = page.getByTestId("transfer-result");
       await expect(result.getByTestId("transfer-status")).toHaveAttribute("data-status", "CONFIRMED", {
@@ -132,6 +140,7 @@ test.describe("Transfer Flow (custodial)", () => {
       await page.getByRole("button", { name: "Continue to PIN" }).click();
       const pin = page.getByRole("dialog").filter({ hasText: "Confirm with PIN" });
       await pin.getByLabel("6-digit PIN").fill(MOCK_PIN);
+      await pin.getByLabel("Authenticator code").fill(MOCK_TOTP_CODE);
       await pin.getByRole("button", { name: "Send", exact: true }).click();
       const result = page.getByTestId("transfer-result");
       await expect(result.getByTestId("transfer-status")).toHaveAttribute("data-status", "PENDING", {
@@ -160,9 +169,11 @@ test.describe("Transfer Flow (custodial)", () => {
     }) => {
       await forceEnglish(page);
       await seedCustodialWallet(page, { status: "ACTIVE", balance: "1000.00", transferOutcome: "DROPPED" });
-      await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
+      await seedTwoFactor(page, true); // 2FA wajib uang keluar custodial (USDX-717)
+      await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY, twoFactorEnabled: true });
       const pin = await openPinDialog(page);
       await pin.getByLabel("6-digit PIN").fill(MOCK_PIN);
+      await pin.getByLabel("Authenticator code").fill(MOCK_TOTP_CODE);
       await pin.getByRole("button", { name: "Send", exact: true }).click();
 
       const result = page.getByTestId("transfer-result");
@@ -182,10 +193,12 @@ test.describe("Transfer Flow (custodial)", () => {
     }) => {
       await forceEnglish(page);
       await seedCustodialWallet(page, { status: "ACTIVE", balance: "1000.00", transferLimit: { perTx: "10.00" } });
-      await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
+      await seedTwoFactor(page, true); // 2FA wajib uang keluar custodial (USDX-717)
+      await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY, twoFactorEnabled: true });
 
       const pin = await openPinDialog(page);
       await pin.getByLabel("6-digit PIN").fill(MOCK_PIN);
+      await pin.getByLabel("Authenticator code").fill(MOCK_TOTP_CODE);
       await pin.getByRole("button", { name: "Send", exact: true }).click();
       await expect(page.getByTestId("transfer-error")).toContainText(
         "exceeds the per-transaction limit of 10 USDX",
@@ -200,7 +213,8 @@ test.describe("Transfer Flow (custodial)", () => {
       await forceEnglish(page);
       // The next transfer → 503 NETWORK_CONGESTED, then the network calms down.
       await seedCustodialWallet(page, { status: "ACTIVE", balance: "1000.00", networkCongested: true });
-      await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
+      await seedTwoFactor(page, true); // 2FA wajib uang keluar custodial (USDX-717)
+      await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY, twoFactorEnabled: true });
       const intentKey = () =>
         page.evaluate(
           () => JSON.parse(sessionStorage.getItem("usdx-transfer-intent") ?? "{}")?.state?.idempotencyKey ?? null,
@@ -208,6 +222,7 @@ test.describe("Transfer Flow (custodial)", () => {
 
       const pin = await openPinDialog(page);
       await pin.getByLabel("6-digit PIN").fill(MOCK_PIN);
+      await pin.getByLabel("Authenticator code").fill(MOCK_TOTP_CODE);
       await pin.getByRole("button", { name: "Send", exact: true }).click();
       const error = page.getByTestId("transfer-error");
       await expect(error).toContainText("The blockchain network is busy right now", { timeout: 15000 });
@@ -226,6 +241,7 @@ test.describe("Transfer Flow (custodial)", () => {
       await expect(pin).toBeVisible();
       expect(await intentKey()).toBe(firstKey);
       await pin.getByLabel("6-digit PIN").fill(MOCK_PIN);
+      await pin.getByLabel("Authenticator code").fill(MOCK_TOTP_CODE);
       await pin.getByRole("button", { name: "Send", exact: true }).click();
       await expect(page.getByTestId("transfer-result")).toBeVisible({ timeout: 15000 });
       await page.getByRole("button", { name: "Send another transfer" }).click();
@@ -239,9 +255,11 @@ test.describe("Transfer Flow (custodial)", () => {
     }) => {
       await forceEnglish(page);
       await seedCustodialWallet(page, { status: "ACTIVE", balance: "1000.00", serviceDown: true });
-      await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
+      await seedTwoFactor(page, true); // 2FA wajib uang keluar custodial (USDX-717)
+      await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY, twoFactorEnabled: true });
       const pin = await openPinDialog(page);
       await pin.getByLabel("6-digit PIN").fill(MOCK_PIN);
+      await pin.getByLabel("Authenticator code").fill(MOCK_TOTP_CODE);
       await pin.getByRole("button", { name: "Send", exact: true }).click();
       const error = page.getByTestId("transfer-error");
       await expect(error).toContainText("The wallet service is temporarily unavailable", { timeout: 15000 });
@@ -254,10 +272,12 @@ test.describe("Transfer Flow (custodial)", () => {
     }) => {
       await forceEnglish(page);
       await seedCustodialWallet(page, { status: "ACTIVE", balance: "1000.00" });
+      await seedTwoFactor(page, true); // 2FA wajib uang keluar custodial (USDX-717)
       await seedRateLimit(page, 3); // every mint/redeem/transfer call → 429 RATE_LIMITED
-      await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
+      await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY, twoFactorEnabled: true });
       const pin = await openPinDialog(page);
       await pin.getByLabel("6-digit PIN").fill(MOCK_PIN);
+      await pin.getByLabel("Authenticator code").fill(MOCK_TOTP_CODE);
       await pin.getByRole("button", { name: "Send", exact: true }).click();
       await expect(page.getByText("Too many requests, please try again shortly.")).toBeVisible({
         timeout: 15000,
@@ -269,7 +289,8 @@ test.describe("Transfer Flow (custodial)", () => {
     test("amount above the balance is rejected before anything is sent", async ({ page }) => {
       await forceEnglish(page);
       await seedCustodialWallet(page, { status: "ACTIVE", balance: "20.00" });
-      await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
+      await seedTwoFactor(page, true); // 2FA wajib uang keluar custodial (USDX-717)
+      await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY, twoFactorEnabled: true });
       await page.goto("/send");
       await expect(page.getByTestId("transfer-balance")).toHaveText("20 USDX", { timeout: 15000 });
       await page.getByPlaceholder("0", { exact: true }).fill("25");
@@ -281,6 +302,7 @@ test.describe("Transfer Flow (custodial)", () => {
     test("PROVISIONING wallet: sending is closed and says why", async ({ page }) => {
       await forceEnglish(page);
       await seedCustodialWallet(page, { status: "PROVISIONING" });
+      await seedTwoFactor(page, true); // 2FA wajib uang keluar custodial (USDX-717)
       await loginViaStorage(page, {
         custodialWallet: { address: null, status: "PROVISIONING" },
       });
@@ -308,9 +330,11 @@ test.describe("Transfer Flow (custodial)", () => {
     test("a transfer stuck in PENDING stays 'waiting' — age never turns it into failed", async ({ page }) => {
       await forceEnglish(page);
       await seedCustodialWallet(page, { status: "ACTIVE", balance: "1000.00", transferOutcome: "PENDING" });
-      await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
+      await seedTwoFactor(page, true); // 2FA wajib uang keluar custodial (USDX-717)
+      await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY, twoFactorEnabled: true });
       const pin = await openPinDialog(page);
       await pin.getByLabel("6-digit PIN").fill(MOCK_PIN);
+      await pin.getByLabel("Authenticator code").fill(MOCK_TOTP_CODE);
       await pin.getByRole("button", { name: "Send", exact: true }).click();
 
       const result = page.getByTestId("transfer-result");
@@ -327,9 +351,11 @@ test.describe("Transfer Flow (custodial)", () => {
     }) => {
       await forceEnglish(page);
       await seedCustodialWallet(page, { status: "ACTIVE", balance: "1000.00", slowFirstTransfer: true });
-      await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
+      await seedTwoFactor(page, true); // 2FA wajib uang keluar custodial (USDX-717)
+      await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY, twoFactorEnabled: true });
       const pin = await openPinDialog(page);
       await pin.getByLabel("6-digit PIN").fill(MOCK_PIN);
+      await pin.getByLabel("Authenticator code").fill(MOCK_TOTP_CODE);
       await pin.getByRole("button", { name: "Send", exact: true }).click();
       await expect(page.getByTestId("transfer-result")).toBeVisible({ timeout: 20000 });
       // Exactly one debit: the retry replayed, it did not send twice.

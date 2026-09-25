@@ -350,6 +350,51 @@ export function isTwoFactorNotEnabled(error: unknown): boolean {
   return isApiError(error) && error.status === 400 && error.code === "TWO_FACTOR_NOT_ENABLED";
 }
 
+// ── 2FA wajib untuk uang keluar custodial (custodial-wallet.md §6.1, USDX-717) ──
+// Transfer (`POST /api/v2/wallet/transfer`) dan redeem custodial (`POST
+// /api/v2/redeem`). Seperti PIN: 401 di sini jawaban di dalam dialog, bukan sesi
+// mati. `INVALID_TWO_FACTOR_CODE` memakai `isInvalidTwoFactorCode` di atas.
+
+// 401 TWO_FACTOR_SETUP_REQUIRED — pemilik wallet custodial belum mengaktifkan 2FA
+// (pola PIN_NOT_SET) → salinan `twoFactorEnabled` dikoreksi, arahkan ke aktivasi.
+export function isTwoFactorSetupRequired(error: unknown): boolean {
+  return isApiError(error) && error.status === 401 && error.code === "TWO_FACTOR_SETUP_REQUIRED";
+}
+
+// 401 TWO_FACTOR_CODE_REQUIRED — `twoFactorCode` kosong/absen pada user ber-2FA.
+export function isTwoFactorCodeRequired(error: unknown): boolean {
+  return isApiError(error) && error.status === 401 && error.code === "TWO_FACTOR_CODE_REQUIRED";
+}
+
+// 409 CUSTODIAL_OUTBOUND_LOCKED — faktor kedua baru dimatikan/diganti (< 24 jam):
+// transfer & redeem custodial ditahan sampai `details.lockedUntil`.
+export function isCustodialOutboundLocked(error: unknown): boolean {
+  return isApiError(error) && error.status === 409 && error.code === "CUSTODIAL_OUTBOUND_LOCKED";
+}
+
+// `details.lockedUntil` (ISO 8601) dari 409 CUSTODIAL_OUTBOUND_LOCKED; null kalau
+// bukan error itu atau bentuknya tidak seperti kontrak.
+export function getOutboundLockedUntil(error: unknown): string | null {
+  if (!isCustodialOutboundLocked(error)) return null;
+  const details = (error as ApiError).details;
+  if (!details || typeof details !== "object") return null;
+  const { lockedUntil } = details as Record<string, unknown>;
+  return typeof lockedUntil === "string" ? lockedUntil : null;
+}
+
+export type LockoutScope = "pin" | "2fa-stepup";
+
+// `details.scope` dari 429 TOO_MANY_ATTEMPTS di transfer/redeem custodial (additive
+// 25 Sep 2026): FE memilih kalimat lockout dari sini. Null = bukan lockout, atau
+// scope absen (backend sebelum USDX-718) / tak dikenal — pemanggil memakai kalimat PIN.
+export function getLockoutScope(error: unknown): LockoutScope | null {
+  if (!isTooManyAttempts(error)) return null;
+  const details = (error as ApiError).details;
+  if (!details || typeof details !== "object") return null;
+  const { scope } = details as Record<string, unknown>;
+  return scope === "pin" || scope === "2fa-stepup" ? scope : null;
+}
+
 // Narrow to a specific SoT error code (e.g. PASSWORD_MISMATCH, WEAK_PASSWORD)
 // regardless of status, so call sites can route 400s to the right field.
 export function hasErrorCode(error: unknown, code: string): boolean {

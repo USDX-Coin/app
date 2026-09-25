@@ -41,6 +41,15 @@ export { MOCK_BACKUP_CODES, MOCK_RECOVERY_OTP, MOCK_TOTP_CODE };
 
 const STATE_KEY = "usdx-mock-two-factor";
 const CHALLENGE_KEY = "usdx-mock-2fa-challenge";
+// Kunci uang keluar custodial (`users.custodial_outbound_locked_until`, §6.1 no.6):
+// terpisah dari STATE_KEY karena mematikan 2FA menghapus state itu, sedangkan
+// kuncinya justru harus bertahan.
+const OUTBOUND_LOCK_KEY = "usdx-mock-outbound-lock";
+const OUTBOUND_LOCK_MS = 24 * 60 * 60 * 1000;
+// Seam "backend sebelum USDX-718": `twoFactorCode` dibuang diam-diam (whitelist
+// tanpa forbidNonWhitelisted), tanpa kunci dan tanpa `outboundLockedUntil` —
+// keadaan yang dihadapi FE ini selama urutan rilis §6.1 (FE dulu, baru BE).
+const LEGACY_STEP_UP_KEY = "usdx-mock-2fa-legacy";
 
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_SECONDS = 15 * 60;
@@ -61,11 +70,15 @@ interface MockChallenge {
 }
 
 let stateMemory: MockTwoFactorState | null = null;
+let lockMemory: string | null = null;
 let challengeMemory: MockChallenge | null = null;
 let verifyFailures = 0;
 let recoveryFailures = 0;
 let recoverySentAt: number | null = null;
 let regenerations = 0;
+// Scope lockout `2fa-stepup` (custodial-wallet.md §6.1 no.4) — terpisah dari
+// `2fa-verify` dan dari scope `pin`; dibagi transfer + redeem custodial.
+let stepUpFailures = 0;
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -172,10 +185,13 @@ export function seedMockTwoFactorChallengeExpired(): void {
 export function resetMockTwoFactor(): void {
   writeState(null);
   writeChallenge(null);
+  seedMockOutboundLock(null);
+  seedMockLegacyStepUp(false);
   verifyFailures = 0;
   recoveryFailures = 0;
   recoverySentAt = null;
   regenerations = 0;
+  stepUpFailures = 0;
 }
 
 // ── Login langkah 1 (dipanggil mockLogin untuk akun ber-2FA) ─────────────────
@@ -226,6 +242,8 @@ export async function mockEnableTwoFactor(
   if (!passwordOk) throw wrongPassword();
   verifyFailures = 0;
   const current = readState();
+  // Enable ulang saat 2FA SUDAH aktif = secret lama diganti di titik ini (§6.1 no.6d).
+  if (current?.enabled) lockOutbound();
   writeState({
     enabled: current?.enabled ?? false,
     pending: true,
@@ -260,6 +278,7 @@ export async function mockDisableTwoFactor(
   else if (!passwordOk) throw wrongPassword();
   verifyFailures = 0;
   writeState(null);
+  lockOutbound();
 }
 
 // ── POST /api/v2/auth/2fa/backup-codes/regenerate ────────────────────────────
@@ -277,6 +296,7 @@ export async function mockRegenerateBackupCodes(
   regenerations += 1;
   const backupCodes = MOCK_BACKUP_CODES.map((c) => `${c.slice(0, 6)}${regenerations}${c.slice(7)}`);
   writeState({ ...state, backupCodes });
+  lockOutbound();
   return { backupCodes };
 }
 
@@ -311,4 +331,84 @@ export async function mockTwoFactorRecovery(req: TwoFactorRecoveryRequest): Prom
   recoveryFailures = 0;
   writeState(null);
   writeChallenge(null);
+  lockOutbound();
+}
+
+// ── Step-up transfer & redeem custodial (custodial-wallet.md §6.1, USDX-717) ──
+// Memerankan penegak backend USDX-718, dipanggil mock transfer/redeem SESUDAH PIN:
+// 2FA aktif? → kode ada? → lockout `2fa-stepup`? → kode valid (TOTP, atau backup
+// code yang lalu hangus). Anti pakai-ulang satu time-step TOTP (§6.1 no.5) tidak
+// diperankan: kode mock tetap — tiap transfer di test akan tertolak.
+export function verifyMockStepUpCode(code: string | undefined): void {
+  if (isMockLegacyStepUp()) return;
+  const state = readState();
+  if (!state?.enabled) {
+    throw new ApiError(401, "TWO_FACTOR_SETUP_REQUIRED", "Aktifkan 2FA untuk mengirim atau redeem dari wallet ini.");
+  }
+  const trimmed = code?.trim() ?? "";
+  if (!trimmed) {
+    throw new ApiError(401, "TWO_FACTOR_CODE_REQUIRED", "Kode authenticator wajib diisi.");
+  }
+  if (stepUpFailures >= MAX_ATTEMPTS) {
+    throw new ApiError(
+      429,
+      "TOO_MANY_ATTEMPTS",
+      "Terlalu banyak kode authenticator yang salah. Coba lagi nanti.",
+      { retryAfterSeconds: LOCKOUT_SECONDS, scope: "2fa-stepup" },
+      LOCKOUT_SECONDS,
+    );
+  }
+  if (TOTP_PATTERN.test(trimmed) ? trimmed !== MOCK_TOTP_CODE : !state.backupCodes.includes(trimmed)) {
+    stepUpFailures += 1;
+    throw wrongCode();
+  }
+  if (!TOTP_PATTERN.test(trimmed)) {
+    writeState({ ...state, backupCodes: state.backupCodes.filter((c) => c !== trimmed) });
+  }
+  stepUpFailures = 0;
+}
+
+// ── Kunci 24 jam uang keluar custodial (§6.1 no.6, USDX-717) ─────────────────
+// Dipasang di keempat jalur "faktor kedua dimatikan atau diganti" di atas; event
+// berikutnya memperpanjang dari saat itu. Aktivasi pertama tidak mengunci.
+function lockOutbound(): void {
+  seedMockOutboundLock(new Date(Date.now() + OUTBOUND_LOCK_MS).toISOString());
+}
+
+// Unit/Playwright: pasang (ISO 8601) atau lepas (`null`) kunci.
+export function seedMockOutboundLock(until: string | null): void {
+  lockMemory = until;
+  writeJson(OUTBOUND_LOCK_KEY, until === null ? null : { until });
+}
+
+// `GET /api/v2/wallet` `outboundLockedUntil`: null bila tidak terkunci, termasuk
+// kunci yang sudah lewat.
+export function mockOutboundLockedUntil(): string | null {
+  if (isMockLegacyStepUp()) return null;
+  const until = readJson<{ until: string }>(OUTBOUND_LOCK_KEY, lockMemory === null ? null : { until: lockMemory })?.until;
+  return until && Date.parse(until) > Date.now() ? until : null;
+}
+
+// Transfer & redeem custodial selama terkunci → 409 CUSTODIAL_OUTBOUND_LOCKED.
+export function assertMockOutboundNotLocked(): void {
+  const lockedUntil = mockOutboundLockedUntil();
+  if (lockedUntil === null) return;
+  throw new ApiError(
+    409,
+    "CUSTODIAL_OUTBOUND_LOCKED",
+    "Transfer & redeem ditahan karena 2FA baru dimatikan atau diganti.",
+    { lockedUntil },
+  );
+}
+
+let legacyMemory = false;
+
+// Unit/Playwright: `true` = backend sebelum USDX-718 (lihat LEGACY_STEP_UP_KEY).
+export function seedMockLegacyStepUp(on: boolean): void {
+  legacyMemory = on;
+  writeJson(LEGACY_STEP_UP_KEY, on ? true : null);
+}
+
+export function isMockLegacyStepUp(): boolean {
+  return readJson<boolean>(LEGACY_STEP_UP_KEY, legacyMemory || null) === true;
 }

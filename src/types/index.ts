@@ -66,6 +66,11 @@ export interface CustodialWallet extends CustodialWalletSummary {
   balanceWei: string | null; // uint256 string; null bersama `balance`
   balanceAt: string | null; // waktu pembacaan; null bersama `balance`
   createdAt: string; // permintaan diterima, bukan waktu ACTIVE
+  // Terisi selama transfer & redeem custodial DITAHAN karena faktor kedua akun baru
+  // dimatikan atau diganti (< 24 jam — wallet.yaml § CustodialWallet.outboundLockedUntil,
+  // custodial-wallet.md §6.1 no.6, USDX-717). Null = tidak terkunci (termasuk kunci
+  // yang sudah lewat). Opsional: backend sebelum USDX-718 tidak mengirimnya.
+  outboundLockedUntil?: string | null;
 }
 
 // POST /api/v2/wallet/transfer → 202 (wallet.yaml § TransferAccepted). **Bukti

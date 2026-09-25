@@ -17,6 +17,7 @@ import { useConsumerRate } from "@/hooks/useConsumerRate";
 import { useAppConfig } from "@/hooks/useAppConfig";
 import { useCustodialWallet } from "@/hooks/useCustodialWallet";
 import { useCooldown, DEFAULT_COOLDOWN_SECONDS } from "@/hooks/useCooldown";
+import { useCustodialStepUp, stepUpErrorKey, isPinLockout } from "@/hooks/useCustodialStepUp";
 import { walletStatusKey } from "@/hooks/useTransfer";
 import { useRedeemPreconditions } from "@/lib/redeem/wallet";
 import { createRedeemOrder } from "@/lib/api/redeem-api";
@@ -45,6 +46,8 @@ import {
   isInvalidPin,
   isPinNotSet,
   isTooManyAttempts,
+  isTwoFactorSetupRequired,
+  isCustodialOutboundLocked,
   isWalletNotActive,
   getRateLimitSeconds,
 } from "@/lib/api/errors";
@@ -53,7 +56,10 @@ import {
 // (week3.md § Endpoints Redeem error codes). PIN failures on the custodial path
 // (401 INVALID_PIN / PIN_NOT_SET, 429 TOO_MANY_ATTEMPTS — redeem.yaml, USDX-565)
 // are NOT mapped here: they belong in the PIN dialog (`pinErrorKey` below), so
-// the user retypes where the mistake was made.
+// the user retypes where the mistake was made. Same for the 2FA answers
+// (custodial-wallet.md §6.1, USDX-717): a wrong/missing code stays under the code
+// field, and SETUP_REQUIRED / CUSTODIAL_OUTBOUND_LOCKED have their own card and
+// banner (`useCustodialStepUp`) instead of a Ringkasan sentence.
 export function redeemErrorKey(error: unknown): string | null {
   if (!error) return null;
   // 429 RATE_LIMITED is surfaced globally as a toast (Providers query/mutation
@@ -61,6 +67,9 @@ export function redeemErrorKey(error: unknown): string | null {
   // generic message, and let the user retry after the throttle clears.
   if (isRateLimited(error)) return null;
   if (isInvalidPin(error) || isPinNotSet(error) || isTooManyAttempts(error)) return null;
+  if (stepUpErrorKey(error) || isTwoFactorSetupRequired(error) || isCustodialOutboundLocked(error)) {
+    return null;
+  }
   if (isApiError(error)) {
     // Custodial wallet PROVISIONING/SUSPENDED — rejected before any order exists.
     // The status does not change by pressing again (wallet.yaml § 409).
@@ -96,6 +105,7 @@ export function useRedeem() {
   const source = custodialAvailable ? store.source : "external";
   const isCustodialSource = source === "custodial";
   const pinCooldown = useCooldown();
+  const stepUp = useCustodialStepUp();
   const setPinSet = usePinSetCorrection();
 
   const effectiveSellRate = rateQuery.data ? Number(rateQuery.data.effectiveSellRate) : null;
@@ -211,9 +221,10 @@ export function useRedeem() {
       };
 
   const createMutation = useMutation({
-    // `pin` only travels on the custodial path (redeem.yaml § CreateRedeemOrder.pin):
-    // the backend ignores it on SELF_SIGN, and the FE does not send it there.
-    mutationFn: (pin?: string) =>
+    // `pin` + `twoFactorCode` only travel on the custodial path (redeem.yaml §
+    // CreateRedeemOrder, custodial-wallet.md §6.1): the backend ignores them on
+    // SELF_SIGN, and the FE does not send them there.
+    mutationFn: (approval?: { pin: string; twoFactorCode: string }) =>
       createRedeemOrder({
         amount: store.amount.trim(),
         amountCurrency: store.amountCurrency,
@@ -221,7 +232,9 @@ export function useRedeem() {
         // Custodial: the user's custodial address (backend derives burnMode from
         // it); external: the connected burn wallet (USDX-259).
         userAddress: burnAddress ?? "",
-        ...(isCustodialSource && pin ? { pin } : {}),
+        ...(isCustodialSource && approval
+          ? { pin: approval.pin, twoFactorCode: approval.twoFactorCode }
+          : {}),
         // Two-path bank destination (USDX-267): saved → only `bankAccountId` (the
         // backend resolves the number/name from the entry); manual → the trio.
         // Omitted fields drop from the JSON body.
@@ -237,14 +250,18 @@ export function useRedeem() {
       // Fakta akun, bukan state mutasi (USDX-651): salinan profil `user.pinSet`
       // yang dikoreksi; PinSetupDialog dari notice mengembalikannya ke true.
       if (isPinNotSet(error)) setPinSet(false);
-      if (isTooManyAttempts(error)) {
+      if (isPinLockout(error)) {
         pinCooldown.start(getRateLimitSeconds(error) || DEFAULT_COOLDOWN_SECONDS);
       }
+      stepUp.onError(error);
       // Backend says the wallet is not ACTIVE while the profile copy said it was →
       // the copy is stale; refetch so the message + the disabled button follow reality.
       if (isWalletNotActive(error)) custodial.invalidate();
       // Non-PIN failures show in the Ringkasan: close the PIN dialog so they are seen.
-      if (!isInvalidPin(error) && !isPinNotSet(error) && !isTooManyAttempts(error)) {
+      // A wrong/missing 2FA code and its lockout stay in the dialog like the PIN ones.
+      const staysInDialog =
+        isInvalidPin(error) || isPinNotSet(error) || isTooManyAttempts(error) || !!stepUpErrorKey(error);
+      if (!staysInDialog) {
         store.setPinOpen(false);
       }
     },
@@ -286,8 +303,10 @@ export function useRedeem() {
   // response, not by the FE): nothing to sign and nothing to confirm. The PIN sent
   // with the create was the approval; the system dispatches the burn and the tracker
   // shows "memproses burn" until the scanner confirms.
-  async function submitRedeem(pin?: string) {
-    const order = await createMutation.mutateAsync(pin);
+  async function submitRedeem(pin?: string, twoFactorCode?: string) {
+    const order = await createMutation.mutateAsync(
+      pin !== undefined ? { pin, twoFactorCode: twoFactorCode ?? "" } : undefined,
+    );
     store.setOrderId(order.id);
     store.setStep("tracker");
     if (order.burnMode === "CUSTODIAL") {
@@ -366,6 +385,13 @@ export function useRedeem() {
     pinErrorKey: isInvalidPin(createMutation.error) ? "pin.errInvalid" : null,
     pinNotSet: custodial.pinSet === false,
     pinCooldownSeconds: pinCooldown.remaining,
+    // 2FA (custodial path only, USDX-717): code field error + `2fa-stepup` countdown,
+    // and the pre-check card / 24-hour lock banner. The external source is untouched.
+    twoFactorErrorKey: stepUpErrorKey(createMutation.error),
+    twoFactorCooldownSeconds: stepUp.twoFactorCooldownSeconds,
+    twoFactorSetupRequired: isCustodialSource && stepUp.twoFactorSetupRequired,
+    outboundLockedUntil: isCustodialSource ? stepUp.lockedUntil : null,
+    stepUpBlocked: isCustodialSource && stepUp.blocked,
     // submit (create order → tracker → guarded burn / system-dispatched burn)
     submitRedeem,
     isCreating: createMutation.isPending,

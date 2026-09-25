@@ -73,7 +73,7 @@ src/
     mint/           # MintForm, MintReview, MintPageContent, skeletons
     redeem/         # RedeemForm, RedeemReview, RedeemPageContent, skeletons
     wallet/         # Custodial wallet (USDX-566): offer, status panel, receive address + QR, sidebar card, onboarding step
-    settings/       # SettingsPageContent (Pengaturan — home of the custodial wallet) + PinSection (transaction PIN, USDX-651)
+    settings/       # SettingsPageContent (Pengaturan — home of the custodial wallet) + PinSection (transaction PIN, USDX-651) + TwoFactorSection (2FA, USDX-714)
     transfer/       # Custodial transfer: TransferForm, TransferReview, TransferResult (tracker), TransferPageContent (USDX-567); TransferStatusPanel/Badge, TransferDetail (USDX-701)
     transactions/   # TransactionList (unified /history, USDX-713), TransferHistoryRow, HistoryCells, skeletons
     profile/        # ProfileCard, skeleton
@@ -228,7 +228,7 @@ describe('functionOrPage') →
 
 - **Unit tests**: hooks, stores, API, validations, utils, chains
 - **Integration tests**: page interactions + responsive (mobile/tablet/desktop)
-- **E2E tests**: auth flow, mint flow, redeem flows, address book, QR scan, rate limit, custodial transfer/redeem (tracker to CONFIRMED/FAILED + row in /history, USDX-701/713), unified history refresh (USDX-713), PIN created from the money paths
+- **E2E tests**: auth flow, mint flow, redeem flows, address book, QR scan, rate limit, custodial transfer/redeem (tracker to CONFIRMED/FAILED + row in /history, USDX-701/713), unified history refresh (USDX-713), PIN created from the money paths, 2FA login + email recovery (USDX-714)
 
 Test helpers in `tests/helpers/`:
 - `test-utils.tsx`: QueryClient wrapper for renderHook (`createWrapper`, gcTime 0; `createCachingWrapper` keeps the cache across unmounts like the app)
@@ -238,14 +238,14 @@ Test helpers in `tests/helpers/`:
 
 | Route | Auth | Type | Description |
 |-------|------|------|-------------|
-| `/login` | No | SC | Email/password login |
+| `/login` | No | SC | Email/password login; on a 2FA account the form is replaced by the code screen (authenticator code or backup code → `2fa/verify-login`) with "Can't access your authenticator?" → email recovery (USDX-714, auth.yaml § loginV2) |
 | `/register` | No | SC | Create account |
 | `/forgot-password` | No | SC | Password reset |
 | `/mint` | Yes | SC | Mint USDX (default dashboard) |
 | `/redeem` | Yes | SC | Redeem USDX to bank |
 | `/history` | Yes | SC | Unified history (USDX-713, `custodial-wallet.md` §5.7): tabs Semua · Minting · Redeem · Masuk · Keluar over `GET /api/v2/transactions` (Semua = `includeTransfers=true`, the rest = `type`), the active tab mirrored in `?type=` (unknown = Semua). Outgoing rows open `/send/history/[id]`; incoming rows show the sender address only + the explorer/copy-hash menu. Refreshes every 15 s while a transfer is PENDING. Mint/redeem rows to/from the user's custodial wallet carry the mint review's "Wallet custodial saya" marker — `TransactionItem.userAddress` matched case-insensitively, no per-row detail call (USDX-653); transfer rows never do |
 | `/profile` | Yes | SC | User info + verification badge |
-| `/settings` | Yes | SC | Pengaturan: custodial "USDX wallet" (offer — the "Buatkan saya wallet" button on builds with `env.walletCreateEnabled` ON = dev + mock, the "Segera hadir" pill everywhere else incl. production, USDX-699 / address + QR + balance / status) + Account card with the transaction PIN (create / change, USDX-651) + link to Profile (USDX-566; switch: `custodial-wallet.md` §1 amandemen 14 Sep + 21 Sep 2026) |
+| `/settings` | Yes | SC | Pengaturan: custodial "USDX wallet" (offer — the "Buatkan saya wallet" button on builds with `env.walletCreateEnabled` ON = dev + mock, the "Segera hadir" pill everywhere else incl. production, USDX-699 / address + QR + balance / status) + Account card with the transaction PIN (create / change, USDX-651) and 2FA (turn on / off, new backup codes, USDX-714) + link to Profile (USDX-566; switch: `custodial-wallet.md` §1 amandemen 14 Sep + 21 Sep 2026) |
 | `/onboarding/wallet` | Yes | SC | "Dikasih wallet" step (USDX-566). **No longer reached from verify-email** — that redirect is off in every environment (verify-email lands on `/mint`, `custodial-wallet.md` §1 amandemen 14 Sep 2026); only a direct URL opens it. Same offer as Settings (button or pill by `env.walletCreateEnabled`, USDX-699). "Not now" → `/mint` |
 | `/bridge` | Yes | SC | ComingSoon (gated — no bridge backend yet; sidebar teaser) |
 | `/send` | Yes | SC | Custodial transfer (`TransferPageContent`) for users with `user.custodialWallet`; ComingSoon for everyone else (no external-wallet send backend) |
@@ -300,6 +300,15 @@ Test helpers in `tests/helpers/`:
   USDX-698 (first-time PIN on a wallet account needs a fresh login) is ON by default
   (698 is live on api-dev; `seedMockStrictPinSet(false)` = the old backend) — a flow that
   starts right after a login arms `seedFreshPasswordAuth(page)` (Playwright)
+- **2FA TOTP (USDX-714, `custodial-wallet.md` §6.1, `two-factor.yaml`)** — required for money
+  leaving the custodial wallet (enforced by backend USDX-718; the transfer/redeem code field is
+  USDX-717). The web can now turn it on/off and regenerate backup codes (Settings → Account)
+  and log in to a 2FA account (`login` → `{ twoFactorRequired }` → code screen →
+  `verify-login`; email recovery). `user.twoFactorEnabled` in the auth store is what screens
+  read; every change goes through `hooks/useProfileCorrection` (store + `/auth/me` cache).
+  Turning 2FA off (button or email recovery) holds custodial transfers & withdrawals for 24
+  hours — both screens say so before the user confirms. Mock: `mock-two-factor.ts`
+  (`seedTwoFactor(page, true)`), codes in `mock-two-factor-fixtures.ts`
 - **Custodial transfer history (USDX-701 → unified /history USDX-713)** — mock outgoing
   ledger in localStorage (`usdx-mock-wallet-transfers`, `lib/api/mock-wallet-transfers.ts`,
   the `TRANSFER_OUT` rows of mock `/transactions`) + incoming ledger

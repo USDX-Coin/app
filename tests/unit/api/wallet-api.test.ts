@@ -230,6 +230,12 @@ describe("transferCustodial", () => {
       expect(JSON.parse(init.body)).toEqual(req);
     });
 
+    test("twoFactorCode travels in the body next to the PIN (USDX-717)", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse(202, { status: "success", data: ACCEPTED }));
+      await transferCustodial({ ...req, twoFactorCode: "492817" }, KEY);
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ ...req, twoFactorCode: "492817" });
+    });
+
     test("a 200 replay unwraps to the same shape as a 202", async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse(200, { status: "success", data: ACCEPTED }));
       await expect(transferCustodial(req, KEY)).resolves.toEqual(ACCEPTED);
@@ -242,6 +248,14 @@ describe("transferCustodial", () => {
         jsonResponse(401, { status: "error", error: { code: "INVALID_PIN", message: "PIN salah" } }),
       );
       await expect(transferCustodial(req, KEY)).rejects.toMatchObject({ status: 401, code: "INVALID_PIN" });
+      expect(onUnauthorized).not.toHaveBeenCalled();
+    });
+
+    test("2FA 401s (USDX-717) are inline errors too — no logout", async () => {
+      for (const code of ["TWO_FACTOR_SETUP_REQUIRED", "TWO_FACTOR_CODE_REQUIRED", "INVALID_TWO_FACTOR_CODE"]) {
+        fetchMock.mockResolvedValueOnce(jsonResponse(401, { status: "error", error: { code, message: "x" } }));
+        await expect(transferCustodial({ ...req, twoFactorCode: "000000" }, KEY)).rejects.toMatchObject({ code });
+      }
       expect(onUnauthorized).not.toHaveBeenCalled();
     });
 

@@ -313,5 +313,6 @@ export function useTransfer(
     twoFactorCooldownSeconds: stepUp.twoFactorCooldownSeconds,
     twoFactorSetupRequired: stepUp.twoFactorSetupRequired,
     outboundLockedUntil: stepUp.lockedUntil,
+    stepUpBlocked: stepUp.blocked,
   };
 }

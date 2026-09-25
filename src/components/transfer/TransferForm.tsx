@@ -37,8 +37,7 @@ import { KycGateDialog } from "@/components/kyc/KycGateDialog";
 import { AddressBookPicker } from "@/components/mint/AddressBookPicker";
 import { AddressScannerDialog } from "@/components/mint/AddressScannerDialog";
 import { PinConfirmDialog } from "@/components/shared/PinConfirmDialog";
-import { TwoFactorSetupNotice } from "@/components/shared/TwoFactorSetupNotice";
-import { OutboundLockNotice } from "@/components/shared/OutboundLockNotice";
+import { StepUpNotices } from "@/components/shared/StepUpNotices";
 import { TransferReview } from "@/components/transfer/TransferReview";
 import { TransferResult } from "@/components/transfer/TransferResult";
 import { useLang } from "@/providers/LanguageProvider";
@@ -79,6 +78,7 @@ export function TransferForm() {
     twoFactorCooldownSeconds,
     twoFactorSetupRequired,
     outboundLockedUntil,
+    stepUpBlocked,
     parsedAmount,
   } = transfer;
 
@@ -113,15 +113,13 @@ export function TransferForm() {
         </Alert>
       )}
 
-      {isWalletActive && twoFactorSetupRequired && (
-        <TwoFactorSetupNotice
-          data-testid="transfer-2fa-required"
-          messageKey="stepUp.setupRequiredSend"
-          tone="warning"
-        />
-      )}
       {isWalletActive && (
-        <OutboundLockNotice data-testid="transfer-locked" lockedUntil={outboundLockedUntil} />
+        <StepUpNotices
+          setupRequired={twoFactorSetupRequired}
+          lockedUntil={outboundLockedUntil}
+          action="send"
+          testIdPrefix="transfer"
+        />
       )}
 
       {/* Sumber: wallet custodial saya + saldo. Bukan tombol connect — tidak ada
@@ -243,12 +241,7 @@ export function TransferForm() {
         type="button"
         variant="brand"
         size="lg"
-        disabled={
-          !isWalletActive ||
-          twoFactorSetupRequired ||
-          outboundLockedUntil !== null ||
-          (gate.verified && !isFormValid)
-        }
+        disabled={!isWalletActive || stepUpBlocked || (gate.verified && !isFormValid)}
         onClick={() => gate.guard(() => setReviewOpen(true))}
       >
         {t("btn.send")}

@@ -2,6 +2,8 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { User } from "@/types";
 
+export type ProfileFlags = Partial<Pick<User, "pinSet" | "twoFactorEnabled">>;
+
 interface AuthState {
   user: User | null;
   // Bearer credential (openapi AuthTokenV2.accessToken / sessionId). Kept IN-MEMORY
@@ -20,6 +22,10 @@ interface AuthState {
   // `false` when the backend answers 401 PIN_NOT_SET while the copy said there was
   // one. The copy is the single source the money screens read. No-op without a user.
   setPinSet: (pinSet: boolean) => void;
+  // Koreksi bendera profil yang dibaca layar uang — `pinSet` dan `twoFactorEnabled`
+  // (USDX-714: sesudah aktivasi/matikan 2FA). Sisa profil + token tidak disentuh;
+  // no-op tanpa user. Dipanggil lewat `hooks/useProfileCorrection` (store + cache).
+  patchUser: (patch: ProfileFlags) => void;
   logout: () => void;
 }
 
@@ -32,6 +38,7 @@ export const useAuthStore = create<AuthState>()(
       setAuth: (user, token) => set({ user, token, isAuthenticated: true }),
       setUser: (user) => set({ user }),
       setPinSet: (pinSet) => set((s) => (s.user ? { user: { ...s.user, pinSet } } : {})),
+      patchUser: (patch) => set((s) => (s.user ? { user: { ...s.user, ...patch } } : {})),
       logout: () => set({ user: null, token: null, isAuthenticated: false }),
     }),
     {

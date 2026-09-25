@@ -4,7 +4,7 @@
 
 import { env } from "@/lib/env";
 import { apiFetch } from "./client";
-import type { AuthResponse, RegisterResult, User } from "@/types";
+import type { AuthResponse, LoginResult, RegisterResult, TwoFactorRequired, User } from "@/types";
 import type {
   LoginRequest,
   RegisterRequest,
@@ -32,7 +32,7 @@ import { mockSetPin, mockChangePin } from "./mock-pin";
 import { hasMockCustodialWallet } from "./mock-custodial-wallet";
 
 // openapi AuthTokenV2 — Better Auth issues a session via cookie or access token.
-interface AuthTokenV2 {
+export interface AuthTokenV2 {
   accessToken: string | null;
   sessionId: string;
   user: User;
@@ -41,18 +41,29 @@ interface AuthTokenV2 {
 // Normalize the backend session payload to the Bearer credential the app stores.
 // Cookie-only audiences return accessToken=null; we fall back to sessionId so the
 // client still has something to attach (and the cookie rides along regardless).
-function toAuthResponse(data: AuthTokenV2): AuthResponse {
+export function toAuthResponse(data: AuthTokenV2): AuthResponse {
   return { user: data.user, token: data.accessToken ?? data.sessionId };
 }
 
-export async function login(req: LoginRequest): Promise<AuthResponse> {
+/** Login langkah 1 dijawab "masukkan kode 2FA" — tidak ada sesi (auth.yaml § loginV2). */
+export function isTwoFactorRequired(result: object): result is TwoFactorRequired {
+  return "twoFactorRequired" in result && result.twoFactorRequired === true;
+}
+
+// Dua bentuk 200 (auth.yaml § loginV2): AuthTokenV2, ATAU — akun ber-2FA —
+// `{ twoFactorRequired: true }` tanpa token. Yang kedua BUKAN login sukses: FE
+// menampilkan layar kode dan menyelesaikannya di `verifyTwoFactorLogin`
+// (two-factor-api). Cookie challenge `two_factor` dari balasan ini ikut otomatis
+// (`credentials: "include"`). GAP 22 Sep ditutup di USDX-714.
+export async function login(req: LoginRequest): Promise<LoginResult> {
   if (env.useMock) return mockLogin(req);
-  const data = await apiFetch<AuthTokenV2>("/api/v2/auth/login", {
+  const data = await apiFetch<AuthTokenV2 | TwoFactorRequired>("/api/v2/auth/login", {
     method: "POST",
     body: req,
     skipAuth: true,
   });
-  return toAuthResponse(data);
+  if (isTwoFactorRequired(data)) return { twoFactorRequired: true };
+  return toAuthResponse(data as AuthTokenV2);
 }
 
 export async function register(req: RegisterRequest): Promise<RegisterResult> {

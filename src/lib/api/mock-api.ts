@@ -1,6 +1,7 @@
 import type {
   LoginRequest,
   RegisterRequest,
+  TwoFactorCodeRequest,
   VerifyEmailRequest,
   ResetPasswordRequest,
   ChangePasswordRequest,
@@ -18,6 +19,7 @@ import type {
 } from "./types";
 import type {
   AuthResponse,
+  LoginResult,
   RegisterResult,
   KycMyStatus,
   MintOrder,
@@ -56,6 +58,11 @@ import {
 import { listMockTransferOutHistory } from "./mock-wallet-transfers";
 import { listMockIncomingTransfers } from "./mock-incoming-transfers";
 import { markMockPasswordAuth, requireAndVerifyMockPin } from "./mock-pin";
+import {
+  isMockTwoFactorEnabled,
+  startMockTwoFactorChallenge,
+  takeMockTwoFactorLogin,
+} from "./mock-two-factor";
 import { ApiError, type Paginated } from "./client";
 import { validatePassword, validateAddress } from "@/lib/validations";
 import { getBankName } from "@/lib/banks";
@@ -159,7 +166,7 @@ const LOGIN_MAX_ATTEMPTS = 5;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const failedLogins = new Map<string, { count: number; firstAt: number }>();
 
-export async function mockLogin(req: LoginRequest): Promise<AuthResponse> {
+export async function mockLogin(req: LoginRequest): Promise<LoginResult> {
   await delay();
   maybeThrowRateLimitOverride("TOO_MANY_ATTEMPTS");
   const attempts = failedLogins.get(req.email);
@@ -184,10 +191,40 @@ export async function mockLogin(req: LoginRequest): Promise<AuthResponse> {
   if (account.user.suspended) {
     throw new ApiError(403, "ACCOUNT_SUSPENDED", "Your account is suspended");
   }
+  // 2FA aktif (auth.yaml § loginV2, USDX-714): password benar TIDAK menerbitkan
+  // sesi — hanya challenge; `mockVerifyTwoFactorLogin` yang menyelesaikan.
+  if (isMockTwoFactorEnabled()) {
+    startMockTwoFactorChallenge(account.user.email);
+    return { twoFactorRequired: true };
+  }
+  return startMockSession(account);
+}
+
+// Sesi hasil password-auth (login langsung, atau langkah 2 sesudah 2FA): segar 5
+// menit untuk pin.yaml § set (seam mock-pin) + membersihkan lockout `pin`.
+function startMockSession(account: MockAccount): AuthResponse {
   currentEmail = account.user.email;
-  // Sesi hasil password-auth: segar 5 menit untuk pin.yaml § set (seam mock-pin).
   markMockPasswordAuth();
   return { user: withCustodialWallet(account.user), token: tokenFor(account.user) };
+}
+
+// POST /api/v2/auth/2fa/verify-login (two-factor.yaml § verifyLogin, USDX-714):
+// kode TOTP/backup di atas challenge langkah 1 → sesi.
+export async function mockVerifyTwoFactorLogin(req: TwoFactorCodeRequest): Promise<AuthResponse> {
+  const email = await takeMockTwoFactorLogin(req.code);
+  const account = accounts.get(email);
+  if (!account) {
+    throw new ApiError(401, "TWO_FACTOR_CHALLENGE_EXPIRED", "Silakan login ulang.");
+  }
+  return startMockSession(account);
+}
+
+// Password akun yang sedang login — gerbang enable/disable/regenerate 2FA
+// (mock-two-factor tidak memegang akun). Sesi `loginViaStorage` jatuh ke akun demo,
+// sama seperti mockChangePassword.
+export function isMockCurrentPassword(password: string): boolean {
+  const account = currentAccount() ?? accounts.get("demo@usdx.com")!;
+  return account.password === password;
 }
 
 // Backend normalizes 08xxx → +62xxx before the phone_hash uniqueness check

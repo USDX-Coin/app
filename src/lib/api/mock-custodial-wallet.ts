@@ -42,6 +42,7 @@ import {
   type MockTransferOutcome,
 } from "./mock-wallet-transfers";
 import { isMockPinSet, resetMockPin, verifyMockPin } from "./mock-pin";
+import { isMockTwoFactorEnabled } from "./mock-two-factor";
 import { USDX_DECIMALS } from "@/lib/constants";
 import { uuidv7 } from "@/lib/uuid";
 
@@ -169,13 +170,14 @@ function custodialSummary(): CustodialWalletSummary | null {
   return { address: settled.address, status: settled.status };
 }
 
-// `users.yaml § User.custodialWallet` + `pinSet` — ikut terbawa di /auth/me +
-// respons login/verify/reset, null untuk user tanpa wallet.
+// `users.yaml § User.custodialWallet` + `pinSet` + `twoFactorEnabled` (USDX-714) —
+// ikut terbawa di /auth/me + respons login/verify/reset, null untuk user tanpa wallet.
 export function withCustodialWallet(user: User): User {
   return {
     ...user,
     custodialWallet: custodialSummary(),
     pinSet: isMockPinSet(),
+    twoFactorEnabled: isMockTwoFactorEnabled(),
   };
 }
 

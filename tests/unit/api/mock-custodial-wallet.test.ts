@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
 import { mockGetMe, mockLogin, mockVerifyEmail } from "@/lib/api/mock-api";
+import type { AuthResponse } from "@/types";
 import {
   mockCreateCustodialWallet,
   mockGetCustodialWallet,
@@ -74,7 +75,7 @@ describe("mock custodial wallet", () => {
         address: MOCK_CUSTODIAL_ADDRESS,
         status: "ACTIVE",
       });
-      const session = await mockLogin({ email: "demo@usdx.com", password: "Demo1234" });
+      const session = (await mockLogin({ email: "demo@usdx.com", password: "Demo1234" })) as AuthResponse;
       expect(session.user.custodialWallet?.status).toBe("ACTIVE");
     });
   });

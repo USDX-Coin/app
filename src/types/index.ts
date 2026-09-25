@@ -20,6 +20,11 @@ export interface User {
   // → arahkan user membuat PIN dulu, jangan buka dialog PIN yang pasti gagal.
   // Opsional: sesi yang di-persist sebelum field ini ada tidak membawanya.
   pinSet?: boolean;
+  // 2FA TOTP aktif di akun (users.yaml § User.twoFactorEnabled, USDX-314). WAJIB
+  // untuk transfer & redeem custodial (custodial-wallet.md §6.1). Salinan di klien
+  // dikoreksi seketika sesudah aktivasi/matikan (`useProfileCorrection`) supaya
+  // layar uang tidak membaca status basi. Opsional: sesi lama tidak membawanya.
+  twoFactorEnabled?: boolean;
   // Wallet custodial user (users.yaml § User → `custodialWallet`, USDX-607/566).
   // `null` = user tidak punya (mayoritas non-custodial). Ini yang menentukan
   // routing: tawarkan "dikasih wallet" atau tampilkan saldo — TANPA memanggil

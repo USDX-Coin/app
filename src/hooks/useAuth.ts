@@ -32,9 +32,12 @@ export function useAuth() {
   const router = useRouter();
   const { user, isAuthenticated, setAuth, logout: storeLogout } = useAuthStore();
 
+  // Akun ber-2FA: langkah 1 hanya `{ twoFactorRequired }` — belum ada sesi, jadi
+  // store dan navigasi tidak disentuh; pemanggil (LoginForm) menampilkan layar kode.
   const loginMutation = useMutation({
     mutationFn: (req: LoginRequest) => authApi.login(req),
     onSuccess: (data) => {
+      if (authApi.isTwoFactorRequired(data)) return;
       setAuth(data.user, data.token);
       router.push(reloginLanding() ?? "/mint");
     },

@@ -1,5 +1,6 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
+import { focusManager } from "@tanstack/react-query";
 import { createWrapper } from "../../helpers/test-utils";
 import {
   HISTORY_REFRESH_MS,
@@ -30,6 +31,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  focusManager.setFocused(undefined);
   vi.useRealTimers();
 });
 
@@ -81,6 +83,20 @@ describe("useTransactions — refresh while a transfer is pending", () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
       await vi.advanceTimersByTimeAsync(HISTORY_REFRESH_MS * 4);
+      expect(listMock).toHaveBeenCalledTimes(1);
+    });
+
+    test("a hidden tab stops the refresh, even with a PENDING transfer on screen", async () => {
+      listMock.mockResolvedValue(pageOf([pending]));
+      const { result } = renderHook(() => useTransactions({ includeTransfers: true }), {
+        wrapper: createWrapper(),
+      });
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect((result.current.data?.data[0] as { status: string }).status).toBe("PENDING");
+      focusManager.setFocused(false); // document.visibilityState === "hidden"
+
+      await vi.advanceTimersByTimeAsync(HISTORY_REFRESH_MS * 3);
       expect(listMock).toHaveBeenCalledTimes(1);
     });
 

@@ -62,7 +62,10 @@ test.describe("Settings — 2FA", () => {
       await expect(dialog).toBeHidden();
       await expect(row(page).getByText("On", { exact: true })).toBeVisible();
 
-      // A screen that refreshes /auth/me and back: the copy does not go stale.
+      // /send (reads the store, no /auth/me refetch) and a screen that refreshes
+      // /auth/me, then back: the copy does not go stale (users.yaml § twoFactorEnabled).
+      await page.goto("/send");
+      await expect(page.getByRole("main")).toBeVisible({ timeout: 15000 });
       await page.goto("/profile");
       await page.goto("/settings");
       await expect(row(page).getByText("On", { exact: true })).toBeVisible({ timeout: 15000 });
@@ -87,13 +90,15 @@ test.describe("Settings — 2FA", () => {
       await expect(row(page).getByText("Off", { exact: true })).toBeVisible();
     });
 
-    test("new backup codes: password → a new set, the old codes are gone", async ({ page }) => {
+    test("new backup codes: 24-hour warning first, password → a new set, the old codes are gone", async ({ page }) => {
       await seedTwoFactor(page, true);
       await loginViaStorage(page, { twoFactorEnabled: true });
       await gotoSettings(page);
 
       await row(page).getByRole("button", { name: "New backup codes" }).click();
       const dialog = page.getByTestId("backup-codes-regenerate-dialog");
+      // New codes replace the second factor (§6.1 no.6c): the hold is stated first.
+      await expect(dialog.getByTestId("backup-codes-regenerate-warning")).toContainText("held for 24 hours");
       await dialog.getByLabel("Password", { exact: true }).fill("Demo1234");
       await dialog.getByRole("button", { name: "Create new codes" }).click();
 

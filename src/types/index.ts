@@ -532,3 +532,33 @@ export interface ConsumerTransaction {
   createdAt: string;
   updatedAt: string;
 }
+
+// Jenis baris riwayat terpadu `GET /api/v2/transactions` (common.yaml § HistoryItemType,
+// custodial-wallet.md §5.7, USDX-713). Sengaja BUKAN perluasan `ConsumerOrderType`:
+// transfer bukan order (pelajaran USDX-464). Enum bisa bertambah — baris ber-`type`
+// tak dikenal dilewati di `lib/history-item.ts`, tidak membuat halaman crash.
+export type HistoryItemType = ConsumerOrderType | "TRANSFER_IN" | "TRANSFER_OUT";
+
+// transactions.yaml § TransferHistoryItem — satu transfer USDX wallet custodial di
+// riwayat terpadu. `counterpartyAddress` = PENGIRIM untuk TRANSFER_IN, TUJUAN untuk
+// TRANSFER_OUT (alamat saja, tidak pernah nama user lain). `status`/`failureReason`
+// diketik longgar seperti `WalletTransfer`: hanya `lib/wallet-transfer.ts` yang
+// menafsirkannya (nilai tak dikenal = PENDING).
+export interface TransferHistoryItem {
+  id: string; // TRANSFER_OUT = WalletTransfer.id (detail /send/history/[id])
+  type: "TRANSFER_IN" | "TRANSFER_OUT";
+  amount: string; // decimal USDX, selalu 6 desimal
+  amountWei: string;
+  chain: string;
+  userAddress: string; // wallet custodial milik user (informasi saja)
+  counterpartyAddress: string;
+  txHash: string;
+  status: WalletTransferStatus | (string & {});
+  failureReason: WalletTransferFailureReason | (string & {}) | null;
+  blockNumber: number | null;
+  createdAt: string; // OUT = submittedAt; IN = stempel waktu blok
+  updatedAt: string;
+}
+
+// Satu baris /history: order (mint/redeem) atau transfer.
+export type HistoryItem = ConsumerTransaction | TransferHistoryItem;

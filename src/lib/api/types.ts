@@ -1,4 +1,4 @@
-import type { AmountCurrency, ConsumerOrderType, EntityType } from "@/types";
+import type { AmountCurrency, EntityType, HistoryItemType } from "@/types";
 import type {
   AnnualIncomeRange,
   NetWorthRange,
@@ -257,7 +257,11 @@ export interface CreateBankAccountRequest {
 export interface ListTransactionsParams {
   page?: number;
   take?: number; // 1..50, default 10
-  type?: ConsumerOrderType; // W2 effective MINT
+  // Satu jenis saja (transactions.yaml § list). Diisi → `includeTransfers` diabaikan.
+  type?: HistoryItemType;
+  // Hanya berlaku tanpa `type`: true → transfer masuk/keluar ikut digabung (tab
+  // "Semua"). Kosong = mint + redeem saja, perilaku lama (USDX-713).
+  includeTransfers?: boolean;
 }
 
 // GET /api/v2/wallet/transfers (wallet.yaml § transfers, USDX-701).

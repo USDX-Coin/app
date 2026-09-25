@@ -11,6 +11,7 @@ import type { ConsumerTransaction, CustodialWallet, User } from "@/types";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 vi.mock("@/lib/api/transactions-api", () => ({ listTransactions: vi.fn() }));
 vi.mock("@/lib/api/wallet-api", () => ({ getCustodialWallet: vi.fn(), createCustodialWallet: vi.fn() }));

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowDown,
   ArrowDownToLine,
@@ -17,7 +17,7 @@ import { useCustodialWallet } from "@/hooks/useCustodialWallet";
 import { useRedeemStore } from "@/stores/redeemStore";
 import { getChainById } from "@/lib/chains";
 import { getFailureKey } from "@/lib/api/errors";
-import { isTransferItem } from "@/lib/history-item";
+import { isHistoryItemType, isTransferItem } from "@/lib/history-item";
 import {
   formatDateTime,
   formatIDR,
@@ -48,9 +48,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TransactionListSkeleton } from "@/components/transactions/TransactionListSkeleton";
 import { PagePagination } from "@/components/shared/PagePagination";
 import { AmountCell, RowActions, TxHashCell } from "@/components/transactions/HistoryCells";
+import { TransferCard, TransferTableRow } from "@/components/transactions/TransferHistoryRow";
 import type {
   ConsumerOrderType,
   ConsumerTransaction,
+  HistoryItemType,
   MintOrderStatus,
   MintPaymentStatus,
   RedeemStatus,
@@ -108,12 +110,18 @@ function totalValue(tx: ConsumerTransaction): string | null {
   return tx.type === "REDEEM" ? tx.netPayoutIdr : tx.totalPayIdr;
 }
 
-// UI filter value → API `type` param. Union mint + redeem (USDX-244).
-const typeParam: Record<string, ConsumerOrderType | undefined> = {
-  all: undefined,
-  mint: "MINT",
-  redeem: "REDEEM",
-};
+// Filter /history (custodial-wallet.md §5.7, USDX-713): "all" = keempat jenis
+// (`includeTransfers`), selain itu satu `HistoryItemType`. Nilainya sama dengan
+// `?type=` di URL supaya filter bisa ditautkan; nilai URL yang tidak dikenal = "all".
+type HistoryFilter = "all" | HistoryItemType;
+
+function filterFromUrl(value: string | null): HistoryFilter {
+  return isHistoryItemType(value) ? value : "all";
+}
+
+function historyUrl(filter: HistoryFilter): string {
+  return filter === "all" ? "/history" : `/history?type=${filter}`;
+}
 
 /**
  * B1 — the four outcomes this page can have, and they must never look alike.
@@ -137,8 +145,18 @@ export function TransactionList() {
   const router = useRouter();
   const { t, lang } = useLang();
   const resumeRedeem = useRedeemStore((s) => s.resumeOrder);
-  const [typeFilter, setTypeFilter] = useState("all");
+  const urlFilter = filterFromUrl(useSearchParams().get("type"));
+  const [typeFilter, setTypeFilter] = useState<HistoryFilter>(urlFilter);
   const [page, setPage] = useState(1);
+  // URL berubah (mis. tautan sidebar "/history" saat tab Masuk terbuka) → ikuti URL.
+  // Penanda ini hanya mengikuti URL: klik tab mengubah state dulu lalu URL menyusul,
+  // dan saat URL tiba nilainya sudah sama dengan state (no-op).
+  const [syncedUrlFilter, setSyncedUrlFilter] = useState(urlFilter);
+  if (urlFilter !== syncedUrlFilter) {
+    setSyncedUrlFilter(urlFilter);
+    setTypeFilter(urlFilter);
+    setPage(1);
+  }
 
   // Resume an unburned redeem from history (USDX-259): load it into the tracker
   // and navigate to /redeem. The `?order=` param makes resume deep-linkable and
@@ -148,11 +166,11 @@ export function TransactionList() {
     router.push(`/redeem?order=${id}`);
   }
 
-  const query = useTransactions({
-    page,
-    take: PAGE_SIZE,
-    type: typeParam[typeFilter],
-  });
+  const query = useTransactions(
+    typeFilter === "all"
+      ? { page, take: PAGE_SIZE, includeTransfers: true }
+      : { page, take: PAGE_SIZE, type: typeFilter },
+  );
   const { data, isLoading, isError, error, isFetching, refetch } = query;
 
   // "Wallet custodial saya" marker (USDX-653, custodial-wallet.md §5.2): the order
@@ -162,8 +180,7 @@ export function TransactionList() {
   // shared wallet query; a user without a wallet triggers no request and gets no
   // marker. Never a per-row detail call.
   const custodialAddress = useCustodialWallet().address;
-  // Sementara: baris transfer belum dirender (belum pernah diminta — tab lama saja).
-  const rows = (data?.data ?? []).filter((r): r is ConsumerTransaction => !isTransferItem(r));
+  const rows = data?.data ?? [];
   const total = data?.metadata.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -171,8 +188,11 @@ export function TransactionList() {
 
   // `getFailureKey` is the one place that tells a dead network (fetch rejects
   // with a TypeError, no status) apart from a server that answered badly.
-  const networkDown = isError && getFailureKey(error) === "error.offline";
-  const state: ListState = isError
+  // Penyegaran di latar (15 s selama ada transfer PENDING) yang gagal tidak
+  // menghapus baris yang sudah tampil — error-state hanya bila belum ada data.
+  const failed = isError && !data;
+  const networkDown = failed && getFailureKey(error) === "error.offline";
+  const state: ListState = failed
     ? networkDown
       ? "offline"
       : "error"
@@ -184,13 +204,17 @@ export function TransactionList() {
 
   const typeOptions = [
     { value: "all", label: t("tx.allTransaction") },
-    { value: "mint", label: t("tx.minting") },
-    { value: "redeem", label: t("tx.redeem") },
+    { value: "MINT", label: t("tx.minting") },
+    { value: "REDEEM", label: t("tx.redeem") },
+    { value: "TRANSFER_IN", label: t("tx.transferIn") },
+    { value: "TRANSFER_OUT", label: t("tx.transferOut") },
   ];
 
   function changeFilter(next: string) {
-    setTypeFilter(next);
+    const filter = filterFromUrl(next);
+    setTypeFilter(filter);
     setPage(1);
+    router.replace(historyUrl(filter), { scroll: false });
   }
 
   if (isLoading) return <TransactionListSkeleton />;
@@ -340,7 +364,9 @@ export function TransactionList() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map((tx) => (
+              {rows.map((tx) => isTransferItem(tx) ? (
+                <TransferTableRow key={tx.id} item={tx} />
+              ) : (
                 <TableRow key={tx.id}>
                   <TableCell className="text-muted-text">{formatDateTime(tx.createdAt, lang)}</TableCell>
                   <TableCell>
@@ -376,7 +402,9 @@ export function TransactionList() {
 
         {/* Mobile cards */}
         <div className="flex flex-col gap-3 lg:hidden">
-          {rows.map((tx) => (
+          {rows.map((tx) => isTransferItem(tx) ? (
+            <TransferCard key={tx.id} item={tx} />
+          ) : (
             <div key={tx.id} className="flex flex-col gap-3 rounded-xl border border-border p-4">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-text">{formatDateTime(tx.createdAt, lang)}</span>

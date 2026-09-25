@@ -2,7 +2,9 @@
 
 // Dialog Backup code baru (two-factor.yaml § regenerateBackupCodes, USDX-714):
 // kata sandi → SELURUH set lama mati, set baru tampil sekali → "Selesai" hanya
-// sesudah user menyatakan sudah menyimpannya. 2FA ternyata mati (salinan profil
+// sesudah user menyatakan sudah menyimpannya. Set baru = faktor kedua DIGANTI
+// (custodial-wallet.md §6.1 no.6c, sot@6a55e6b): backend (USDX-718) menahan
+// transfer & redeem custodial 24 jam — peringatannya tampil SEBELUM konfirmasi. 2FA ternyata mati (salinan profil
 // basi) → kalimatnya, dan salinan dikoreksi oleh useTwoFactor.
 
 import { useState } from "react";
@@ -107,14 +109,19 @@ export function BackupCodesRegenerateDialog({ open, onOpenChange }: BackupCodesR
             {codes ? (
               <BackupCodesPanel codes={codes} saved={saved} onSavedChange={setSaved} />
             ) : (
-              <TwoFactorPasswordField
-                id="backup-codes-regenerate-password"
-                value={password}
-                onChange={setPassword}
-                autoFocus
-                disabled={busy}
-                error={passwordError}
-              />
+              <>
+                <Alert tone="warning" data-testid="backup-codes-regenerate-warning">
+                  {t("twoFactor.regenerate.warning")}
+                </Alert>
+                <TwoFactorPasswordField
+                  id="backup-codes-regenerate-password"
+                  value={password}
+                  onChange={setPassword}
+                  autoFocus
+                  disabled={busy}
+                  error={passwordError}
+                />
+              </>
             )}
           </DialogBody>
 

@@ -37,7 +37,7 @@ tests/
     history-unified-flow.spec.ts  # Unified /history: incoming PENDING -> Successful without reload (15 s refresh), no-wallet user, unknown ?type= (USDX-713)
     redeem-custodial-flow.spec.ts # Custodial redeem: PIN, no wallet dialog, tracker to payout (USDX-567)
     transfer-2fa-flow.spec.ts     # Custodial transfer with 2FA (USDX-717): PIN + authenticator code, backup code, wrong code keeps the PIN, activation card → turn on in place → Send enabled without reload, 24-hour lock banner (on load and as a 409 mid-form), 2fa-stepup lockout sentence ≠ PIN, backend before 718 still sends
-    redeem-custodial-2fa-flow.spec.ts # Custodial redeem with 2FA (USDX-717): PIN + code, wrong code stays in the dialog (no logout), activation card, lock banner (on load and as a 409 mid-form), external source untouched
+    redeem-custodial-2fa-flow.spec.ts # Custodial redeem with 2FA (USDX-717): PIN + code, wrong code stays in the dialog (no logout), activation card, lock banner (on load and as a 409 mid-form), external source untouched: Redeem enabled + Ringkasan reachable with 2FA off or a 24-hour lock (AC#6)
     two-factor-flow.spec.ts       # Login on a 2FA account: code / backup code (single use), forgot-PIN re-login still lands on Settings after the code, email recovery with the 24-hour warning, expired challenge (USDX-714)
     pin-flow.spec.ts              # PIN created from the transfer/redeem notice, stale-copy PIN_NOT_SET (USDX-651); every create door asks to log in again under backend USDX-698 (USDX-697); forgot PIN from a locked transfer PIN dialog → new PIN approves, old refused (USDX-696)
   audit-ui/             # node + Playwright — measurement, NOT assertions

@@ -24,6 +24,13 @@
 // yang lain (`errorKey`) menutup dialog PIN dan tampil di Ringkasan, di samping
 // angka yang menghasilkannya. 429 RATE_LIMITED dibiarkan ke toast global.
 //
+// 2FA (custodial-wallet.md §6.1, USDX-717): kode authenticator ikut di body yang
+// sama (`twoFactorCode`) dan BUKAN identitas niat — mengganti kode setelah salah
+// memakai key yang sama. Galat kode (`twoFactorErrorKey`, lockout `2fa-stepup`)
+// tetap di dialog PIN; 401 TWO_FACTOR_SETUP_REQUIRED dan 409 CUSTODIAL_OUTBOUND_LOCKED
+// (`where: "guard"`) menutup dialog dan tampil lewat kartu ajakan / banner kunci
+// milik `useCustodialStepUp`, bukan kalimat galat Ringkasan.
+//
 // `pinNotSet` dibaca dari salinan profil `user.pinSet` saja (USDX-651): 401
 // PIN_NOT_SET mengoreksi salinan itu ke `false`, dan PinSetupDialog (dibuka dari
 // notice) mengembalikannya ke `true` — dialog PIN lalu terbuka lagi tanpa
@@ -34,6 +41,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTransferStore } from "@/stores/transferStore";
 import { usePinSetCorrection } from "@/hooks/usePinSetCorrection";
 import { useCustodialWallet } from "@/hooks/useCustodialWallet";
+import { useCustodialStepUp, stepUpErrorKey, isPinLockout } from "@/hooks/useCustodialStepUp";
 import { TRANSACTIONS_KEY } from "@/hooks/useTransactions";
 import { useCooldown, DEFAULT_COOLDOWN_SECONDS } from "@/hooks/useCooldown";
 import { transferCustodial } from "@/lib/api/wallet-api";
@@ -50,6 +58,8 @@ import {
   isInvalidPin,
   isPinNotSet,
   isTooManyAttempts,
+  isTwoFactorSetupRequired,
+  isCustodialOutboundLocked,
   isWalletNotActive,
   isWalletNotFound,
   isWalletServiceUnavailable,
@@ -72,8 +82,12 @@ export const IN_PROGRESS_RETRY_MS = 1_500;
 export const IN_PROGRESS_MAX_RETRIES = 4;
 
 export interface TransferError {
-  /** Di mana pesannya tampil: dialog PIN (`pin`) atau Ringkasan (`form`). */
-  where: "pin" | "form";
+  /**
+   * Di mana pesannya tampil: kolom PIN (`pin`), kolom kode authenticator
+   * (`twoFactor`), Ringkasan (`form`), atau kartu ajakan 2FA / banner kunci milik
+   * `useCustodialStepUp` (`guard` — tidak ada kalimat galat tambahan).
+   */
+  where: "pin" | "twoFactor" | "form" | "guard";
   key: string;
   vars?: Record<string, string>;
 }
@@ -98,7 +112,12 @@ export function mapTransferError(
   if (isRateLimited(error)) return null;
   if (isInvalidPin(error)) return { where: "pin", key: "pin.errInvalid" };
   if (isPinNotSet(error)) return { where: "pin", key: "pin.errNotSet" };
-  if (isTooManyAttempts(error)) return { where: "pin", key: "pin.errLocked" };
+  if (isPinLockout(error)) return { where: "pin", key: "pin.errLocked" };
+  if (isTooManyAttempts(error)) return { where: "twoFactor", key: "stepUp.errLocked" };
+  const codeKey = stepUpErrorKey(error);
+  if (codeKey) return { where: "twoFactor", key: codeKey };
+  if (isTwoFactorSetupRequired(error)) return { where: "guard", key: "stepUp.setupRequiredSend" };
+  if (isCustodialOutboundLocked(error)) return { where: "guard", key: "stepUp.locked" };
   if (isWalletNotActive(error)) {
     return {
       where: "form",
@@ -150,6 +169,7 @@ export function useTransfer(
   const store = useTransferStore();
   const wallet = useCustodialWallet();
   const pinCooldown = useCooldown();
+  const stepUp = useCustodialStepUp();
   const setPinSet = usePinSetCorrection();
   const queryClient = useQueryClient();
 
@@ -166,11 +186,16 @@ export function useTransfer(
     parsedAmount > 0;
 
   const mutation = useMutation({
-    mutationFn: async (pin: string) => {
+    mutationFn: async ({ pin, twoFactorCode }: { pin: string; twoFactorCode: string }) => {
       const key = store.ensureIdempotencyKey();
       // Jumlah dinormalkan ke bentuk kontrak ("25." → "25", "007" → "7"): yang
       // lolos validator FE tidak boleh ditolak 422 oleh regex backend.
-      const body = { to: store.to.trim(), amount: normalizeTransferAmount(store.amount), pin };
+      const body = {
+        to: store.to.trim(),
+        amount: normalizeTransferAmount(store.amount),
+        pin,
+        twoFactorCode,
+      };
       // Retry IN_PROGRESS dengan key yang SAMA. Yang pertama bisa saja sudah
       // ter-broadcast — key baru = transfer kedua, persis yang kontrak cegah.
       for (let attempt = 0; ; attempt++) {
@@ -199,9 +224,10 @@ export function useTransfer(
       // Fakta akun, bukan state mutasi: salinan profil yang dikoreksi, supaya tetap
       // tampil setelah `reset()` dan hilang begitu PIN dibuat.
       if (isPinNotSet(error)) setPinSet(false);
-      if (isTooManyAttempts(error)) {
+      if (isPinLockout(error)) {
         pinCooldown.start(getRateLimitSeconds(error) || DEFAULT_COOLDOWN_SECONDS);
       }
+      stepUp.onError(error);
       // Backend menolak karena statusnya bukan ACTIVE → salinan di profil basi;
       // tarik status sebenarnya supaya pesan dan tombol mengikuti keadaan nyata.
       if (isWalletNotActive(error)) wallet.invalidate();
@@ -214,7 +240,7 @@ export function useTransfer(
       // Error non-PIN tampil di Ringkasan: tutup dialog PIN supaya pesannya terlihat.
       // `null` (RATE_LIMITED → toast global) membiarkan dialog apa adanya: user
       // cukup menekan kirim lagi setelah throttle lewat, dengan key yang sama.
-      if (mapped && mapped.where !== "pin") store.setPinOpen(false);
+      if (mapped && mapped.where !== "pin" && mapped.where !== "twoFactor") store.setPinOpen(false);
     },
   });
 
@@ -267,7 +293,8 @@ export function useTransfer(
       store.reset();
     },
     // submit
-    submitWithPin: (pin: string) => mutation.mutateAsync(pin).catch(() => undefined),
+    submitWithPin: (pin: string, twoFactorCode: string) =>
+      mutation.mutateAsync({ pin, twoFactorCode }).catch(() => undefined),
     isSubmitting: mutation.isPending,
     // errors — PIN-related stay in the PIN dialog, the rest go to the Ringkasan
     formErrorKey: error?.where === "form" ? error.key : null,
@@ -280,5 +307,11 @@ export function useTransfer(
         : null,
     pinNotSet: wallet.pinSet === false,
     pinCooldownSeconds: pinCooldown.remaining,
+    // 2FA (USDX-717) — errLocked → `twoFactorCooldownSeconds` (hitung mundur sendiri).
+    twoFactorErrorKey:
+      error?.where === "twoFactor" && error.key !== "stepUp.errLocked" ? error.key : null,
+    twoFactorCooldownSeconds: stepUp.twoFactorCooldownSeconds,
+    twoFactorSetupRequired: stepUp.twoFactorSetupRequired,
+    outboundLockedUntil: stepUp.lockedUntil,
   };
 }

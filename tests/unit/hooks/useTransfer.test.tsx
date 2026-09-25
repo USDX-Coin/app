@@ -481,7 +481,7 @@ describe("useTransfer — 2FA step-up", () => {
   describe("positive", () => {
     test("a wrong code stays in the PIN dialog; the retry with a new code keeps the SAME key", async () => {
       const { result } = await submitFailing(new ApiError(401, "INVALID_TWO_FACTOR_CODE", "x"), "000000");
-      expect(result.current.twoFactorErrorKey).toBe("stepUp.errInvalid");
+      await waitFor(() => expect(result.current.twoFactorErrorKey).toBe("stepUp.errInvalid"));
       expect(result.current.pinErrorKey).toBeNull();
       expect(result.current.formErrorKey).toBeNull();
       expect(useTransferStore.getState().pinOpen).toBe(true);
@@ -494,7 +494,7 @@ describe("useTransfer — 2FA step-up", () => {
 
     test("TWO_FACTOR_CODE_REQUIRED asks for the code under the field", async () => {
       const { result } = await submitFailing(new ApiError(401, "TWO_FACTOR_CODE_REQUIRED", "x"));
-      expect(result.current.twoFactorErrorKey).toBe("stepUp.errRequired");
+      await waitFor(() => expect(result.current.twoFactorErrorKey).toBe("stepUp.errRequired"));
     });
   });
 

@@ -68,6 +68,8 @@ export function TransferForm() {
     pinErrorKey,
     pinNotSet,
     pinCooldownSeconds,
+    twoFactorErrorKey,
+    twoFactorCooldownSeconds,
     parsedAmount,
   } = transfer;
 
@@ -243,10 +245,12 @@ export function TransferForm() {
           amount: formatAmount(parsedAmount),
           to: truncateAddress(to, 6),
         })}
-        onSubmit={(pin) => void submitWithPin(pin)}
+        onSubmit={(pin, code) => void submitWithPin(pin, code)}
         isSubmitting={isSubmitting}
         errorKey={pinErrorKey}
         cooldownSeconds={pinCooldownSeconds}
+        twoFactorErrorKey={twoFactorErrorKey}
+        twoFactorCooldownSeconds={twoFactorCooldownSeconds}
         pinNotSet={pinNotSet}
         confirmLabel={t("btn.send")}
       />

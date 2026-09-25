@@ -189,6 +189,61 @@ test.describe("Transfer Flow (custodial)", () => {
       await expect(page.getByTestId("transfer-result")).toHaveCount(0);
     });
 
+    test("503 NETWORK_CONGESTED → 'network is busy, balance safe' on the Ringkasan; the retry uses the same key and sends once (USDX-709)", async ({
+      page,
+    }) => {
+      await forceEnglish(page);
+      // The next transfer → 503 NETWORK_CONGESTED, then the network calms down.
+      await seedCustodialWallet(page, { status: "ACTIVE", balance: "1000.00", networkCongested: true });
+      await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
+      const intentKey = () =>
+        page.evaluate(
+          () => JSON.parse(sessionStorage.getItem("usdx-transfer-intent") ?? "{}")?.state?.idempotencyKey ?? null,
+        );
+
+      const pin = await openPinDialog(page);
+      await pin.getByLabel("6-digit PIN").fill(MOCK_PIN);
+      await pin.getByRole("button", { name: "Send", exact: true }).click();
+      const error = page.getByTestId("transfer-error");
+      await expect(error).toContainText("The blockchain network is busy right now", { timeout: 15000 });
+      await expect(error).toContainText("Your balance is safe and nothing was sent");
+      // Not the other 503, not the offline sentence, not the generic 5xx one.
+      await expect(error).not.toContainText("The wallet service is temporarily unavailable");
+      await expect(error).not.toContainText("Can't reach the server");
+      await expect(error).not.toContainText("Our server is having trouble");
+      await expect(pin).toBeHidden();
+      await expect(page.getByTestId("transfer-result")).toHaveCount(0);
+      const firstKey = await intentKey();
+      expect(firstKey).toMatch(/^[0-9a-f-]{36}$/);
+
+      // Same intent, pressed again: same Idempotency-Key, one transfer.
+      await page.getByRole("button", { name: "Continue to PIN" }).click();
+      await expect(pin).toBeVisible();
+      expect(await intentKey()).toBe(firstKey);
+      await pin.getByLabel("6-digit PIN").fill(MOCK_PIN);
+      await pin.getByRole("button", { name: "Send", exact: true }).click();
+      await expect(page.getByTestId("transfer-result")).toBeVisible({ timeout: 15000 });
+      await page.getByRole("button", { name: "Send another transfer" }).click();
+      await expect(page.getByTestId("transfer-balance")).toHaveText("975 USDX", { timeout: 15000 });
+      await page.goto("/send/history");
+      await expect(page.getByTestId("transfer-history-row")).toHaveCount(1, { timeout: 15000 });
+    });
+
+    test("503 WALLET_SERVICE_UNAVAILABLE keeps its own sentence — not the network-busy one (USDX-709)", async ({
+      page,
+    }) => {
+      await forceEnglish(page);
+      await seedCustodialWallet(page, { status: "ACTIVE", balance: "1000.00", serviceDown: true });
+      await loginViaStorage(page, { custodialWallet: MOCK_CUSTODIAL_WALLET_SUMMARY });
+      const pin = await openPinDialog(page);
+      await pin.getByLabel("6-digit PIN").fill(MOCK_PIN);
+      await pin.getByRole("button", { name: "Send", exact: true }).click();
+      const error = page.getByTestId("transfer-error");
+      await expect(error).toContainText("The wallet service is temporarily unavailable", { timeout: 15000 });
+      await expect(error).not.toContainText("network is busy");
+      await expect(page.getByTestId("transfer-result")).toHaveCount(0);
+    });
+
     test("429 RATE_LIMITED → the throttle toast, and the PIN dialog stays for a same-key retry", async ({
       page,
     }) => {

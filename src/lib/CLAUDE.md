@@ -68,7 +68,7 @@ Auth + KYC now route through real-or-mock dispatchers; mint/redeem/transactions 
 To wire a new real endpoint: add a function to the relevant `*-api.ts` that branches on `env.useMock`, calling `apiFetch` for the real path and a `mock*` fn otherwise.
 
 Wallet-custodial error helpers in `api/errors.ts` (USDX-567): `isWalletNotFound`,
-`isWalletNotActive`, `isWalletServiceUnavailable`, `isInvalidPin`, `isPinNotSet`,
+`isWalletNotActive`, `isWalletServiceUnavailable`, `isNetworkCongested` (503, USDX-709), `isInvalidPin`, `isPinNotSet`,
 `isTooManyAttempts`, `isIdempotencyKeyInProgress`, `isIdempotencyKeyReused`,
 `isRecipientBlacklisted`, `isTransferLimitExceeded` + `getTransferLimitDetails`. They
 branch on `code` AND status because three 409s overlap (wallet.yaml § PETA KODE 409).
@@ -80,7 +80,7 @@ and `isPinUnchanged` (422).
 Mock custodial money paths (`api/mock-custodial-wallet.ts`, USDX-567 on top of the
 566 state machine): the account PIN comes from `mock-pin.ts` (`123456` by default,
 lockout after 5 wrong), transfer idempotency enforced like the contract (replay resolved
-before the balance pre-check), seams `serviceDown`, `transferLimit`, `slowFirstTransfer`
+before the balance pre-check), seams `serviceDown`, `networkCongested` (the next transfer → 503 `NETWORK_CONGESTED`, then clears, USDX-709), `transferLimit`, `slowFirstTransfer`
 (the PIN seam is `seedMockPin` / `seedAccountPin`). Redeem (in
 `mock-api.ts`, via helpers imported from the custodial file): `burnMode` is derived from
 `userAddress`, the custodial burn is dispatched 1.5 s after create (hash only; the

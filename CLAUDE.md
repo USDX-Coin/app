@@ -179,7 +179,11 @@ Mint and Redeem keep their state in Zustand stores; the Ringkasan is a modal:
   `status` values read as PENDING (`lib/wallet-transfer.ts`). History: `/send/history`
   (list, page/take, API order) + `/send/history/[id]` (same tracker; 404/422 = neutral
   "not found" + back). `Idempotency-Key` (UUID v7) is minted once per
-  intent by `transferStore` and reused by every retry; `setTo`/`setAmount` drop it
+  intent by `transferStore` and reused by every retry; `setTo`/`setAmount` drop it.
+  The two `503`s get their own Ringkasan sentence: `WALLET_SERVICE_UNAVAILABLE`
+  ("Layanan wallet sedang tidak tersedia…") vs `NETWORK_CONGESTED` (fees above the
+  safety ceiling → "Jaringan blockchain sedang padat. Saldo Anda aman…", no gas/POL/fee
+  words, USDX-709); both keep the key, since both are safe to retry with the same one
 
 Step state lives in Zustand stores. Form data preserved when going back.
 

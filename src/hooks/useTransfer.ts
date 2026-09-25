@@ -10,8 +10,9 @@
 //
 // Yang menjadikan hook ini lebih dari form biasa adalah `Idempotency-Key`:
 //   - dibuat SEKALI per niat (transferStore.ensureIdempotencyKey), dipakai ulang
-//     oleh semua retry — salah PIN, 503, jaringan putus — dan dibuang hanya saat
-//     user mengubah tujuan/jumlah (store yang menjaga itu);
+//     oleh semua retry — salah PIN, 503 (termasuk NETWORK_CONGESTED), jaringan
+//     putus — dan dibuang hanya saat user mengubah tujuan/jumlah (store yang
+//     menjaga itu);
 //   - 409 IDEMPOTENCY_KEY_IN_PROGRESS → tunggu lalu coba lagi dengan key yang
 //     SAMA (bukan transfer baru) beberapa kali; kalau masih berjalan, user
 //     diberi tahu dan tombol kirim memakai key yang sama lagi;
@@ -52,6 +53,7 @@ import {
   isWalletNotActive,
   isWalletNotFound,
   isWalletServiceUnavailable,
+  isNetworkCongested,
   isIdempotencyKeyInProgress,
   isIdempotencyKeyReused,
   isRecipientBlacklisted,
@@ -128,6 +130,9 @@ export function mapTransferError(
   if (isValidationError(error)) return { where: "form", key: "transfer.errValidation" };
   if (isWalletNotFound(error)) return { where: "form", key: "transfer.errNoWallet" };
   if (isWalletServiceUnavailable(error)) return { where: "form", key: "transfer.errServiceUnavailable" };
+  // Fee jaringan di atas plafon: ditolak sebelum tanda tangan. Kunci TIDAK dibuang —
+  // kontraknya "aman di-retry dengan key yang SAMA" (USDX-709).
+  if (isNetworkCongested(error)) return { where: "form", key: "transfer.errNetworkCongested" };
   if (isIdempotencyKeyInProgress(error)) return { where: "form", key: "transfer.errInProgress" };
   if (isIdempotencyKeyReused(error)) return { where: "form", key: "transfer.errGeneric" };
   if (isApiError(error) && error.status === 403) return { where: "form", key: "transfer.errGate" };

@@ -204,6 +204,28 @@ describe("useTransfer", () => {
         expect(useTransferStore.getState().step).toBe("done");
       });
 
+      test("NETWORK_CONGESTED → its own sentence on the Ringkasan, and the retry reuses the SAME key (USDX-709)", async () => {
+        fillValidForm();
+        transferMock.mockRejectedValueOnce(new ApiError(503, "NETWORK_CONGESTED", "x"));
+        const { result } = await renderReady();
+        act(() => result.current.openPin());
+        await act(async () => {
+          await result.current.submitWithPin("123456");
+        });
+        await waitFor(() => expect(result.current.formErrorKey).toBe("transfer.errNetworkCongested"));
+        // Not a PIN problem: the PIN dialog closes so the Ringkasan message shows.
+        expect(result.current.pinErrorKey).toBeNull();
+        expect(useTransferStore.getState().pinOpen).toBe(false);
+        const firstKey = transferMock.mock.calls[0][1];
+        expect(useTransferStore.getState().idempotencyKey).toBe(firstKey);
+
+        await act(async () => {
+          await result.current.submitWithPin("123456");
+        });
+        expect(transferMock.mock.calls[1][1]).toBe(firstKey);
+        expect(useTransferStore.getState().step).toBe("done");
+      });
+
       test("WALLET_NOT_ACTIVE → form error with the wallet status, no retry offered", async () => {
         fillValidForm();
         transferMock.mockRejectedValueOnce(new ApiError(409, "WALLET_NOT_ACTIVE", "x"));
@@ -392,6 +414,10 @@ describe("useTransfer", () => {
         expect(mapTransferError(new ApiError(422, "RECIPIENT_BLACKLISTED", "x"), t, "ACTIVE")?.key).toBe("transfer.errBlacklisted");
         expect(mapTransferError(new ApiError(422, "INSUFFICIENT_BALANCE", "x"), t, "ACTIVE")?.key).toBe("transfer.errInsufficient");
         expect(mapTransferError(new ApiError(503, "WALLET_SERVICE_UNAVAILABLE", "x"), t, "ACTIVE")?.key).toBe("transfer.errServiceUnavailable");
+        expect(mapTransferError(new ApiError(503, "NETWORK_CONGESTED", "x"), t, "ACTIVE")).toEqual({
+          where: "form",
+          key: "transfer.errNetworkCongested",
+        });
         expect(mapTransferError(new ApiError(403, "KYC_NOT_VERIFIED", "x"), t, "ACTIVE")?.key).toBe("transfer.errGate");
       });
 

@@ -8,7 +8,7 @@
 import { transferStatusOf } from "@/lib/wallet-transfer";
 import type { HistoryItem, HistoryItemType, TransferHistoryItem } from "@/types";
 
-export const HISTORY_ITEM_TYPES: readonly HistoryItemType[] = [
+const HISTORY_ITEM_TYPES: readonly HistoryItemType[] = [
   "MINT",
   "REDEEM",
   "TRANSFER_IN",

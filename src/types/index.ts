@@ -208,6 +208,22 @@ export interface AuthResponse {
   token: string;
 }
 
+// Login langkah 1 pada akun ber-2FA (auth.yaml § loginV2): 200 TANPA token —
+// BUKAN login sukses. Token baru terbit di `POST /auth/2fa/verify-login`.
+export interface TwoFactorRequired {
+  twoFactorRequired: true;
+}
+
+export type LoginResult = AuthResponse | TwoFactorRequired;
+
+// POST /api/v2/auth/2fa/enable (two-factor.yaml § TwoFactorEnroll). `totpUri` =
+// otpauth:// untuk QR — dirender LOKAL, tidak pernah dikirim ke layanan pihak
+// ketiga. `backupCodes` sekali pakai, ditampilkan SEKALI.
+export interface TwoFactorEnrollment {
+  totpUri: string;
+  backupCodes: string[];
+}
+
 // Result of POST /api/v2/auth/register — no session issued (user must verify email first).
 export interface RegisterResult {
   email: string;

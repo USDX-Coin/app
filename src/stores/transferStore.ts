@@ -24,7 +24,7 @@ import { uuidv7 } from "@/lib/uuid";
 // key BARU = transfer kedua. sessionStorage, bukan localStorage: niat mati
 // bersama tab, tidak ikut ke sesi lain. Tampilan (`step`, `result`, modal) tidak
 // ikut — transfer yang sudah terkirim tetap bisa ditemukan di riwayat
-// (/send/history, USDX-701).
+// (/history tab Keluar, USDX-701 → USDX-713).
 export type TransferStep = "form" | "done";
 
 interface TransferState {

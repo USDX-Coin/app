@@ -1,8 +1,9 @@
 // ── Mock riwayat & status transfer custodial (wallet.yaml, USDX-701) ─────────
-// Stand-in untuk `GET /api/v2/wallet/transfers` (+ `/{id}`). Buku besar transfer
+// Stand-in untuk baris TRANSFER_OUT `GET /api/v2/transactions` (USDX-713) dan
+// `GET /api/v2/wallet/transfers/{id}` (tracker). Buku besar transfer
 // yang sudah di-broadcast (padanan baris `DONE` `wallet_transfer_requests`),
 // disimpan di localStorage ("usdx-mock-wallet-transfers") supaya bertahan
-// melintasi `page.goto` Playwright: /send → tracker → /send/history → detail
+// melintasi `page.goto` Playwright: /send → tracker → /history → detail
 // menempuh beberapa muatan halaman.
 //
 // Watcher receipt backend diperankan saat BACA: baris PENDING yang `settleAt`-nya
@@ -16,8 +17,7 @@
 // Fixture tiga status ada di mock-wallet-transfer-fixtures.ts (hanya tipe, supaya
 // suite Playwright bisa mengimpornya).
 
-import type { TransferAccepted, WalletTransfer } from "@/types";
-import type { Paginated } from "./client";
+import type { TransferAccepted, TransferHistoryItem, WalletTransfer } from "@/types";
 import { ApiError } from "./client";
 
 const LEDGER_KEY = "usdx-mock-wallet-transfers";
@@ -136,28 +136,27 @@ export function recordMockWalletTransfer(
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// Terbaru dulu: `submittedAt` desc, pemecah seri `id` desc (wallet.yaml § transfers).
-function newestFirst(a: MockTransferRow, b: MockTransferRow): number {
-  if (a.submittedAt !== b.submittedAt) return a.submittedAt < b.submittedAt ? 1 : -1;
-  return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
-}
-
-export function listMockWalletTransfers(
-  userId: string,
-  params: { page?: number; take?: number },
-): Paginated<WalletTransfer> {
-  const page = params.page ?? 1;
-  const take = params.take ?? 10;
-  if (!Number.isInteger(page) || page < 1 || !Number.isInteger(take) || take < 1 || take > 50) {
-    throw new ApiError(422, "VALIDATION_ERROR", "Parameter halaman tidak valid");
-  }
-  // Tanpa wallet / tanpa transfer → 200 daftar kosong, bukan 404.
-  const mine = settledLedger().filter((r) => r.userId === userId).sort(newestFirst);
-  const start = (page - 1) * take;
-  return {
-    data: mine.slice(start, start + take).map(toWalletTransfer),
-    metadata: { page, limit: take, total: mine.length },
-  };
+// Baris TRANSFER_OUT riwayat terpadu `GET /api/v2/transactions` (USDX-713): baris
+// buku besar yang sama, bentuk transactions.yaml § TransferHistoryItem — `createdAt`
+// = `submittedAt` (kunci urutan), pihak lain = tujuan.
+export function listMockTransferOutHistory(userId: string): TransferHistoryItem[] {
+  return settledLedger()
+    .filter((r) => r.userId === userId)
+    .map((r) => ({
+      id: r.id,
+      type: "TRANSFER_OUT",
+      amount: r.amount,
+      amountWei: r.amountWei,
+      chain: r.chain,
+      userAddress: r.from,
+      counterpartyAddress: r.to,
+      txHash: r.txHash,
+      status: r.status,
+      failureReason: r.failureReason,
+      blockNumber: r.blockNumber,
+      createdAt: r.submittedAt,
+      updatedAt: r.finalizedAt ?? r.submittedAt,
+    }));
 }
 
 export function getMockWalletTransfer(userId: string, id: string): WalletTransfer {

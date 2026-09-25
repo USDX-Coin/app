@@ -100,10 +100,15 @@ test.describe("Transfer Flow (custodial)", () => {
       });
       const hash = await result.getByRole("link", { name: "View on explorer" }).getAttribute("href");
 
-      await result.getByRole("link", { name: "Transfer history" }).click();
-      const rows = page.getByTestId("transfer-history-row");
+      // Riwayat terpadu (USDX-713): no "Transfer history" button on /send any more — the
+      // tracker's "Back to history" lands on /history, tab "Outgoing".
+      await expect(result.getByRole("link", { name: "Transfer history" })).toHaveCount(0);
+      await result.getByRole("link", { name: "Back to history" }).click();
+      await expect(page).toHaveURL(/\/history\?type=TRANSFER_OUT$/);
+      await expect(page.getByRole("tab", { name: "Outgoing" })).toHaveAttribute("aria-selected", "true");
+      const rows = page.getByTestId("history-transfer-row");
       await expect(rows).toHaveCount(1, { timeout: 15000 });
-      await expect(rows.first()).toContainText("12.00 USDX");
+      await expect(rows.first()).toContainText("12.00");
       await expect(rows.first().getByTestId("transfer-status-badge")).toHaveText("Successful");
       await rows.first().getByRole("link", { name: "View details" }).click();
       await expect(page.getByTestId("transfer-status")).toHaveAttribute("data-status", "CONFIRMED", {
@@ -115,11 +120,11 @@ test.describe("Transfer Flow (custodial)", () => {
     test("history opened moments before a send shows the new transfer at once, not the empty state (review app#79)", async ({
       page,
     }) => {
-      // 1. The history is opened first — empty, and now cached as fresh.
-      await page.goto("/send/history");
-      await expect(page.getByTestId("transfer-history-empty")).toBeVisible({ timeout: 15000 });
-      // 2. Client-side navigation keeps that cache alive.
-      await page.getByRole("button", { name: "Send USDX" }).click();
+      // 1. The history is opened first — no outgoing transfer yet, and now cached as fresh.
+      await page.goto("/history?type=TRANSFER_OUT");
+      await expect(page.getByText("Nothing matches this filter")).toBeVisible({ timeout: 15000 });
+      // 2. Client-side navigation (sidebar) keeps that cache alive.
+      await page.getByRole("link", { name: "Send", exact: true }).first().click();
       await expect(page.getByText("You will send")).toBeVisible({ timeout: 15000 });
       await page.getByPlaceholder("0", { exact: true }).fill("7");
       await page.getByPlaceholder("0x5DC489Ad05Efc").fill(TO);
@@ -133,9 +138,9 @@ test.describe("Transfer Flow (custodial)", () => {
         timeout: 15000,
       });
       // 3. Well inside the 15 s staleTime of the cached empty list.
-      await result.getByRole("link", { name: "Transfer history" }).click();
-      await expect(page.getByTestId("transfer-history-row")).toHaveCount(1, { timeout: 15000 });
-      await expect(page.getByTestId("transfer-history-empty")).toHaveCount(0);
+      await result.getByRole("link", { name: "Back to history" }).click();
+      await expect(page.getByTestId("history-transfer-row")).toHaveCount(1, { timeout: 15000 });
+      await expect(page.getByText("Nothing matches this filter")).toHaveCount(0);
     });
 
     test("destination can come from the address book", async ({ page }) => {
@@ -225,8 +230,8 @@ test.describe("Transfer Flow (custodial)", () => {
       await expect(page.getByTestId("transfer-result")).toBeVisible({ timeout: 15000 });
       await page.getByRole("button", { name: "Send another transfer" }).click();
       await expect(page.getByTestId("transfer-balance")).toHaveText("975 USDX", { timeout: 15000 });
-      await page.goto("/send/history");
-      await expect(page.getByTestId("transfer-history-row")).toHaveCount(1, { timeout: 15000 });
+      await page.goto("/history?type=TRANSFER_OUT");
+      await expect(page.getByTestId("history-transfer-row")).toHaveCount(1, { timeout: 15000 });
     });
 
     test("503 WALLET_SERVICE_UNAVAILABLE keeps its own sentence — not the network-busy one (USDX-709)", async ({
@@ -331,8 +336,8 @@ test.describe("Transfer Flow (custodial)", () => {
       await page.getByRole("button", { name: "Send another transfer" }).click();
       await expect(page.getByTestId("transfer-balance")).toHaveText("975 USDX", { timeout: 15000 });
       // …and exactly one transfer in the history — one intent, one tracker.
-      await page.goto("/send/history");
-      await expect(page.getByTestId("transfer-history-row")).toHaveCount(1, { timeout: 15000 });
+      await page.goto("/history?type=TRANSFER_OUT");
+      await expect(page.getByTestId("history-transfer-row")).toHaveCount(1, { timeout: 15000 });
     });
   });
 });

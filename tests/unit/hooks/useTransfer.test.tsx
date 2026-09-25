@@ -3,10 +3,11 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import { createWrapper, createCachingWrapper } from "../../helpers/test-utils";
 import { useTransfer, mapTransferError } from "@/hooks/useTransfer";
 import { useSession } from "@/hooks/useSession";
-import { useWalletTransfers } from "@/hooks/useWalletTransfers";
+import { useTransactions } from "@/hooks/useTransactions";
 import { useTransferStore } from "@/stores/transferStore";
 import { useAuthStore } from "@/stores/authStore";
-import { getCustodialWallet, listWalletTransfers, transferCustodial } from "@/lib/api/wallet-api";
+import { getCustodialWallet, transferCustodial } from "@/lib/api/wallet-api";
+import { listTransactions } from "@/lib/api/transactions-api";
 import { getMe } from "@/lib/api/auth-api";
 import { ApiError } from "@/lib/api/client";
 import type { CustodialWallet, TransferAccepted, User } from "@/types";
@@ -15,10 +16,10 @@ vi.mock("@/lib/api/wallet-api", () => ({
   getCustodialWallet: vi.fn(),
   createCustodialWallet: vi.fn(),
   transferCustodial: vi.fn(),
-  listWalletTransfers: vi.fn(),
 }));
+vi.mock("@/lib/api/transactions-api", () => ({ listTransactions: vi.fn() }));
 const getWalletMock = vi.mocked(getCustodialWallet);
-const listTransfersMock = vi.mocked(listWalletTransfers);
+const listTransfersMock = vi.mocked(listTransactions);
 const transferMock = vi.mocked(transferCustodial);
 vi.mock("@/lib/api/auth-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api/auth-api")>()),
@@ -152,13 +153,13 @@ describe("useTransfer", () => {
         expect(s.idempotencyKey).toBeNull(); // intent finished
       });
 
-      test("a broadcast refreshes the cached transfer history — the new row shows at once (review app#79)", async () => {
+      test("a broadcast refreshes the cached /history list — the new row shows at once (review app#79, USDX-713)", async () => {
         // The history was opened moments ago and is still "fresh" (staleTime 15 s).
         listTransfersMock.mockResolvedValue({ data: [], metadata: { page: 1, limit: 10, total: 0 } });
         fillValidForm();
         const Wrapper = createCachingWrapper();
         const { result } = renderHook(
-          () => ({ transfer: useTransfer(t), history: useWalletTransfers({ page: 1, take: 10 }) }),
+          () => ({ transfer: useTransfer(t), history: useTransactions({ page: 1, take: 10, type: "TRANSFER_OUT" }) }),
           { wrapper: Wrapper },
         );
         await waitFor(() => expect(result.current.history.isSuccess).toBe(true));

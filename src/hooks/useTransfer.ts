@@ -34,7 +34,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTransferStore } from "@/stores/transferStore";
 import { usePinSetCorrection } from "@/hooks/usePinSetCorrection";
 import { useCustodialWallet } from "@/hooks/useCustodialWallet";
-import { WALLET_TRANSFERS_KEY } from "@/hooks/useWalletTransfers";
+import { TRANSACTIONS_KEY } from "@/hooks/useTransactions";
 import { useCooldown, DEFAULT_COOLDOWN_SECONDS } from "@/hooks/useCooldown";
 import { transferCustodial } from "@/lib/api/wallet-api";
 import {
@@ -191,9 +191,9 @@ export function useTransfer(
       // Saldo turun begitu tx masuk blok; segarkan di latar.
       wallet.invalidate();
       // Riwayat yang dibuka < 15 s lalu masih dianggap segar — tanpa ini tombol
-      // "Riwayat transfer" di layar hasil menampilkan daftar lama, bahkan
-      // "Belum ada transfer" untuk transfer pertama (review app#79, USDX-701).
-      void queryClient.invalidateQueries({ queryKey: WALLET_TRANSFERS_KEY });
+      // "Riwayat transfer" di layar hasil menampilkan /history tab Keluar tanpa
+      // transfer yang baru dikirim (review app#79, USDX-701 → USDX-713).
+      void queryClient.invalidateQueries({ queryKey: TRANSACTIONS_KEY });
     },
     onError: (error) => {
       // Fakta akun, bukan state mutasi: salinan profil yang dikoreksi, supaya tetap

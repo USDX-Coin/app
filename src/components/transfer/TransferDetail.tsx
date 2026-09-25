@@ -1,6 +1,7 @@
 "use client";
 
 // Detail satu transfer (/send/history/[id], USDX-701, wallet.yaml § transfer-detail).
+// "Kembali ke riwayat" → /history tab Keluar (custodial-wallet.md §5.7, USDX-713).
 // Memakai tracker yang sama dengan layar sesudah kirim: transfer yang masih PENDING
 // terus dipantau (≥ 3 s) sampai final, yang sudah final tidak di-poll lagi.
 //
@@ -24,12 +25,13 @@ import {
 } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TransferStatusPanel } from "@/components/transfer/TransferStatusPanel";
+import { OUTGOING_HISTORY_HREF } from "@/lib/history-item";
 
 function BackToHistory({ variant = "outline" }: { variant?: "outline" | "brand" }) {
   const { t } = useLang();
   return (
     <Button variant={variant} size="lg" asChild>
-      <Link href="/send/history">
+      <Link href={OUTGOING_HISTORY_HREF}>
         <ArrowLeft />
         {t("transfer.detail.backToHistory")}
       </Link>

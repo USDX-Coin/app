@@ -34,6 +34,7 @@ import type {
   MintChannelOption,
   MintOrderCreated,
   ConsumerTransaction,
+  HistoryItem,
   VaBank,
   AmountCurrency,
   RedeemOrderCreated,
@@ -50,7 +51,10 @@ import {
   requireActiveCustodialWallet,
   mockCustodialBalanceUsdx,
   debitMockCustodialBalance,
+  currentMockUserId,
 } from "./mock-custodial-wallet";
+import { listMockTransferOutHistory } from "./mock-wallet-transfers";
+import { listMockIncomingTransfers } from "./mock-incoming-transfers";
 import { markMockPasswordAuth, requireAndVerifyMockPin } from "./mock-pin";
 import { ApiError, type Paginated } from "./client";
 import { validatePassword, validateAddress } from "@/lib/validations";
@@ -897,24 +901,40 @@ function seededTransactions(): ConsumerTransaction[] {
   });
 }
 
+// Riwayat terpadu (USDX-713, transactions.yaml § list): `type` diisi → hanya jenis itu;
+// tanpa `type` + `includeTransfers` → keempat jenis; tanpa keduanya → mint + redeem
+// saja (klien lama). Transfer = milik user sesi (buku besar keluar + masuk).
 export async function mockListConsumerTransactions(
   params: ListTransactionsParams = {},
-): Promise<Paginated<ConsumerTransaction>> {
+): Promise<Paginated<HistoryItem>> {
   await delay(250);
   const page = params.page ?? 1;
   const take = params.take ?? 10;
-  const all = [
+  const withTransfers = params.type
+    ? params.type === "TRANSFER_IN" || params.type === "TRANSFER_OUT"
+    : params.includeTransfers === true;
+  const userId = currentMockUserId();
+  const all: HistoryItem[] = [
     ...[...mintOrders.values()].map(mintRecordToTransaction),
     ...seededTransactions(),
     ...[...redeemOrders.values()].map(redeemRecordToTransaction),
     ...seededRedeemTransactions(),
-  ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    ...(withTransfers
+      ? [...listMockIncomingTransfers(userId), ...listMockTransferOutHistory(userId)]
+      : []),
+  ].sort(newestHistoryFirst);
   const filtered = params.type ? all.filter((t) => t.type === params.type) : all;
   const start = (page - 1) * take;
   return {
     data: filtered.slice(start, start + take),
     metadata: { page, limit: take, total: filtered.length },
   };
+}
+
+// `createdAt` desc, pemecah seri `id` desc (transactions.yaml § list).
+function newestHistoryFirst(a: HistoryItem, b: HistoryItem): number {
+  if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? 1 : -1;
+  return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
 }
 
 // ── Mock W3 consumer: redeem (USDX-243) ─────────────────────────────────────
@@ -1403,7 +1423,7 @@ export async function mockGetRedeemOrder(id: string): Promise<RedeemOrderDetail>
 }
 
 // ── Mock W3: redeem rows in the union history list (USDX-244) ───────────────
-// `GET /v2/transactions` is union mint + redeem. Map any redeem orders created
+// `GET /v2/transactions` unions mint + redeem (+ transfers, USDX-713). Map any redeem orders created
 // this session, plus a few seeded rows (various RedeemStatus) so /history shows
 // redeem in mock dev before the user redeems. REDEEM rows fill grossIdr +
 // netPayoutIdr + status (RedeemStatus); txHash = burn hash.

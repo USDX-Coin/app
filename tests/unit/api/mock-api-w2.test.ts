@@ -15,6 +15,7 @@ import {
   MOCK_BLACKLISTED_ADDRESS,
 } from "@/lib/api/mock-api";
 import { MOCK_CUSTODIAL_ADDRESS } from "@/lib/api/mock-custodial-wallet";
+import type { ConsumerTransaction } from "@/types";
 
 const VALID_REDEEM = {
   amount: "100",
@@ -140,7 +141,8 @@ describe("mockListConsumerTransactions", () => {
       const result = await mockListConsumerTransactions({ page: 1, take: 50, type: "REDEEM" });
       expect(result.data.length).toBeGreaterThan(0);
       expect(result.data.every((t) => t.type === "REDEEM")).toBe(true);
-      const row = result.data[0];
+      // type=REDEEM → hanya baris order, aman dipersempit (USDX-713).
+      const row = result.data[0] as ConsumerTransaction;
       // Redeem rows carry gross + net (not the mint subtotal/totalPay fields).
       expect(row.netPayoutIdr).not.toBeNull();
       expect(row.grossIdr).not.toBeNull();

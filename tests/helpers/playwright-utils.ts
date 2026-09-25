@@ -1,5 +1,8 @@
 import { expect, type Page } from "@playwright/test";
-import { MOCK_WALLET_TRANSFER_FIXTURES } from "../../src/lib/api/mock-wallet-transfer-fixtures";
+import {
+  MOCK_INCOMING_TRANSFER_FIXTURES,
+  MOCK_WALLET_TRANSFER_FIXTURES,
+} from "../../src/lib/api/mock-wallet-transfer-fixtures";
 
 const AUTH_STATE = {
   state: {
@@ -462,4 +465,35 @@ export async function seedWalletTransfers(
       JSON.stringify(r.map((row) => ({ settleAt: null, outcome: row.status, userId: "usr_1", ...row }))),
     );
   }, rows as Record<string, unknown>[]);
+}
+
+/** USDX that came IN to the custodial wallet — PENDING + CONFIRMED (USDX-713). */
+export const INCOMING_TRANSFER_FIXTURES = MOCK_INCOMING_TRANSFER_FIXTURES;
+
+/**
+ * Arm the mock's incoming-transfer ledger (mock-incoming-transfers
+ * "usdx-mock-incoming-transfers", USDX-713) for `usr_1`. With `confirmAfterMs`,
+ * every PENDING row turns CONFIRMED that long after the tab first loads — the
+ * stand-in for the backend scanner's final pass; without it rows keep their status.
+ * Applied ONCE per tab. Call before the first page.goto().
+ */
+export async function seedIncomingTransfers(
+  page: Page,
+  rows: (typeof MOCK_INCOMING_TRANSFER_FIXTURES)[keyof typeof MOCK_INCOMING_TRANSFER_FIXTURES][] | Record<string, unknown>[],
+  opts: { confirmAfterMs?: number } = {},
+) {
+  await page.addInitScript(
+    ({ r, confirmAfterMs }) => {
+      if (sessionStorage.getItem("usdx-mock-incoming-transfers-seeded")) return;
+      sessionStorage.setItem("usdx-mock-incoming-transfers-seeded", "1");
+      const settleAt = confirmAfterMs == null ? null : Date.now() + confirmAfterMs;
+      localStorage.setItem(
+        "usdx-mock-incoming-transfers",
+        JSON.stringify(
+          r.map((row) => ({ userId: "usr_1", ...row, settleAt: row.status === "PENDING" ? settleAt : null })),
+        ),
+      );
+    },
+    { r: rows as Record<string, unknown>[], confirmAfterMs: opts.confirmAfterMs ?? null },
+  );
 }

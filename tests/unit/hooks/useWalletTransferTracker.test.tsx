@@ -2,18 +2,17 @@ import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { createWrapper } from "../../helpers/test-utils";
 import { TRANSFER_POLL_MS, useWalletTransferTracker } from "@/hooks/useWalletTransferTracker";
-import { RATE_LIMIT_RETRIES, useWalletTransfers } from "@/hooks/useWalletTransfers";
-import { getWalletTransfer, listWalletTransfers } from "@/lib/api/wallet-api";
+import { useTransactions } from "@/hooks/useTransactions";
+import { getWalletTransfer } from "@/lib/api/wallet-api";
+import { listTransactions } from "@/lib/api/transactions-api";
 import { ApiError } from "@/lib/api/client";
 import { MOCK_WALLET_TRANSFER_FIXTURES as FX } from "@/lib/api/mock-wallet-transfer-fixtures";
 import type { WalletTransfer } from "@/types";
 
-vi.mock("@/lib/api/wallet-api", () => ({
-  getWalletTransfer: vi.fn(),
-  listWalletTransfers: vi.fn(),
-}));
+vi.mock("@/lib/api/wallet-api", () => ({ getWalletTransfer: vi.fn() }));
+vi.mock("@/lib/api/transactions-api", () => ({ listTransactions: vi.fn() }));
 const getMock = vi.mocked(getWalletTransfer);
-const listMock = vi.mocked(listWalletTransfers);
+const listMock = vi.mocked(listTransactions);
 
 const ID = FX.pending.id;
 const pending: WalletTransfer = FX.pending;
@@ -137,11 +136,11 @@ describe("useWalletTransferTracker", () => {
       await waitFor(() => expect(getMock).toHaveBeenCalledTimes(2));
     });
 
-    test("reaching a final status refreshes the cached history once, so list and detail agree (review app#79)", async () => {
-      listMock.mockResolvedValue({ data: [pending], metadata: { page: 1, limit: 10, total: 1 } });
+    test("reaching a final status refreshes the cached /history list once, so list and detail agree (review app#79, USDX-713)", async () => {
+      listMock.mockResolvedValue({ data: [], metadata: { page: 1, limit: 10, total: 0 } });
       getMock.mockResolvedValueOnce(pending).mockResolvedValue(confirmed);
       const { result } = renderHook(
-        () => ({ tracker: useWalletTransferTracker(ID), history: useWalletTransfers({ page: 1, take: 10 }) }),
+        () => ({ tracker: useWalletTransferTracker(ID), history: useTransactions({ page: 1, take: 10, type: "TRANSFER_OUT" }) }),
         { wrapper: createWrapper() },
       );
 
@@ -165,67 +164,6 @@ describe("useWalletTransferTracker", () => {
       unmount();
       await vi.advanceTimersByTimeAsync(TRANSFER_POLL_MS * 5);
       expect(getMock).toHaveBeenCalledTimes(1);
-    });
-  });
-});
-
-describe("useWalletTransfers", () => {
-  describe("positive", () => {
-    test("forwards page/take and returns the paginated envelope", async () => {
-      listMock.mockResolvedValue({ data: [FX.confirmed], metadata: { page: 2, limit: 10, total: 11 } });
-      const { result } = renderHook(() => useWalletTransfers({ page: 2, take: 10 }), {
-        wrapper: createWrapper(),
-      });
-
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      expect(listMock).toHaveBeenCalledWith({ page: 2, take: 10 });
-      expect(result.current.data?.metadata.total).toBe(11);
-    });
-  });
-
-  describe("negative", () => {
-    test("a failed list is an error, not an empty success", async () => {
-      vi.useRealTimers();
-      listMock.mockRejectedValue(new ApiError(500, "INTERNAL_ERROR", "x"));
-      const { result } = renderHook(() => useWalletTransfers(), { wrapper: createWrapper() });
-
-      await waitFor(() => expect(result.current.isError).toBe(true), { timeout: 3_000 }); // one retry
-      expect(result.current.data).toBeUndefined();
-    });
-  });
-
-  describe("edge case", () => {
-    test("429 waits Retry-After and tries again before giving up", async () => {
-      vi.useRealTimers(); // real clock: the retry sleep is TanStack's own timer
-      listMock
-        .mockRejectedValueOnce(rateLimited(2))
-        .mockResolvedValue({ data: [FX.confirmed], metadata: { page: 1, limit: 10, total: 1 } });
-      const { result } = renderHook(() => useWalletTransfers(), { wrapper: createWrapper() });
-
-      await waitFor(() => expect(listMock).toHaveBeenCalledTimes(1));
-      // Past the default 1 s retry delay, still short of Retry-After 2 s.
-      await new Promise((r) => setTimeout(r, 1_500));
-      expect(listMock).toHaveBeenCalledTimes(1);
-      expect(result.current.isError).toBe(false);
-      await waitFor(() => expect(result.current.isSuccess).toBe(true), { timeout: 2_000 });
-      expect(listMock).toHaveBeenCalledTimes(2);
-    });
-
-    test("a 429 that persists ends in the error state after the bounded retries", async () => {
-      vi.useRealTimers();
-      listMock.mockRejectedValue(rateLimited(1));
-      const { result } = renderHook(() => useWalletTransfers(), { wrapper: createWrapper() });
-
-      await waitFor(() => expect(result.current.isError).toBe(true), { timeout: 4_000 });
-      expect(listMock).toHaveBeenCalledTimes(RATE_LIMIT_RETRIES + 1);
-    });
-
-    test("an empty list is a success with no rows", async () => {
-      listMock.mockResolvedValue({ data: [], metadata: { page: 1, limit: 10, total: 0 } });
-      const { result } = renderHook(() => useWalletTransfers(), { wrapper: createWrapper() });
-
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      expect(result.current.data?.data).toEqual([]);
     });
   });
 });

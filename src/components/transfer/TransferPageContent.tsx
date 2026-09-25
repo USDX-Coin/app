@@ -7,13 +7,11 @@
 //     13 Agu), dan onboarding "dikasih wallet" adalah USDX-566 — bukan tiket ini.
 // Keputusan dibaca dari ringkasan di profil supaya tidak ada kedipan: user
 // non-custodial tidak menunggu GET /api/v2/wallet hanya untuk melihat ComingSoon.
-// Pemilik wallet juga mendapat pintu ke riwayat transfer (/send/history, USDX-701).
 
 import { PageHeader } from "@/components/shared/PageHeader";
 import { ComingSoonPage } from "@/components/shared/ComingSoonPage";
 import { KycStatusSection } from "@/components/kyc/KycStatusSection";
 import { TransferForm } from "@/components/transfer/TransferForm";
-import { TransferHistoryLink } from "@/components/transfer/TransferHistoryLink";
 import { useCustodialWallet } from "@/hooks/useCustodialWallet";
 
 export function TransferPageContent() {
@@ -36,9 +34,6 @@ export function TransferPageContent() {
     <div className="flex flex-1 flex-col gap-2">
       <PageHeader crumbs={["crumb.transaction", "nav.send"]} title="title.send" />
       <KycStatusSection />
-      <div className="flex justify-end">
-        <TransferHistoryLink />
-      </div>
       {/* `items-start`: baris ini hanya memusatkan horizontal — tanpa itu
           `stretch` menarik kartu form sampai ke dasar halaman. */}
       <div className="flex flex-1 items-start justify-center pt-8">

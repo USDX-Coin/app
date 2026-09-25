@@ -14,7 +14,7 @@ components/
   redeem/      # Redeem flow: RedeemForm, RedeemReview, RedeemStatus (tracker), BankSelect, BankAccountPicker + AddBankAccountModal (bank book, USDX-261). Custodial source switch + PIN dialog in the review (USDX-567)
   wallet/      # Custodial wallet (USDX-566): CustodialWalletOffer, CustodialWalletPanel, ReceiveAddress (QR + copy), CustodialWalletSection (offer-or-panel), CustodialBalanceCard (sidebar), WalletOnboardingContent
   settings/    # SettingsPageContent — Pengaturan is a real page since USDX-566; PinSection = the transaction PIN row in the Account card (USDX-651)
-  transfer/    # Custodial transfer (USDX-567): TransferPageContent (custodial owner → form, else ComingSoon), TransferForm, TransferReview, TransferResult (= confirmation tracker, USDX-701). History (USDX-701): TransferHistoryList (/send/history), TransferDetail (/send/history/[id]), TransferStatusPanel + TransferStatusBadge (shared by tracker and detail), TransferHistoryLink (/send, /history)
+  transfer/    # Custodial transfer (USDX-567): TransferPageContent (custodial owner → form, else ComingSoon), TransferForm, TransferReview, TransferResult (= confirmation tracker, USDX-701). History (USDX-701): TransferDetail (/send/history/[id]), TransferStatusPanel + TransferStatusBadge (shared by tracker, detail and the /history rows). The transfer LIST lives in /history since USDX-713 (`transactions/TransferHistoryRow`); `/send/history` redirects there
   transactions/ profile/ system/
 ```
 
@@ -107,6 +107,13 @@ components/
   `useCustodialWallet().address` **case-insensitively** (`isSameAddress`, `lib/utils.ts`)
   — unlike the review, a stored mint address may be all lowercase. No wallet = no marker
   and no request; never a detail call per row (USDX-653, `custodial-wallet.md` §5.2).
+  Transfer rows never get that marker — they are always the user's own wallet (USDX-713).
+- `transactions/TransactionList` = the unified history (USDX-713, `custodial-wallet.md`
+  §5.7): tabs Semua · Minting · Redeem · Masuk · Keluar, the active one mirrored in
+  `?type=` (read on open via `useSearchParams`, so `/history` wraps it in `Suspense`;
+  unknown value = Semua). Transfer rows are `transactions/TransferHistoryRow` (outgoing →
+  `/send/history/[id]`; incoming → the row menu of `transactions/HistoryCells`, sender
+  address only). A failed background refresh keeps the rows on screen.
 - `redeem/RedeemStatus` hides `BurnGate` for `order.burnMode === "CUSTODIAL"` and shows
   the "sistem sedang memproses burn" strip instead; `useRedeemBurn.runBurn` refuses such
   an order too, so the resume-from-history path cannot trigger a wallet either.

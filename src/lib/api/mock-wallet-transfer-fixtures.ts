@@ -4,7 +4,7 @@
 // yang sama) — karena itu file ini sengaja hanya mengimpor TIPE: suite Playwright
 // mengimpornya lewat path relatif tanpa menarik klien API / env Next.
 
-import type { WalletTransfer } from "@/types";
+import type { TransferHistoryItem, WalletTransfer } from "@/types";
 
 const FIXTURE_BASE = {
   from: "0x000000C528aE908fB929a0898B65e913623c9aFf",
@@ -63,3 +63,39 @@ export const MOCK_WALLET_TRANSFER_FIXTURES = {
   },
 } satisfies Record<string, WalletTransfer>;
 
+
+// ── Fixture USDX MASUK ke wallet custodial (riwayat terpadu, USDX-713) ──────────
+// Bentuk transactions.yaml § TransferHistoryItem (TRANSFER_IN). `counterpartyAddress`
+// = pengirim (alamat saja). Tidak pernah FAILED — korban reorg dihapus (§5.7).
+const INCOMING_BASE = {
+  type: "TRANSFER_IN",
+  chain: "polygon",
+  userAddress: "0x000000C528aE908fB929a0898B65e913623c9aFf",
+  counterpartyAddress: "0x7c0A3d4E9fA87a8B273483b28C4171B98C3F0E28",
+  failureReason: null,
+} as const;
+
+export const MOCK_INCOMING_TRANSFER_FIXTURES = {
+  pending: {
+    ...INCOMING_BASE,
+    id: "0193abcf-22bb-7cde-8f02-6d3f1b0e5f02",
+    txHash: "0x" + "f6".repeat(32),
+    amount: "7.250000",
+    amountWei: "7250000",
+    status: "PENDING",
+    blockNumber: 76_543_300,
+    createdAt: "2026-08-28T04:45:00.000Z",
+    updatedAt: "2026-08-28T04:45:00.000Z",
+  },
+  confirmed: {
+    ...INCOMING_BASE,
+    id: "0193abcf-22bb-7cde-8f02-6d3f1b0e5f01",
+    txHash: "0x" + "e5".repeat(32),
+    amount: "12.000000",
+    amountWei: "12000000",
+    status: "CONFIRMED",
+    blockNumber: 76_543_150,
+    createdAt: "2026-08-28T04:25:00.000Z",
+    updatedAt: "2026-08-28T04:26:10.000Z",
+  },
+} satisfies Record<string, TransferHistoryItem>;

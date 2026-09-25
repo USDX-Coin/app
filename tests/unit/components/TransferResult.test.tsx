@@ -83,13 +83,16 @@ describe("TransferResult (tracker after send)", () => {
       expect(screen.getByTestId("transfer-failure-reason")).toHaveTextContent("Ditolak oleh kontrak token USDX");
     });
 
-    test("keeps the explorer link and a way to the transfer history", async () => {
+    // AC USDX-713: "/send tidak lagi punya tombol 'Riwayat transfer'"; dari tracker
+    // "kembali ke riwayat" → /history tab Keluar.
+    test("keeps the explorer link and a 'back to history' link to the Keluar tab", async () => {
       getMock.mockResolvedValue(detail());
       renderResult();
 
       const link = screen.getByRole("link", { name: "Lihat di explorer" });
       expect(link).toHaveAttribute("href", `https://polygonscan.com/tx/${ACCEPTED.txHash}`);
-      expect(screen.getByRole("link", { name: /Riwayat transfer/ })).toHaveAttribute("href", "/send/history");
+      expect(screen.getByRole("link", { name: "Kembali ke riwayat" })).toHaveAttribute("href", "/history?type=TRANSFER_OUT");
+      expect(screen.queryByRole("link", { name: /Riwayat transfer/ })).toBeNull();
     });
   });
 

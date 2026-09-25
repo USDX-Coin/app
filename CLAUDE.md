@@ -74,8 +74,8 @@ src/
     redeem/         # RedeemForm, RedeemReview, RedeemPageContent, skeletons
     wallet/         # Custodial wallet (USDX-566): offer, status panel, receive address + QR, sidebar card, onboarding step
     settings/       # SettingsPageContent (Pengaturan — home of the custodial wallet) + PinSection (transaction PIN, USDX-651)
-    transfer/       # Custodial transfer: TransferForm, TransferReview, TransferResult (tracker), TransferPageContent (USDX-567); TransferStatusPanel/Badge, TransferHistoryList, TransferDetail, TransferHistoryLink (USDX-701)
-    transactions/   # TransactionList, skeletons
+    transfer/       # Custodial transfer: TransferForm, TransferReview, TransferResult (tracker), TransferPageContent (USDX-567); TransferStatusPanel/Badge, TransferDetail (USDX-701)
+    transactions/   # TransactionList (unified /history, USDX-713), TransferHistoryRow, HistoryCells, skeletons
     profile/        # ProfileCard, skeleton
     ui/             # shadcn/ui base components (auto-generated)
   hooks/            # Custom hooks (useAuth, useMint, useRedeem, useCustodialWallet, useTransfer, usePin, etc.)
@@ -176,9 +176,9 @@ Mint and Redeem keep their state in Zustand stores; the Ringkasan is a modal:
   every 3 s via `hooks/useWalletTransferTracker` until CONFIRMED ("Berhasil") or FAILED
   ("Gagal — USDX tidak berpindah, aman kirim ulang"); it stops at a final status and on
   unmount, backs off to `Retry-After` on 429, and NEVER infers failure from age. Unknown
-  `status` values read as PENDING (`lib/wallet-transfer.ts`). History: `/send/history`
-  (list, page/take, API order) + `/send/history/[id]` (same tracker; 404/422 = neutral
-  "not found" + back). `Idempotency-Key` (UUID v7) is minted once per
+  `status` values read as PENDING (`lib/wallet-transfer.ts`). History: the transfer is a
+  row of `/history` (tab "Keluar", USDX-713); `/send/history/[id]` = the same tracker
+  (404/422 = neutral "not found" + back to `/history?type=TRANSFER_OUT`). `Idempotency-Key` (UUID v7) is minted once per
   intent by `transferStore` and reused by every retry; `setTo`/`setAmount` drop it.
   The two `503`s get their own Ringkasan sentence: `WALLET_SERVICE_UNAVAILABLE`
   ("Layanan wallet sedang tidak tersedia…") vs `NETWORK_CONGESTED` (fees above the
@@ -228,7 +228,7 @@ describe('functionOrPage') →
 
 - **Unit tests**: hooks, stores, API, validations, utils, chains
 - **Integration tests**: page interactions + responsive (mobile/tablet/desktop)
-- **E2E tests**: auth flow, mint flow, redeem flows, address book, QR scan, rate limit, custodial transfer/redeem (tracker to CONFIRMED/FAILED + history, USDX-701), PIN created from the money paths
+- **E2E tests**: auth flow, mint flow, redeem flows, address book, QR scan, rate limit, custodial transfer/redeem (tracker to CONFIRMED/FAILED + row in /history, USDX-701/713), unified history refresh (USDX-713), PIN created from the money paths
 
 Test helpers in `tests/helpers/`:
 - `test-utils.tsx`: QueryClient wrapper for renderHook (`createWrapper`, gcTime 0; `createCachingWrapper` keeps the cache across unmounts like the app)
@@ -243,14 +243,14 @@ Test helpers in `tests/helpers/`:
 | `/forgot-password` | No | SC | Password reset |
 | `/mint` | Yes | SC | Mint USDX (default dashboard) |
 | `/redeem` | Yes | SC | Redeem USDX to bank |
-| `/history` | Yes | SC | Transaction history (mint + redeem, W3). Rows to/from the user's custodial wallet carry the mint review's "Wallet custodial saya" marker — `TransactionItem.userAddress` matched case-insensitively against the wallet address, no per-row detail call (USDX-653). Custodial transfers are NOT here (own resource) — wallet owners get a link to `/send/history` |
+| `/history` | Yes | SC | Unified history (USDX-713, `custodial-wallet.md` §5.7): tabs Semua · Minting · Redeem · Masuk · Keluar over `GET /api/v2/transactions` (Semua = `includeTransfers=true`, the rest = `type`), the active tab mirrored in `?type=` (unknown = Semua). Outgoing rows open `/send/history/[id]`; incoming rows show the sender address only + the explorer/copy-hash menu. Refreshes every 15 s while a transfer is PENDING. Mint/redeem rows to/from the user's custodial wallet carry the mint review's "Wallet custodial saya" marker — `TransactionItem.userAddress` matched case-insensitively, no per-row detail call (USDX-653); transfer rows never do |
 | `/profile` | Yes | SC | User info + verification badge |
 | `/settings` | Yes | SC | Pengaturan: custodial "USDX wallet" (offer — the "Buatkan saya wallet" button on builds with `env.walletCreateEnabled` ON = dev + mock, the "Segera hadir" pill everywhere else incl. production, USDX-699 / address + QR + balance / status) + Account card with the transaction PIN (create / change, USDX-651) + link to Profile (USDX-566; switch: `custodial-wallet.md` §1 amandemen 14 Sep + 21 Sep 2026) |
 | `/onboarding/wallet` | Yes | SC | "Dikasih wallet" step (USDX-566). **No longer reached from verify-email** — that redirect is off in every environment (verify-email lands on `/mint`, `custodial-wallet.md` §1 amandemen 14 Sep 2026); only a direct URL opens it. Same offer as Settings (button or pill by `env.walletCreateEnabled`, USDX-699). "Not now" → `/mint` |
 | `/bridge` | Yes | SC | ComingSoon (gated — no bridge backend yet; sidebar teaser) |
 | `/send` | Yes | SC | Custodial transfer (`TransferPageContent`) for users with `user.custodialWallet`; ComingSoon for everyone else (no external-wallet send backend) |
-| `/send/history` | Yes | SC | Custodial transfer history (`TransferHistoryList`, USDX-701) — `GET /api/v2/wallet/transfers`, linked from `/send` and `/history` for wallet owners (`TransferHistoryLink`); empty list for users without a wallet |
-| `/send/history/[id]` | Yes | SC | One transfer + confirmation tracker (`TransferDetail`, USDX-701); stale/wrong id → neutral "not found" + back to history |
+| `/send/history` | Yes | SC | Redirect → `/history?type=TRANSFER_OUT` (the old USDX-701 list, replaced by USDX-713). No "Transfer history" button on `/send` or `/history` any more |
+| `/send/history/[id]` | Yes | SC | One transfer + confirmation tracker (`TransferDetail`, USDX-701); stale/wrong id → neutral "not found"; "back" → `/history?type=TRANSFER_OUT` |
 
 ## Known Limitations
 
@@ -300,14 +300,17 @@ Test helpers in `tests/helpers/`:
   USDX-698 (first-time PIN on a wallet account needs a fresh login) is ON by default
   (698 is live on api-dev; `seedMockStrictPinSet(false)` = the old backend) — a flow that
   starts right after a login arms `seedFreshPasswordAuth(page)` (Playwright)
-- **Custodial transfer history (USDX-701)** — mock ledger in localStorage
-  (`usdx-mock-wallet-transfers`, `lib/api/mock-wallet-transfers.ts`): every mock
+- **Custodial transfer history (USDX-701 → unified /history USDX-713)** — mock outgoing
+  ledger in localStorage (`usdx-mock-wallet-transfers`, `lib/api/mock-wallet-transfers.ts`,
+  the `TRANSFER_OUT` rows of mock `/transactions`) + incoming ledger
+  (`usdx-mock-incoming-transfers`, `lib/api/mock-incoming-transfers.ts`, `TRANSFER_IN`): every mock
   transfer lands as PENDING and the "receipt watcher" decides it 3.5 s later (seam
   `transferOutcome` on `seedCustodialWallet`: `CONFIRMED` default, `REVERTED`, `DROPPED`,
   `PENDING` = stuck forever, anything else = a status the FE does not know). Fixtures for
   the three statuses + two failure reasons: `lib/api/mock-wallet-transfer-fixtures.ts`
   (types only, so Playwright imports it) — `seedMockWalletTransfers` (unit) /
-  `seedWalletTransfers(page, rows)` (Playwright)
+  `seedWalletTransfers(page, rows)` (Playwright); incoming: `seedMockIncomingTransfers` /
+  `seedIncomingTransfers(page, rows, { confirmAfterMs })`
 - The `/payment` mock gateway route was deleted (it faked "Payment Successful" with a
   `setTimeout`); the real mint flow uses the cross-origin checkout handoff
 - RainbowKit wallet connection works; the USDX balance is read **on-chain for real**

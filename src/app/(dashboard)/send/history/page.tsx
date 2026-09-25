@@ -1,17 +1,9 @@
-import { PageHeader } from "@/components/shared/PageHeader";
-import { TransferHistoryList } from "@/components/transfer/TransferHistoryList";
+import { redirect } from "next/navigation";
+import { OUTGOING_HISTORY_HREF } from "@/lib/history-item";
 
-// /send/history — riwayat transfer keluar dari wallet custodial (USDX-701,
-// wallet.yaml § transfers). Tinggal di bawah /send supaya sidebar tetap menandai
-// "Send". User tanpa wallet mendapat daftar kosong dari API (200), bukan galat.
+// /send/history (daftar, USDX-701) digantikan /history tab Keluar (custodial-wallet.md
+// §5.7, USDX-713). Route tetap ada supaya tautan/bookmark lama tidak 404; detail
+// /send/history/[id] tidak terpengaruh.
 export default function TransferHistoryPage() {
-  return (
-    <div className="flex flex-1 flex-col gap-6">
-      <PageHeader
-        crumbs={["crumb.transaction", "nav.send", "transfer.history.title"]}
-        title="transfer.history.title"
-      />
-      <TransferHistoryList />
-    </div>
-  );
+  redirect(OUTGOING_HISTORY_HREF);
 }

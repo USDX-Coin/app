@@ -9,7 +9,6 @@ import {
   createCustodialWallet,
   getCustodialWallet,
   getWalletTransfer,
-  listWalletTransfers,
   transferCustodial,
 } from "@/lib/api/wallet-api";
 import { configureApiClient } from "@/lib/api/client";
@@ -276,8 +275,8 @@ describe("transferCustodial", () => {
   });
 });
 
-// GET /api/v2/wallet/transfers + /{id} (USDX-701, wallet.yaml § transfers / transfer-detail).
-describe("listWalletTransfers / getWalletTransfer", () => {
+// GET /api/v2/wallet/transfers/{id} (USDX-701, wallet.yaml § transfers / transfer-detail).
+describe("getWalletTransfer", () => {
   const TRANSFER: WalletTransfer = {
     id: "0193abce-11aa-7bcd-8e01-5c2f0a9d4e77",
     txHash: "0x" + "ab".repeat(32),
@@ -294,24 +293,6 @@ describe("listWalletTransfers / getWalletTransfer", () => {
   };
 
   describe("positive", () => {
-    test("list GETs /api/v2/wallet/transfers with page/take and keeps the pagination metadata", async () => {
-      fetchMock.mockResolvedValueOnce(
-        jsonResponse(200, {
-          status: "success",
-          metadata: { page: 2, limit: 10, total: 11 },
-          data: [TRANSFER],
-        }),
-      );
-
-      const page = await listWalletTransfers({ page: 2, take: 10 });
-
-      expect(page).toEqual({ data: [TRANSFER], metadata: { page: 2, limit: 10, total: 11 } });
-      const [url, init] = fetchMock.mock.calls[0];
-      expect(url).toBe("/api/v2/wallet/transfers?page=2&take=10");
-      expect(init.method).toBe("GET");
-      expect((init.headers as Headers).get("Authorization")).toBe("Bearer session-token");
-    });
-
     test("detail GETs /api/v2/wallet/transfers/{id} and unwraps the envelope", async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse(200, { status: "success", data: TRANSFER }));
 
@@ -349,17 +330,6 @@ describe("listWalletTransfers / getWalletTransfer", () => {
   });
 
   describe("edge case", () => {
-    test("list without params sends no query string; an empty list stays empty", async () => {
-      fetchMock.mockResolvedValueOnce(
-        jsonResponse(200, { status: "success", metadata: { page: 1, limit: 10, total: 0 }, data: [] }),
-      );
-
-      const page = await listWalletTransfers();
-
-      expect(fetchMock.mock.calls[0][0]).toBe("/api/v2/wallet/transfers");
-      expect(page.data).toEqual([]);
-      expect(page.metadata.total).toBe(0);
-    });
 
     test("the id is URL-encoded — a stale value can never rewrite the path", async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse(200, { status: "success", data: TRANSFER }));

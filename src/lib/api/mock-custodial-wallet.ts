@@ -34,10 +34,9 @@ import type {
   WalletTransfer,
 } from "@/types";
 import type { CreateTransferRequest } from "./types";
-import { ApiError, type Paginated } from "./client";
+import { ApiError } from "./client";
 import {
   getMockWalletTransfer,
-  listMockWalletTransfers,
   recordMockWalletTransfer,
   resetMockWalletTransfers,
   type MockTransferOutcome,
@@ -292,7 +291,7 @@ function maybeThrowRateLimited(): void {
 
 // Id user sesi (kunci idempotensi hanya berlaku untuk pemiliknya). Mock hanya
 // punya satu akun demo; sesi yang diseed Playwright dibaca dari `usdx-auth`.
-function currentMockUserId(): string {
+export function currentMockUserId(): string {
   if (typeof localStorage === "undefined") return "usr_1";
   try {
     const raw = localStorage.getItem("usdx-auth");
@@ -480,17 +479,8 @@ export async function mockTransferCustodial(
 
 // ── Riwayat & tracker (wallet.yaml § transfers / transfer-detail, USDX-701) ──
 // Buku besarnya di mock-wallet-transfers.ts; di sini hanya pintu yang tahu siapa
-// user sesi + throttle grup `wallet`. Seperti kontrak: tanpa gate wallet (user
-// tanpa wallet = daftar kosong) dan tanpa 503 (tidak menyentuh zona kunci).
-export async function mockListWalletTransfers(params: {
-  page?: number;
-  take?: number;
-}): Promise<Paginated<WalletTransfer>> {
-  await delay(150);
-  maybeThrowRateLimited();
-  return listMockWalletTransfers(currentMockUserId(), params);
-}
-
+// user sesi + throttle grup `wallet`. Seperti kontrak: tanpa 503 (tidak menyentuh
+// zona kunci). Daftarnya kini lewat /transactions (mock-api, USDX-713).
 export async function mockGetWalletTransfer(id: string): Promise<WalletTransfer> {
   await delay(150);
   maybeThrowRateLimited();

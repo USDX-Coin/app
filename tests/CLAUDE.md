@@ -36,6 +36,8 @@ tests/
     transfer-flow.spec.ts         # Custodial transfer: form -> Ringkasan -> PIN -> tracker PENDING -> CONFIRMED/FAILED, stuck stays waiting, row in /history "Keluar" (USDX-567/701/713)
     history-unified-flow.spec.ts  # Unified /history: incoming PENDING -> Successful without reload (15 s refresh), no-wallet user, unknown ?type= (USDX-713)
     redeem-custodial-flow.spec.ts # Custodial redeem: PIN, no wallet dialog, tracker to payout (USDX-567)
+    transfer-2fa-flow.spec.ts     # Custodial transfer with 2FA (USDX-717): PIN + authenticator code, backup code, wrong code keeps the PIN, activation card → turn on in place → Send enabled without reload, 24-hour lock banner (on load and as a 409 mid-form), 2fa-stepup lockout sentence ≠ PIN, backend before 718 still sends
+    redeem-custodial-2fa-flow.spec.ts # Custodial redeem with 2FA (USDX-717): PIN + code, wrong code stays in the dialog (no logout), activation card, lock banner, external source untouched
     two-factor-flow.spec.ts       # Login on a 2FA account: code / backup code (single use), forgot-PIN re-login still lands on Settings after the code, email recovery with the 24-hour warning, expired challenge (USDX-714)
     pin-flow.spec.ts              # PIN created from the transfer/redeem notice, stale-copy PIN_NOT_SET (USDX-651); every create door asks to log in again under backend USDX-698 (USDX-697); forgot PIN from a locked transfer PIN dialog → new PIN approves, old refused (USDX-696)
   audit-ui/             # node + Playwright — measurement, NOT assertions
@@ -116,7 +118,11 @@ beforeEach(() => {
 - **2FA** (USDX-714): `seedTwoFactor(page, true)` turns the account's 2FA on in the mock (once
   per tab) — pair it with `twoFactorEnabled: true` on `loginViaStorage`. The mock accepts
   `MOCK_TOTP_CODE` / `MOCK_BACKUP_CODES` / `MOCK_RECOVERY_OTP`; `expireTwoFactorChallenge(page)`
-  ends the login step-1 challenge while the code screen is open
+  ends the login step-1 challenge while the code screen is open.
+  **Custodial transfer/redeem need 2FA since USDX-717**: the mock plays backend 718, so every
+  custodial money spec arms `seedTwoFactor(page, true)` + `twoFactorEnabled: true` and fills
+  "Authenticator code" with `MOCK_TOTP_CODE`. `seedOutboundLock(page, iso)` = money out on hold
+  (24-hour lock), `seedLegacyStepUp(page)` = the backend before 718 (code dropped, no lock)
 - Unit tests mock all data — no network, no DOM rendering for store tests
 - Playwright tests use `{ timeout: 15000 }` on key assertions for SSR hydration
 - `type="email"` inputs have native browser validation — test with valid-format emails

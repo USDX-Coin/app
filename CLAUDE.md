@@ -68,7 +68,7 @@ src/
     (dashboard)/    # Mint, redeem, transactions, profile (SC pages + Client wrappers)
   components/
     auth/           # LoginForm, RegisterForm, ForgotPasswordForm (Client)
-    shared/         # Cross-feature: PageHeader, PinConfirmDialog + PinField + PinSetupDialog/PinChangeDialog/PinNotSetNotice/ForgotPinLink (PIN, USDX-567/651/696)
+    shared/         # Cross-feature: PageHeader, PinConfirmDialog (PIN + authenticator code, USDX-717) + PinField + PinSetupDialog/PinChangeDialog/PinNotSetNotice/ForgotPinLink (PIN, USDX-567/651/696), TwoFactorCodeField/TwoFactorSetupNotice (USDX-714), StepUpNotices/OutboundLockNotice (USDX-717)
     layout/         # AuthLayout, Header, Sidebar, Logo
     mint/           # MintForm, MintReview, MintPageContent, skeletons
     redeem/         # RedeemForm, RedeemReview, RedeemPageContent, skeletons
@@ -228,7 +228,7 @@ describe('functionOrPage') →
 
 - **Unit tests**: hooks, stores, API, validations, utils, chains
 - **Integration tests**: page interactions + responsive (mobile/tablet/desktop)
-- **E2E tests**: auth flow, mint flow, redeem flows, address book, QR scan, rate limit, custodial transfer/redeem (tracker to CONFIRMED/FAILED + row in /history, USDX-701/713), unified history refresh (USDX-713), PIN created from the money paths, 2FA login + email recovery (USDX-714)
+- **E2E tests**: auth flow, mint flow, redeem flows, address book, QR scan, rate limit, custodial transfer/redeem (tracker to CONFIRMED/FAILED + row in /history, USDX-701/713), unified history refresh (USDX-713), PIN created from the money paths, 2FA login + email recovery (USDX-714), 2FA code on custodial transfer/redeem + activation card + 24-hour lock banner (USDX-717)
 
 Test helpers in `tests/helpers/`:
 - `test-utils.tsx`: QueryClient wrapper for renderHook (`createWrapper`, gcTime 0; `createCachingWrapper` keeps the cache across unmounts like the app)
@@ -301,14 +301,24 @@ Test helpers in `tests/helpers/`:
   (698 is live on api-dev; `seedMockStrictPinSet(false)` = the old backend) — a flow that
   starts right after a login arms `seedFreshPasswordAuth(page)` (Playwright)
 - **2FA TOTP (USDX-714, `custodial-wallet.md` §6.1, `two-factor.yaml`)** — required for money
-  leaving the custodial wallet (enforced by backend USDX-718; the transfer/redeem code field is
-  USDX-717). The web can now turn it on/off and regenerate backup codes (Settings → Security)
+  leaving the custodial wallet (enforced by backend USDX-718, which deploys AFTER this web —
+  the old backend drops `twoFactorCode` silently). **Transfer & custodial redeem (USDX-717)**:
+  `PinConfirmDialog` has a "Kode authenticator" field under the PIN ("Pakai backup code"
+  swaps it), sent as `twoFactorCode` in the same body; `/send` and the custodial redeem read
+  `user.twoFactorEnabled` (false → activation card, dialog in place) and GET /wallet
+  `outboundLockedUntil` (→ "ditahan sampai …" banner) BEFORE the form, both disabling the
+  send button (`hooks/useCustodialStepUp`, `shared/StepUpNotices`); `401
+  TWO_FACTOR_SETUP_REQUIRED` / `409 CUSTODIAL_OUTBOUND_LOCKED` land on the same card/banner,
+  `INVALID_TWO_FACTOR_CODE` / `TWO_FACTOR_CODE_REQUIRED` under the code field, `429` picks its
+  sentence from `details.scope` (`2fa-stepup` vs `pin`; absent = PIN). The web can now turn it on/off and regenerate backup codes (Settings → Security)
   and log in to a 2FA account (`login` → `{ twoFactorRequired }` → code screen →
   `verify-login`; email recovery). `user.twoFactorEnabled` in the auth store is what screens
   read; every change goes through `hooks/useProfileCorrection` (store + `/auth/me` cache).
   Turning 2FA off (button or email recovery) holds custodial transfers & withdrawals for 24
   hours — both screens say so before the user confirms. Mock: `mock-two-factor.ts`
-  (`seedTwoFactor(page, true)`), codes in `mock-two-factor-fixtures.ts`
+  (`seedTwoFactor(page, true)`), codes in `mock-two-factor-fixtures.ts`; the mock enforces
+  718 on transfer/redeem by default (`seedOutboundLock(page, iso)`, `seedLegacyStepUp(page)` =
+  the backend before 718)
 - **Custodial transfer history (USDX-701 → unified /history USDX-713)** — mock outgoing
   ledger in localStorage (`usdx-mock-wallet-transfers`, `lib/api/mock-wallet-transfers.ts`,
   the `TRANSFER_OUT` rows of mock `/transactions`) + incoming ledger

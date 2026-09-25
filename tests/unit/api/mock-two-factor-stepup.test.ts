@@ -1,9 +1,19 @@
 import { describe, test, expect, beforeEach } from "vitest";
 import {
   MOCK_BACKUP_CODES,
+  MOCK_RECOVERY_OTP,
   MOCK_TOTP_CODE,
+  assertMockOutboundNotLocked,
+  mockDisableTwoFactor,
+  mockEnableTwoFactor,
+  mockOutboundLockedUntil,
+  mockRegenerateBackupCodes,
+  mockTwoFactorRecovery,
+  mockVerifyTwoFactor,
   resetMockTwoFactor,
+  seedMockOutboundLock,
   seedMockTwoFactor,
+  startMockTwoFactorChallenge,
   verifyMockStepUpCode,
 } from "@/lib/api/mock-two-factor";
 
@@ -94,6 +104,86 @@ describe("verifyMockStepUpCode", () => {
       expect(thrown(() => verifyMockStepUpCode(undefined))).toMatchObject({
         code: "TWO_FACTOR_SETUP_REQUIRED",
       });
+    });
+  });
+});
+
+// Kunci 24 jam uang keluar custodial (§6.1 no.6): setiap faktor kedua DIMATIKAN
+// ATAU DIGANTI — disable, pemulihan email, regenerate backup code, enable ulang saat
+// aktif. Aktivasi pertama tidak mengunci (no.9). Kunci milik akun, bertahan walau
+// 2FA diaktifkan lagi.
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function lockedForAboutADay(): boolean {
+  const until = mockOutboundLockedUntil();
+  if (until === null) return false;
+  const ms = Date.parse(until) - Date.now();
+  return ms > DAY_MS - 60_000 && ms <= DAY_MS;
+}
+
+describe("mock outbound lock", () => {
+  describe("positive", () => {
+    test("turning 2FA off locks money out for 24 hours", async () => {
+      seedMockTwoFactor(true);
+      await mockDisableTwoFactor({ password: "Demo1234" }, { passwordOk: true });
+      expect(lockedForAboutADay()).toBe(true);
+      expect(thrown(() => assertMockOutboundNotLocked())).toMatchObject({
+        status: 409,
+        code: "CUSTODIAL_OUTBOUND_LOCKED",
+        details: { lockedUntil: mockOutboundLockedUntil() },
+      });
+    });
+
+    test("new backup codes lock; so does a re-enable while 2FA is already on", async () => {
+      seedMockTwoFactor(true);
+      await mockRegenerateBackupCodes({ password: "Demo1234" }, { passwordOk: true });
+      expect(lockedForAboutADay()).toBe(true);
+
+      seedMockOutboundLock(null);
+      await mockEnableTwoFactor({ password: "Demo1234" }, { passwordOk: true });
+      expect(lockedForAboutADay()).toBe(true);
+    });
+
+    test("email recovery locks", async () => {
+      seedMockTwoFactor(true);
+      startMockTwoFactorChallenge("demo@usdx.com");
+      await mockTwoFactorRecovery({});
+      await mockTwoFactorRecovery({ code: MOCK_RECOVERY_OTP });
+      expect(lockedForAboutADay()).toBe(true);
+    });
+
+    test("the lock survives turning 2FA back on", async () => {
+      seedMockTwoFactor(true);
+      await mockDisableTwoFactor({ password: "Demo1234" }, { passwordOk: true });
+      await mockEnableTwoFactor({ password: "Demo1234" }, { passwordOk: true });
+      await mockVerifyTwoFactor({ code: MOCK_TOTP_CODE });
+      expect(lockedForAboutADay()).toBe(true);
+    });
+  });
+
+  describe("negative", () => {
+    test("no lock by default, and the first activation does not lock", async () => {
+      expect(mockOutboundLockedUntil()).toBeNull();
+      await mockEnableTwoFactor({ password: "Demo1234" }, { passwordOk: true });
+      await mockVerifyTwoFactor({ code: MOCK_TOTP_CODE });
+      expect(mockOutboundLockedUntil()).toBeNull();
+      expect(() => assertMockOutboundNotLocked()).not.toThrow();
+    });
+
+    test("a failed disable (wrong password) does not lock", async () => {
+      seedMockTwoFactor(true);
+      await expect(
+        mockDisableTwoFactor({ password: "nope" }, { passwordOk: false }),
+      ).rejects.toMatchObject({ code: "INVALID_CREDENTIALS" });
+      expect(mockOutboundLockedUntil()).toBeNull();
+    });
+  });
+
+  describe("edge case", () => {
+    test("a lock in the past reads as null and lets money out", () => {
+      seedMockOutboundLock(new Date(Date.now() - 1_000).toISOString());
+      expect(mockOutboundLockedUntil()).toBeNull();
+      expect(() => assertMockOutboundNotLocked()).not.toThrow();
     });
   });
 });

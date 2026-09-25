@@ -248,6 +248,10 @@ export interface CreateRedeemOrderRequest {
   // ada layar tanda tangan wallet. Diabaikan backend di jalur SELF_SIGN; FE tidak
   // mengirimkannya di sana (field dihilangkan dari body).
   pin?: string;
+  // Jalur CUSTODIAL saja, bersama `pin` (redeem.yaml § CreateRedeemOrder.twoFactorCode,
+  // custodial-wallet.md §6.1, USDX-717): kode authenticator 6 digit ATAU backup code.
+  // Tidak ada idempotency key di endpoint ini — satu kode TOTP menyetujui satu order.
+  twoFactorCode?: string;
 }
 
 // ── Gelombang 1 Custodial Wallet — transfer (USDX-567) ───────────────────────
@@ -255,12 +259,17 @@ export interface CreateRedeemOrderRequest {
 // `chain` (Polygon-only, wallet custodial hanya ada di satu chain) dan tidak ada
 // `amountCurrency` (transfer memindahkan token, bukan menjual/membeli). Header
 // `Idempotency-Key` WAJIB dan dibawa terpisah oleh `transferCustodial` — bukan
-// bagian body. "Body sama" untuk replay = `to` + `amount`; `pin` bukan identitas
-// niat transfer.
+// bagian body. "Body sama" untuk replay = `to` + `amount`; `pin` dan
+// `twoFactorCode` bukan identitas niat transfer.
 export interface CreateTransferRequest {
   to: string; // EVM address tujuan; address custodial sendiri → 422 VALIDATION_ERROR
   amount: string; // decimal USDX, positif, maks 6 desimal
   pin: string; // PIN 6-digit akun (pin.yaml); berbagi lockout scope `pin`
+  // Kode authenticator 6 digit ATAU backup code (wallet.yaml § CreateTransfer.
+  // twoFactorCode, custodial-wallet.md §6.1, USDX-717). Wajib secara aturan, opsional
+  // di tipe: backend lama membuangnya diam-diam (urutan rilis FE → BE). Retry dengan
+  // Idempotency-Key yang sama boleh membawa kode baru.
+  twoFactorCode?: string;
 }
 
 // POST /api/v2/redeem/{id}/burn-tx body (redeem.yaml redeemV2BurnTx, USDX-259).

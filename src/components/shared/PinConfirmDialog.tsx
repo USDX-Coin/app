@@ -83,6 +83,20 @@ export function PinConfirmDialog({
   const [code, setCode] = useState("");
   const [useBackup, setUseBackup] = useState(false);
   const [touched, setTouched] = useState(false);
+  // Pemanggil juga menutup dialog sendiri (galat Ringkasan) tanpa lewat
+  // handleOpenChange. Saat dibuka lagi kolom kode dikosongkan: kode TOTP yang sudah
+  // menyetujui satu niat tidak berlaku untuk niat lain dan backup code hangus sekali
+  // pakai (§6.1 no.5, redeem.yaml) — mengirimnya ulang hanya membakar satu percobaan
+  // `2fa-stepup`. PIN tetap seperti sebelumnya.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) {
+      setCode("");
+      setUseBackup(false);
+      setTouched(false);
+    }
+  }
 
   const locked = cooldownSeconds > 0;
   const codeLocked = twoFactorCooldownSeconds > 0;

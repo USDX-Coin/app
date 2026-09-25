@@ -51,9 +51,10 @@ export function TransferResult({ result, onAgain }: TransferResultProps) {
             {t("transfer.again")}
           </Button>
           <Button variant="outline" size="lg" asChild>
+            {/* Bukan lagi "Riwayat transfer": riwayat = /history tab Keluar (§5.7, USDX-713). */}
             <Link href={OUTGOING_HISTORY_HREF}>
               <History />
-              {t("transfer.history.link")}
+              {t("transfer.detail.backToHistory")}
             </Link>
           </Button>
         </div>

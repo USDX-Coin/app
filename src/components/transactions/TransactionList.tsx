@@ -21,6 +21,7 @@ import { useCustodialWallet } from "@/hooks/useCustodialWallet";
 import { useRedeemStore } from "@/stores/redeemStore";
 import { getChainById } from "@/lib/chains";
 import { getFailureKey } from "@/lib/api/errors";
+import { isTransferItem } from "@/lib/history-item";
 import {
   formatDateTime,
   formatIDR,
@@ -181,7 +182,8 @@ export function TransactionList() {
   // shared wallet query; a user without a wallet triggers no request and gets no
   // marker. Never a per-row detail call.
   const custodialAddress = useCustodialWallet().address;
-  const rows = data?.data ?? [];
+  // Sementara: baris transfer belum dirender (belum pernah diminta — tab lama saja).
+  const rows = (data?.data ?? []).filter((r): r is ConsumerTransaction => !isTransferItem(r));
   const total = data?.metadata.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);

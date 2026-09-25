@@ -20,8 +20,8 @@
 //   Galat lain (jaringan, 5xx) tetap di-poll supaya tracker pulih sendiri.
 // - Endpoint ini tidak punya 503 (sumbernya DB backend).
 // - Saat status PERTAMA KALI terbaca final, cache daftar riwayat diinvalidasi supaya
-//   badge baris yang sama di /send/history tidak tertinggal ≤ 15 s dari detail
-//   (nit review app#79).
+//   badge baris yang sama di /history tidak tertinggal ≤ 15 s dari detail
+//   (nit review app#79; riwayat terpadu USDX-713).
 
 import { useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -33,7 +33,7 @@ import {
   isWalletTransferNotFound,
 } from "@/lib/api/errors";
 import { isFinalTransferStatus, transferStatusOf } from "@/lib/wallet-transfer";
-import { WALLET_TRANSFERS_KEY } from "@/hooks/useWalletTransfers";
+import { TRANSACTIONS_KEY } from "@/hooks/useTransactions";
 
 export const TRANSFER_POLL_MS = 3_000;
 
@@ -77,7 +77,7 @@ export function useWalletTransferTracker(id: string | null) {
   useEffect(() => {
     if (!id || !status || !isFinalTransferStatus(status) || finalSeenFor.current === id) return;
     finalSeenFor.current = id;
-    void queryClient.invalidateQueries({ queryKey: WALLET_TRANSFERS_KEY });
+    void queryClient.invalidateQueries({ queryKey: TRANSACTIONS_KEY });
   }, [id, status, queryClient]);
 
   return {

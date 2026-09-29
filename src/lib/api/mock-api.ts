@@ -1,6 +1,7 @@
 import type {
   LoginRequest,
   RegisterRequest,
+  TwoFactorCodeRequest,
   VerifyEmailRequest,
   ResetPasswordRequest,
   ChangePasswordRequest,
@@ -18,6 +19,7 @@ import type {
 } from "./types";
 import type {
   AuthResponse,
+  LoginResult,
   RegisterResult,
   KycMyStatus,
   MintOrder,
@@ -34,6 +36,7 @@ import type {
   MintChannelOption,
   MintOrderCreated,
   ConsumerTransaction,
+  HistoryItem,
   VaBank,
   AmountCurrency,
   RedeemOrderCreated,
@@ -44,13 +47,24 @@ import type {
 import {
   MOCK_CONTRACT_ADDRESS,
   MOCK_BLACKLISTED_ADDRESS,
+  MOCK_CUSTODIAL_ADDRESS,
   withCustodialWallet,
   isMockCustodialAddress,
-  requireAndVerifyMockPin,
   requireActiveCustodialWallet,
   mockCustodialBalanceUsdx,
   debitMockCustodialBalance,
+  currentMockUserId,
 } from "./mock-custodial-wallet";
+import { listMockTransferOutHistory } from "./mock-wallet-transfers";
+import { listMockIncomingTransfers } from "./mock-incoming-transfers";
+import { markMockPasswordAuth, requireAndVerifyMockPin } from "./mock-pin";
+import {
+  assertMockOutboundNotLocked,
+  isMockTwoFactorEnabled,
+  startMockTwoFactorChallenge,
+  takeMockTwoFactorLogin,
+  verifyMockStepUpCode,
+} from "./mock-two-factor";
 import { ApiError, type Paginated } from "./client";
 import { validatePassword, validateAddress } from "@/lib/validations";
 import { getBankName } from "@/lib/banks";
@@ -154,7 +168,7 @@ const LOGIN_MAX_ATTEMPTS = 5;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const failedLogins = new Map<string, { count: number; firstAt: number }>();
 
-export async function mockLogin(req: LoginRequest): Promise<AuthResponse> {
+export async function mockLogin(req: LoginRequest): Promise<LoginResult> {
   await delay();
   maybeThrowRateLimitOverride("TOO_MANY_ATTEMPTS");
   const attempts = failedLogins.get(req.email);
@@ -179,8 +193,40 @@ export async function mockLogin(req: LoginRequest): Promise<AuthResponse> {
   if (account.user.suspended) {
     throw new ApiError(403, "ACCOUNT_SUSPENDED", "Your account is suspended");
   }
+  // 2FA aktif (auth.yaml § loginV2, USDX-714): password benar TIDAK menerbitkan
+  // sesi — hanya challenge; `mockVerifyTwoFactorLogin` yang menyelesaikan.
+  if (isMockTwoFactorEnabled()) {
+    startMockTwoFactorChallenge(account.user.email);
+    return { twoFactorRequired: true };
+  }
+  return startMockSession(account);
+}
+
+// Sesi hasil password-auth (login langsung, atau langkah 2 sesudah 2FA): segar 5
+// menit untuk pin.yaml § set (seam mock-pin) + membersihkan lockout `pin`.
+function startMockSession(account: MockAccount): AuthResponse {
   currentEmail = account.user.email;
+  markMockPasswordAuth();
   return { user: withCustodialWallet(account.user), token: tokenFor(account.user) };
+}
+
+// POST /api/v2/auth/2fa/verify-login (two-factor.yaml § verifyLogin, USDX-714):
+// kode TOTP/backup di atas challenge langkah 1 → sesi.
+export async function mockVerifyTwoFactorLogin(req: TwoFactorCodeRequest): Promise<AuthResponse> {
+  const email = await takeMockTwoFactorLogin(req.code);
+  const account = accounts.get(email);
+  if (!account) {
+    throw new ApiError(401, "TWO_FACTOR_CHALLENGE_EXPIRED", "Silakan login ulang.");
+  }
+  return startMockSession(account);
+}
+
+// Password akun yang sedang login — gerbang enable/disable/regenerate 2FA
+// (mock-two-factor tidak memegang akun). Sesi `loginViaStorage` jatuh ke akun demo,
+// sama seperti mockChangePassword.
+export function isMockCurrentPassword(password: string): boolean {
+  const account = currentAccount() ?? accounts.get("demo@usdx.com")!;
+  return account.password === password;
 }
 
 // Backend normalizes 08xxx → +62xxx before the phone_hash uniqueness check
@@ -233,6 +279,10 @@ export async function mockVerifyEmail(req: VerifyEmailRequest): Promise<AuthResp
     accounts.get("demo@usdx.com")!;
   account.user.emailVerifiedAt = new Date().toISOString();
   currentEmail = account.user.email;
+  // Sesi auto-login verifikasi email ikut dihitung segar untuk pin.yaml § set
+  // (keputusan PM 21 Sep 2026): token dari email = bukti yang tak bisa dipicu dari
+  // sesi bocor, dan alur akun baru verifikasi → wallet → PIN tanpa login ulang.
+  markMockPasswordAuth();
   return { user: withCustodialWallet(account.user), token: tokenFor(account.user) };
 }
 
@@ -253,6 +303,7 @@ export async function mockResetPassword(req: ResetPasswordRequest): Promise<Auth
   const account = currentAccount() ?? accounts.get("demo@usdx.com")!;
   account.user.emailVerifiedAt = account.user.emailVerifiedAt ?? new Date().toISOString();
   currentEmail = account.user.email;
+  markMockPasswordAuth();
   return { user: withCustodialWallet(account.user), token: tokenFor(account.user) };
 }
 
@@ -841,12 +892,25 @@ function mintRecordToTransaction(order: MockMintRecord): ConsumerTransaction {
     netPayoutIdr: null, // redeem-only
     effectiveRate: order.effectiveRate,
     chain: order.chain,
+    userAddress: order.userAddress,
     paymentStatus: order.paymentStatus,
     status: order.status,
     txHash: order.onChainTxHash,
     createdAt: order.createdAt,
     updatedAt: order.updatedAt,
   };
+}
+
+// `userAddress` of the seeded history rows (USDX-653). The first row of each type
+// goes to/from the mock custodial wallet, so a user seeded with that wallet sees
+// the "wallet custodial saya" marker; the second mint row stores the same address
+// all lowercase, as `CreateMintOrderV2.userAddress` allows. The rest are an
+// address-book wallet — no marker. A user without a wallet sees no marker at all.
+const MOCK_MANUAL_HISTORY_ADDRESS = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed";
+function seededMintUserAddress(i: number): string {
+  if (i === 0) return MOCK_CUSTODIAL_ADDRESS;
+  if (i === 1) return MOCK_CUSTODIAL_ADDRESS.toLowerCase();
+  return MOCK_MANUAL_HISTORY_ADDRESS;
 }
 
 // A few deterministic completed mint rows so /history (USDX-204) isn't empty in
@@ -866,6 +930,7 @@ function seededTransactions(): ConsumerTransaction[] {
       netPayoutIdr: null,
       effectiveRate: idr(mockEffectiveBuyRate()),
       chain: "polygon",
+      userAddress: seededMintUserAddress(i),
       paymentStatus: "PAID" as const,
       status: "COMPLETED" as const,
       txHash: "0x" + (2_000_000 + i * 7919).toString(16).padStart(64, "0").slice(0, 64),
@@ -875,24 +940,40 @@ function seededTransactions(): ConsumerTransaction[] {
   });
 }
 
+// Riwayat terpadu (USDX-713, transactions.yaml § list): `type` diisi → hanya jenis itu;
+// tanpa `type` + `includeTransfers` → keempat jenis; tanpa keduanya → mint + redeem
+// saja (klien lama). Transfer = milik user sesi (buku besar keluar + masuk).
 export async function mockListConsumerTransactions(
   params: ListTransactionsParams = {},
-): Promise<Paginated<ConsumerTransaction>> {
+): Promise<Paginated<HistoryItem>> {
   await delay(250);
   const page = params.page ?? 1;
   const take = params.take ?? 10;
-  const all = [
+  const withTransfers = params.type
+    ? params.type === "TRANSFER_IN" || params.type === "TRANSFER_OUT"
+    : params.includeTransfers === true;
+  const userId = currentMockUserId();
+  const all: HistoryItem[] = [
     ...[...mintOrders.values()].map(mintRecordToTransaction),
     ...seededTransactions(),
     ...[...redeemOrders.values()].map(redeemRecordToTransaction),
     ...seededRedeemTransactions(),
-  ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    ...(withTransfers
+      ? [...listMockIncomingTransfers(userId), ...listMockTransferOutHistory(userId)]
+      : []),
+  ].sort(newestHistoryFirst);
   const filtered = params.type ? all.filter((t) => t.type === params.type) : all;
   const start = (page - 1) * take;
   return {
     data: filtered.slice(start, start + take),
     metadata: { page, limit: take, total: filtered.length },
   };
+}
+
+// `createdAt` desc, pemecah seri `id` desc (transactions.yaml § list).
+function newestHistoryFirst(a: HistoryItem, b: HistoryItem): number {
+  if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? 1 : -1;
+  return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
 }
 
 // ── Mock W3 consumer: redeem (USDX-243) ─────────────────────────────────────
@@ -1117,11 +1198,14 @@ export async function mockCreateRedeemOrder(
   // Dua jalur burn — `burnMode` ditentukan di sini, dari kecocokan `userAddress`
   // dengan wallet custodial user (redeem.yaml § redeemV2Create). Urutan gate
   // jalur custodial (keputusan review backend#315, sama dengan /wallet/transfer):
-  // validasi bentuk → `pin` wajib (422) → PIN diverifikasi (401/429) →
+  // validasi bentuk → `pin` wajib (422) → PIN diverifikasi (401/429) → kode 2FA
+  // (401/429) → kunci 24 jam (409 CUSTODIAL_OUTBOUND_LOCKED) →
   // 409 WALLET_NOT_ACTIVE — semuanya SEBELUM rate limit / pre-check / inquiry.
   const burnMode: BurnMode = isMockCustodialAddress(req.userAddress) ? "CUSTODIAL" : "SELF_SIGN";
   if (burnMode === "CUSTODIAL") {
     requireAndVerifyMockPin(req.pin);
+    verifyMockStepUpCode(req.twoFactorCode); // 2FA wajib §6.1 (USDX-717)
+    assertMockOutboundNotLocked(); // kunci 24 jam §6.1 no.6
     requireActiveCustodialWallet();
   }
   maybeThrowRateLimited(); // 429 RATE_LIMITED seam (USDX-252)
@@ -1381,7 +1465,7 @@ export async function mockGetRedeemOrder(id: string): Promise<RedeemOrderDetail>
 }
 
 // ── Mock W3: redeem rows in the union history list (USDX-244) ───────────────
-// `GET /v2/transactions` is union mint + redeem. Map any redeem orders created
+// `GET /v2/transactions` unions mint + redeem (+ transfers, USDX-713). Map any redeem orders created
 // this session, plus a few seeded rows (various RedeemStatus) so /history shows
 // redeem in mock dev before the user redeems. REDEEM rows fill grossIdr +
 // netPayoutIdr + status (RedeemStatus); txHash = burn hash.
@@ -1397,6 +1481,7 @@ function redeemRecordToTransaction(record: MockRedeemRecord): ConsumerTransactio
     netPayoutIdr: d.netPayoutIdr,
     effectiveRate: d.effectiveRate,
     chain: d.chain,
+    userAddress: d.userAddress,
     paymentStatus: null, // mint-only
     status: d.status,
     txHash: d.burnTxHash,
@@ -1432,6 +1517,8 @@ function seededRedeemTransactions(): ConsumerTransaction[] {
       netPayoutIdr: idr(net),
       effectiveRate: idr(rate),
       chain: "polygon",
+      // Redeem consumer demands EIP-55 at create, so no lowercase variant here.
+      userAddress: i === 0 ? MOCK_CUSTODIAL_ADDRESS : MOCK_MANUAL_HISTORY_ADDRESS,
       paymentStatus: null,
       status: s.status,
       txHash: s.burned

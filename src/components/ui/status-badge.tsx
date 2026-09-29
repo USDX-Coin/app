@@ -53,6 +53,9 @@ const STATUS_TONE: Record<string, BadgeTone> = {
   PROVISIONING: "warning",
   ACTIVE: "success",
   SUSPENDED: "danger",
+  // Custodial transfer (WalletTransferStatus, USDX-701). PENDING and FAILED are
+  // already listed above with the tones they need (warning / danger).
+  CONFIRMED: "success",
 }
 
 function statusTone(status: string | null | undefined): BadgeTone {

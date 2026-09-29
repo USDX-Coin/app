@@ -1,27 +1,29 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowDown,
   ArrowDownToLine,
   ArrowUpFromLine,
-  ChevronLeft,
-  ChevronRight,
-  Copy,
-  ExternalLink,
   History,
-  MoreHorizontal,
   ServerCrash,
   SlidersHorizontal,
+  Wallet,
   WifiOff,
 } from "lucide-react";
-import { toast } from "sonner";
 import { useTransactions } from "@/hooks/useTransactions";
+import { useCustodialWallet } from "@/hooks/useCustodialWallet";
 import { useRedeemStore } from "@/stores/redeemStore";
 import { getChainById } from "@/lib/chains";
 import { getFailureKey } from "@/lib/api/errors";
-import { formatDateTime, formatIDR, formatTokenAmount, truncateAddress, cn } from "@/lib/utils";
+import { isHistoryItemType, isTransferItem } from "@/lib/history-item";
+import {
+  formatDateTime,
+  formatIDR,
+  isSameAddress,
+  cn,
+} from "@/lib/utils";
 import { useLang } from "@/providers/LanguageProvider";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -33,19 +35,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-} from "@/components/ui/pagination";
 import { StatusBadge } from "@/components/ui/status-badge";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -55,11 +45,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TransactionListSkeleton } from "@/components/transactions/TransactionListSkeleton";
+import { PagePagination } from "@/components/shared/PagePagination";
+import { AmountCell, RowActions, TxHashCell } from "@/components/transactions/HistoryCells";
+import { TransferCard, TransferTableRow } from "@/components/transactions/TransferHistoryRow";
 import type {
   ConsumerOrderType,
   ConsumerTransaction,
+  HistoryItemType,
   MintOrderStatus,
   MintPaymentStatus,
   RedeemStatus,
@@ -117,28 +110,18 @@ function totalValue(tx: ConsumerTransaction): string | null {
   return tx.type === "REDEEM" ? tx.netPayoutIdr : tx.totalPayIdr;
 }
 
-// Block explorer tx link for the order's chain, or null when the chain has no
-// known explorer or the tx hasn't landed on-chain yet (txHash null).
-function explorerTxUrl(chain: string, txHash: string | null): string | null {
-  if (!txHash) return null;
-  const url = getChainById(chain)?.explorerUrl;
-  return url ? `${url}/tx/${txHash}` : null;
+// Filter /history (custodial-wallet.md §5.7, USDX-713): "all" = keempat jenis
+// (`includeTransfers`), selain itu satu `HistoryItemType`. Nilainya sama dengan
+// `?type=` di URL supaya filter bisa ditautkan; nilai URL yang tidak dikenal = "all".
+type HistoryFilter = "all" | HistoryItemType;
+
+function filterFromUrl(value: string | null): HistoryFilter {
+  return isHistoryItemType(value) ? value : "all";
 }
 
-/** Page list with ellipsis: 1 2 3 … 8 9 10 */
-function pageList(current: number, total: number): (number | "…")[] {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-  if (current <= 3) return [1, 2, 3, "…", total - 2, total - 1, total];
-  if (current >= total - 2) return [1, 2, 3, "…", total - 2, total - 1, total];
-  return [1, "…", current - 1, current, current + 1, "…", total];
+function historyUrl(filter: HistoryFilter): string {
+  return filter === "all" ? "/history" : `/history?type=${filter}`;
 }
-
-// UI filter value → API `type` param. Union mint + redeem (USDX-244).
-const typeParam: Record<string, ConsumerOrderType | undefined> = {
-  all: undefined,
-  mint: "MINT",
-  redeem: "REDEEM",
-};
 
 /**
  * B1 — the four outcomes this page can have, and they must never look alike.
@@ -162,8 +145,18 @@ export function TransactionList() {
   const router = useRouter();
   const { t, lang } = useLang();
   const resumeRedeem = useRedeemStore((s) => s.resumeOrder);
-  const [typeFilter, setTypeFilter] = useState("all");
+  const urlFilter = filterFromUrl(useSearchParams().get("type"));
+  const [typeFilter, setTypeFilter] = useState<HistoryFilter>(urlFilter);
   const [page, setPage] = useState(1);
+  // URL berubah (mis. tautan sidebar "/history" saat tab Masuk terbuka) → ikuti URL.
+  // Penanda ini hanya mengikuti URL: klik tab mengubah state dulu lalu URL menyusul,
+  // dan saat URL tiba nilainya sudah sama dengan state (no-op).
+  const [syncedUrlFilter, setSyncedUrlFilter] = useState(urlFilter);
+  if (urlFilter !== syncedUrlFilter) {
+    setSyncedUrlFilter(urlFilter);
+    setTypeFilter(urlFilter);
+    setPage(1);
+  }
 
   // Resume an unburned redeem from history (USDX-259): load it into the tracker
   // and navigate to /redeem. The `?order=` param makes resume deep-linkable and
@@ -173,12 +166,20 @@ export function TransactionList() {
     router.push(`/redeem?order=${id}`);
   }
 
-  const query = useTransactions({
-    page,
-    take: PAGE_SIZE,
-    type: typeParam[typeFilter],
-  });
+  const query = useTransactions(
+    typeFilter === "all"
+      ? { page, take: PAGE_SIZE, includeTransfers: true }
+      : { page, take: PAGE_SIZE, type: typeFilter },
+  );
   const { data, isLoading, isError, error, isFetching, refetch } = query;
+
+  // "Wallet custodial saya" marker (USDX-653, custodial-wallet.md §5.2): the order
+  // has no custodial flag, so the row's `userAddress` is matched against the
+  // user's wallet address, case-insensitively — a mint may store it all
+  // lowercase. The address comes from the profile summary (`/auth/me`) or the
+  // shared wallet query; a user without a wallet triggers no request and gets no
+  // marker. Never a per-row detail call.
+  const custodialAddress = useCustodialWallet().address;
   const rows = data?.data ?? [];
   const total = data?.metadata.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -187,8 +188,11 @@ export function TransactionList() {
 
   // `getFailureKey` is the one place that tells a dead network (fetch rejects
   // with a TypeError, no status) apart from a server that answered badly.
-  const networkDown = isError && getFailureKey(error) === "error.offline";
-  const state: ListState = isError
+  // Penyegaran di latar (15 s selama ada transfer PENDING) yang gagal tidak
+  // menghapus baris yang sudah tampil — error-state hanya bila belum ada data.
+  const failed = isError && !data;
+  const networkDown = failed && getFailureKey(error) === "error.offline";
+  const state: ListState = failed
     ? networkDown
       ? "offline"
       : "error"
@@ -200,18 +204,17 @@ export function TransactionList() {
 
   const typeOptions = [
     { value: "all", label: t("tx.allTransaction") },
-    { value: "mint", label: t("tx.minting") },
-    { value: "redeem", label: t("tx.redeem") },
+    { value: "MINT", label: t("tx.minting") },
+    { value: "REDEEM", label: t("tx.redeem") },
+    { value: "TRANSFER_IN", label: t("tx.transferIn") },
+    { value: "TRANSFER_OUT", label: t("tx.transferOut") },
   ];
 
-  function copy(text: string) {
-    navigator.clipboard.writeText(text);
-    toast.success(t("toast.copied"));
-  }
-
   function changeFilter(next: string) {
-    setTypeFilter(next);
+    const filter = filterFromUrl(next);
+    setTypeFilter(filter);
     setPage(1);
+    router.replace(historyUrl(filter), { scroll: false });
   }
 
   if (isLoading) return <TransactionListSkeleton />;
@@ -227,46 +230,18 @@ export function TransactionList() {
     );
   }
 
-  function AmountCell({ amount }: { amount: string }) {
+  function CustodialMarker({ tx }: { tx: ConsumerTransaction }) {
+    if (!isSameAddress(tx.userAddress, custodialAddress)) return null;
     return (
-      <span className="flex items-center justify-end gap-1.5 tabular-nums text-foreground">
-        <img src="/image/usdx-coin.svg" alt="" className="size-4 rounded-full" />
-        {formatTokenAmount(amount, lang)}
-      </span>
-    );
-  }
-
-  function TxHashCell({ tx }: { tx: ConsumerTransaction }) {
-    const url = explorerTxUrl(tx.chain, tx.txHash);
-    if (!tx.txHash) return <span className="text-muted-text">—</span>;
-    return (
-      <span className="flex items-center gap-1 text-foreground">
-        {url ? (
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary-text underline-offset-4 hover:underline"
-          >
-            {truncateAddress(tx.txHash, 4)}
-          </a>
-        ) : (
-          truncateAddress(tx.txHash, 4)
-        )}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => copy(tx.txHash!)}
-              aria-label={t("common.copy")}
-              className="text-muted-text"
-            >
-              <Copy className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{t("common.copy")}</TooltipContent>
-        </Tooltip>
+      <span
+        data-testid="tx-custodial-marker"
+        className="flex items-center gap-1 text-xs text-muted-text"
+      >
+        <Wallet className="size-3.5 shrink-0" aria-hidden />
+        {/* The mint review's label, word for word (USDX-653: "samakan dengan label
+            tujuan custodial di review mint") — one key, so the two never drift. The
+            row's type (Minting / Redeem) already says destination vs burn source. */}
+        {t("mint.destCustodial")}
       </span>
     );
   }
@@ -280,53 +255,6 @@ export function TransactionList() {
       ? redeemStatusLabelKey[status as RedeemStatus]
       : statusLabelKey[status as BadgeKey];
     return <StatusBadge status={status}>{t(labelKey)}</StatusBadge>;
-  }
-
-  /**
-   * Menu ⋯ per baris (Figma 8). Figma memasang tiga entri: "Lihat detail",
-   * "Buka di explorer", "Salin hash". "Lihat detail" butuh Sheet detail +
-   * Steps timeline yang belum ada di produk, jadi ia TIDAK dirender — entri
-   * menu yang tidak membuka apa pun lebih buruk daripada menu berisi dua.
-   *
-   * Dua entri yang tersisa sama-sama butuh tx hash. Baris yang belum mendarat
-   * on-chain karena itu tidak dapat pemicu sama sekali, bukan tombol yang
-   * membuka menu kosong. Kolomnya tetap ada supaya lebar tabel tidak bergoyang
-   * antar baris.
-   */
-  function RowActions({ tx }: { tx: ConsumerTransaction }) {
-    const url = explorerTxUrl(tx.chain, tx.txHash);
-    if (!tx.txHash) return null;
-    return (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={t("tx.rowActions")}
-            className="text-muted-text"
-          >
-            <MoreHorizontal className="size-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
-          {url && (
-            // `asChild` is stripped by the Animate UI item, so this cannot be an
-            // `<a>`; `noopener` is passed explicitly instead of inherited from
-            // `rel`.
-            <DropdownMenuItem
-              onSelect={() => window.open(url, "_blank", "noopener,noreferrer")}
-            >
-              <ExternalLink />
-              {t("tx.openExplorer")}
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuItem onSelect={() => copy(tx.txHash!)}>
-            <Copy />
-            {t("tx.copyHash")}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    );
   }
 
   function chainLabel(chain: string) {
@@ -436,10 +364,17 @@ export function TransactionList() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map((tx) => (
+              {rows.map((tx) => isTransferItem(tx) ? (
+                <TransferTableRow key={tx.id} item={tx} />
+              ) : (
                 <TableRow key={tx.id}>
                   <TableCell className="text-muted-text">{formatDateTime(tx.createdAt, lang)}</TableCell>
-                  <TableCell><TypeCell type={tx.type} /></TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-0.5">
+                      <TypeCell type={tx.type} />
+                      <CustodialMarker tx={tx} />
+                    </div>
+                  </TableCell>
                   <TableCell className="text-right"><AmountCell amount={tx.amount} /></TableCell>
                   <TableCell className="text-right tabular-nums text-foreground">{idrOrDash(subtotalValue(tx))}</TableCell>
                   {/* Total adalah angka yang benar-benar berpindah tangan —
@@ -447,7 +382,7 @@ export function TransactionList() {
                       dari Subtotal di sebelahnya. */}
                   <TableCell className="text-right font-medium tabular-nums text-foreground">{idrOrDash(totalValue(tx))}</TableCell>
                   <TableCell className="text-foreground">{chainLabel(tx.chain)}</TableCell>
-                  <TableCell><TxHashCell tx={tx} /></TableCell>
+                  <TableCell><TxHashCell chain={tx.chain} txHash={tx.txHash} /></TableCell>
                   <TableCell className="w-[212px]">
                     <div className="flex items-center gap-2">
                       <StatusPill tx={tx} />
@@ -458,7 +393,7 @@ export function TransactionList() {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="w-14 text-right"><RowActions tx={tx} /></TableCell>
+                  <TableCell className="w-14 text-right"><RowActions chain={tx.chain} txHash={tx.txHash} /></TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -467,14 +402,19 @@ export function TransactionList() {
 
         {/* Mobile cards */}
         <div className="flex flex-col gap-3 lg:hidden">
-          {rows.map((tx) => (
+          {rows.map((tx) => isTransferItem(tx) ? (
+            <TransferCard key={tx.id} item={tx} />
+          ) : (
             <div key={tx.id} className="flex flex-col gap-3 rounded-xl border border-border p-4">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-text">{formatDateTime(tx.createdAt, lang)}</span>
                 <StatusPill tx={tx} />
               </div>
               <div className="flex items-center justify-between">
-                <TypeCell type={tx.type} />
+                <div className="flex flex-col gap-0.5">
+                  <TypeCell type={tx.type} />
+                  <CustodialMarker tx={tx} />
+                </div>
                 <AmountCell amount={tx.amount} />
               </div>
               <CardRow label={t("tx.subtotal")} value={idrOrDash(subtotalValue(tx))} />
@@ -482,7 +422,7 @@ export function TransactionList() {
               <CardRow label={t("tx.chain")} value={chainLabel(tx.chain)} />
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-text">{t("tx.txHash")}</span>
-                <TxHashCell tx={tx} />
+                <TxHashCell chain={tx.chain} txHash={tx.txHash} />
               </div>
               {tx.type === "REDEEM" && tx.status === "AWAITING_BURN" && (
                 <Button className="mt-1 w-full" onClick={() => continueBurn(tx.id)}>
@@ -493,46 +433,7 @@ export function TransactionList() {
           ))}
         </div>
 
-        {/* Pagination. `PaginationLink` is an `<a>`, which this page cannot use:
-            the page number lives in component state, not in the URL, and
-            prev/next need a real `disabled` — a disabled anchor does not exist. */}
-        {totalPages > 1 && (
-          <Pagination className="justify-between">
-            <Button
-              variant="outline"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-            >
-              <ChevronLeft /> {t("tx.previous")}
-            </Button>
-            <PaginationContent className="hidden sm:flex">
-              {pageList(currentPage, totalPages).map((p, i) => (
-                <PaginationItem key={p === "…" ? `e${i}` : p}>
-                  {p === "…" ? (
-                    <PaginationEllipsis />
-                  ) : (
-                    <Button
-                      variant={p === currentPage ? "brand" : "ghost"}
-                      size="icon-sm"
-                      className="rounded-full"
-                      aria-current={p === currentPage ? "page" : undefined}
-                      onClick={() => setPage(p)}
-                    >
-                      {p}
-                    </Button>
-                  )}
-                </PaginationItem>
-              ))}
-            </PaginationContent>
-            <Button
-              variant="outline"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-            >
-              {t("tx.next")} <ChevronRight />
-            </Button>
-          </Pagination>
-        )}
+        <PagePagination currentPage={currentPage} totalPages={totalPages} onPageChange={setPage} />
       </>
     );
   }

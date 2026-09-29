@@ -2,16 +2,21 @@ import { describe, test, expect } from "vitest";
 import { ApiError } from "@/lib/api/client";
 import {
   isWalletNotFound,
+  isWalletTransferNotFound,
   isWalletNotActive,
   isWalletServiceUnavailable,
+  isNetworkCongested,
   isInvalidPin,
   isPinNotSet,
   isTooManyAttempts,
+  isReauthRequired,
+  isPinUnchanged,
   isIdempotencyKeyInProgress,
   isIdempotencyKeyReused,
   isRecipientBlacklisted,
   isTransferLimitExceeded,
   getTransferLimitDetails,
+  getReauthPinSet,
 } from "@/lib/api/errors";
 
 // Helper error-code wallet custodial (wallet.yaml § PETA KODE 409, USDX-567).
@@ -21,6 +26,12 @@ describe("errors helpers — wallet custodial", () => {
   describe("positive", () => {
     test("isWalletNotFound matches 404 WALLET_NOT_FOUND", () => {
       expect(isWalletNotFound(new ApiError(404, "WALLET_NOT_FOUND", "x"))).toBe(true);
+    });
+
+    test("isWalletTransferNotFound matches 404 WALLET_TRANSFER_NOT_FOUND (USDX-701)", () => {
+      expect(
+        isWalletTransferNotFound(new ApiError(404, "WALLET_TRANSFER_NOT_FOUND", "x")),
+      ).toBe(true);
     });
 
     test("isWalletNotActive matches 409 WALLET_NOT_ACTIVE", () => {
@@ -33,12 +44,24 @@ describe("errors helpers — wallet custodial", () => {
       ).toBe(true);
     });
 
+    test("isNetworkCongested matches 503 NETWORK_CONGESTED (USDX-709)", () => {
+      expect(isNetworkCongested(new ApiError(503, "NETWORK_CONGESTED", "x"))).toBe(true);
+    });
+
     test("PIN helpers tell INVALID_PIN, PIN_NOT_SET and TOO_MANY_ATTEMPTS apart", () => {
       expect(isInvalidPin(new ApiError(401, "INVALID_PIN", "x"))).toBe(true);
       expect(isPinNotSet(new ApiError(401, "PIN_NOT_SET", "x"))).toBe(true);
       expect(isTooManyAttempts(new ApiError(429, "TOO_MANY_ATTEMPTS", "x"))).toBe(true);
       expect(isInvalidPin(new ApiError(401, "PIN_NOT_SET", "x"))).toBe(false);
       expect(isPinNotSet(new ApiError(401, "INVALID_PIN", "x"))).toBe(false);
+    });
+
+    test("PIN set/change helpers (USDX-651): REAUTH_REQUIRED is a 401 that is not a dead session; PIN_UNCHANGED is a 422 that is not VALIDATION_ERROR", () => {
+      expect(isReauthRequired(new ApiError(401, "REAUTH_REQUIRED", "x"))).toBe(true);
+      expect(isReauthRequired(new ApiError(401, "INVALID_PIN", "x"))).toBe(false);
+      expect(isReauthRequired(new ApiError(401, "UNAUTHORIZED", "x"))).toBe(false);
+      expect(isPinUnchanged(new ApiError(422, "PIN_UNCHANGED", "x"))).toBe(true);
+      expect(isPinUnchanged(new ApiError(422, "VALIDATION_ERROR", "x"))).toBe(false);
     });
 
     test("idempotency helpers branch on code, not status", () => {
@@ -80,12 +103,24 @@ describe("errors helpers — wallet custodial", () => {
       expect(getTransferLimitDetails(new Error("boom"))).toBeNull();
     });
 
+    test("the two 404s are told apart: WALLET_NOT_FOUND ≠ WALLET_TRANSFER_NOT_FOUND", () => {
+      expect(isWalletTransferNotFound(new ApiError(404, "WALLET_NOT_FOUND", "x"))).toBe(false);
+      expect(isWalletNotFound(new ApiError(404, "WALLET_TRANSFER_NOT_FOUND", "x"))).toBe(false);
+    });
+
     test("isTooManyAttempts does not match RATE_LIMITED (throughput throttle)", () => {
       expect(isTooManyAttempts(new ApiError(429, "RATE_LIMITED", "x"))).toBe(false);
     });
 
     test("isInvalidPin does not match a 401 session error", () => {
       expect(isInvalidPin(new ApiError(401, "UNAUTHORIZED", "x"))).toBe(false);
+    });
+
+    test("the two 503s are told apart: NETWORK_CONGESTED ≠ WALLET_SERVICE_UNAVAILABLE", () => {
+      expect(isNetworkCongested(new ApiError(503, "WALLET_SERVICE_UNAVAILABLE", "x"))).toBe(false);
+      expect(isWalletServiceUnavailable(new ApiError(503, "NETWORK_CONGESTED", "x"))).toBe(false);
+      // Same code on another status is not the contract's 503.
+      expect(isNetworkCongested(new ApiError(500, "NETWORK_CONGESTED", "x"))).toBe(false);
     });
   });
 
@@ -107,6 +142,45 @@ describe("errors helpers — wallet custodial", () => {
         resetAt: null,
       });
       expect(getTransferLimitDetails(err)?.resetAt).toBeNull();
+    });
+  });
+});
+
+// `details.pinSet` pada 401 REAUTH_REQUIRED dari POST /auth/pin/set (pin.yaml
+// § set, additive 21 Sep 2026; USDX-697). `false` = akun ber-wallet custodial
+// yang BELUM punya PIN dan sesinya tidak segar; `true` / absen (backend lama) =
+// akun sudah punya PIN. Klien tidak boleh menyimpulkan "sudah punya PIN" dari
+// kode saja.
+describe("getReauthPinSet", () => {
+  describe("positive", () => {
+    test("details.pinSet false → false (no PIN yet, the session is not fresh)", () => {
+      expect(getReauthPinSet(new ApiError(401, "REAUTH_REQUIRED", "x", { pinSet: false }))).toBe(false);
+    });
+
+    test("details.pinSet true → true (the account already has a PIN)", () => {
+      expect(getReauthPinSet(new ApiError(401, "REAUTH_REQUIRED", "x", { pinSet: true }))).toBe(true);
+    });
+  });
+
+  describe("negative", () => {
+    test("anything that is not REAUTH_REQUIRED → null", () => {
+      expect(getReauthPinSet(new ApiError(401, "PIN_NOT_SET", "x", { pinSet: false }))).toBeNull();
+      expect(getReauthPinSet(new ApiError(401, "INVALID_PIN", "x"))).toBeNull();
+      expect(getReauthPinSet(new Error("boom"))).toBeNull();
+      expect(getReauthPinSet(undefined)).toBeNull();
+    });
+  });
+
+  describe("edge case", () => {
+    test("details absent (old backend) → true, as the contract says", () => {
+      expect(getReauthPinSet(new ApiError(401, "REAUTH_REQUIRED", "x"))).toBe(true);
+      expect(getReauthPinSet(new ApiError(401, "REAUTH_REQUIRED", "x", {}))).toBe(true);
+    });
+
+    test("a pinSet that is not a boolean is read as true — only an explicit false means no PIN", () => {
+      expect(getReauthPinSet(new ApiError(401, "REAUTH_REQUIRED", "x", { pinSet: "false" }))).toBe(true);
+      expect(getReauthPinSet(new ApiError(401, "REAUTH_REQUIRED", "x", { pinSet: null }))).toBe(true);
+      expect(getReauthPinSet(new ApiError(401, "REAUTH_REQUIRED", "x", "pinSet"))).toBe(true);
     });
   });
 });

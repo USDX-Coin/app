@@ -1,4 +1,4 @@
-import type { AmountCurrency, ConsumerOrderType, EntityType } from "@/types";
+import type { AmountCurrency, EntityType, HistoryItemType } from "@/types";
 import type {
   AnnualIncomeRange,
   NetWorthRange,
@@ -49,6 +49,53 @@ export interface ChangePasswordRequest {
   currentPassword: string;
   newPassword: string;
   confirmNewPassword: string;
+}
+
+// ── PIN akun (openapi pin.yaml — set / change, USDX-651) ───────────────────
+// Keduanya session-gated; body hanya PIN, user diambil dari sesi. PIN 6 digit
+// numerik (`^[0-9]{6}$`); bentuk salah → 422 VALIDATION_ERROR tanpa membakar
+// attempt lockout `pin`.
+
+// POST /api/v2/auth/pin/set. First-time set (akun belum punya PIN) cukup sesi
+// valid dan `currentPin` diabaikan. Menimpa PIN yang sudah ada butuh re-auth:
+// sesi password-auth segar ATAU `currentPin` benar; keduanya absen → 401
+// REAUTH_REQUIRED. FE memakai endpoint ini hanya untuk first-time set — rotasi
+// PIN lewat `ChangePinRequest`.
+export interface SetPinRequest {
+  pin: string;
+  currentPin?: string;
+}
+
+// POST /api/v2/auth/pin/change — rotasi PIN, gated PIN lama (lockout scope `pin`
+// bersama transfer/redeem). `newPin` WAJIB beda dari `currentPin` (422 PIN_UNCHANGED).
+export interface ChangePinRequest {
+  currentPin: string;
+  newPin: string;
+}
+
+// ── 2FA TOTP (openapi two-factor.yaml, USDX-714) ───────────────────────────
+// Field `code` di semua body di bawah = rahasia (TOTP / backup code / OTP email):
+// tidak pernah dicatat di log / analytics klien (custodial-wallet.md §6.1 "Log").
+
+// POST /api/v2/auth/2fa/enable dan /backup-codes/regenerate — password-gated.
+export interface TwoFactorPasswordRequest {
+  password: string;
+}
+
+// POST /api/v2/auth/2fa/verify (finalisasi enroll, TOTP 6 digit) dan
+// /verify-login (TOTP atau backup code).
+export interface TwoFactorCodeRequest {
+  code: string;
+}
+
+// POST /api/v2/auth/2fa/disable — konfirmasi SALAH SATU: password ATAU kode TOTP
+// (either/or, keputusan PM — tidak diperketat).
+export type DisableTwoFactorRequest = { password: string } | { code: string };
+
+// POST /api/v2/auth/2fa/recovery/email — tanpa `code` = kirim OTP ke email;
+// dengan `code` = verifikasi OTP → 2FA dimatikan (tanpa token; login ulang).
+export interface TwoFactorRecoveryRequest {
+  code?: string;
 }
 
 // ── KYC (openapi kyc.yaml — consumer) ──────────────────────────────────────
@@ -201,6 +248,10 @@ export interface CreateRedeemOrderRequest {
   // ada layar tanda tangan wallet. Diabaikan backend di jalur SELF_SIGN; FE tidak
   // mengirimkannya di sana (field dihilangkan dari body).
   pin?: string;
+  // Jalur CUSTODIAL saja, bersama `pin` (redeem.yaml § CreateRedeemOrder.twoFactorCode,
+  // custodial-wallet.md §6.1, USDX-717): kode authenticator 6 digit ATAU backup code.
+  // Tidak ada idempotency key di endpoint ini — satu kode TOTP menyetujui satu order.
+  twoFactorCode?: string;
 }
 
 // ── Gelombang 1 Custodial Wallet — transfer (USDX-567) ───────────────────────
@@ -208,12 +259,17 @@ export interface CreateRedeemOrderRequest {
 // `chain` (Polygon-only, wallet custodial hanya ada di satu chain) dan tidak ada
 // `amountCurrency` (transfer memindahkan token, bukan menjual/membeli). Header
 // `Idempotency-Key` WAJIB dan dibawa terpisah oleh `transferCustodial` — bukan
-// bagian body. "Body sama" untuk replay = `to` + `amount`; `pin` bukan identitas
-// niat transfer.
+// bagian body. "Body sama" untuk replay = `to` + `amount`; `pin` dan
+// `twoFactorCode` bukan identitas niat transfer.
 export interface CreateTransferRequest {
   to: string; // EVM address tujuan; address custodial sendiri → 422 VALIDATION_ERROR
   amount: string; // decimal USDX, positif, maks 6 desimal
   pin: string; // PIN 6-digit akun (pin.yaml); berbagi lockout scope `pin`
+  // Kode authenticator 6 digit ATAU backup code (wallet.yaml § CreateTransfer.
+  // twoFactorCode, custodial-wallet.md §6.1, USDX-717). Wajib secara aturan, opsional
+  // di tipe: backend lama membuangnya diam-diam (urutan rilis FE → BE). Retry dengan
+  // Idempotency-Key yang sama boleh membawa kode baru.
+  twoFactorCode?: string;
 }
 
 // POST /api/v2/redeem/{id}/burn-tx body (redeem.yaml redeemV2BurnTx, USDX-259).
@@ -235,5 +291,10 @@ export interface CreateBankAccountRequest {
 export interface ListTransactionsParams {
   page?: number;
   take?: number; // 1..50, default 10
-  type?: ConsumerOrderType; // W2 effective MINT
+  // Satu jenis saja (transactions.yaml § list). Diisi → `includeTransfers` diabaikan.
+  type?: HistoryItemType;
+  // Hanya berlaku tanpa `type`: true → transfer masuk/keluar ikut digabung (tab
+  // "Semua"). Kosong = mint + redeem saja, perilaku lama (USDX-713).
+  includeTransfers?: boolean;
 }
+

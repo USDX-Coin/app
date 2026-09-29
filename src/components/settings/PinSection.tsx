@@ -1,0 +1,78 @@
+"use client";
+
+// Baris "PIN transaksi" di kartu Akun halaman Pengaturan (USDX-651). Rumah
+// utama untuk membuat dan mengubah PIN akun — PIN yang menyetujui transfer dan
+// redeem custodial (pin.yaml). Status dibaca dari salinan profil `user.pinSet`
+// (users.yaml § User): `true` → "Ubah PIN" (PinChangeDialog); `false`, atau sesi
+// lama yang belum membawa field-nya, → "Buat PIN" (PinSetupDialog — kalau akun
+// ternyata sudah punya, backend menjawab REAUTH_REQUIRED dan barisnya berbalik
+// ke "Ubah PIN" lewat koreksi salinan di usePin).
+//
+// Juga layar tujuan tombol "Login ulang" di dialog Buat PIN (USDX-697,
+// custodial-wallet.md §5.1): sesudah login, penanda `create-pin` diambil di sini
+// dan dialog Buat PIN langsung terbuka — sesinya segar, jendela 5 menit berjalan.
+// Penanda `forgot-pin` (jalur lupa-PIN, USDX-696) membuka varian "Buat PIN baru"
+// — justru saat akun SUDAH punya PIN: menimpanya tanpa PIN lama adalah niatnya.
+
+import { useEffect, useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { PinSetupDialog } from "@/components/shared/PinSetupDialog";
+import { PinChangeDialog } from "@/components/shared/PinChangeDialog";
+import { usePin } from "@/hooks/usePin";
+import { takeReloginIntent } from "@/lib/auth/relogin-intent";
+import { useLang } from "@/providers/LanguageProvider";
+
+export function PinSection() {
+  const { t } = useLang();
+  const { pinSet } = usePin();
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [changeOpen, setChangeOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+
+  // Sekali saat mount. Penanda selalu dibuang; dialog hanya dibuka bila akun
+  // memang belum punya PIN — kalau sudah, "Buat PIN" di sesi segar justru menimpa
+  // PIN yang ada (jalur lupa-PIN, bukan niat user ini).
+  useEffect(() => {
+    // Penanda hidup di sessionStorage — tidak terbaca saat render server, jadi
+    // dialognya dibuka sesudah hidrasi.
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (takeReloginIntent("forgot-pin")) setResetOpen(true);
+    else if (takeReloginIntent("create-pin") && pinSet !== true) setSetupOpen(true);
+    /* eslint-enable react-hooks/set-state-in-effect */
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sekali per mount, bukan tiap pinSet berubah
+  }, []);
+
+  return (
+    <div
+      data-slot="settings-pin"
+      data-pin-set={pinSet === null ? "unknown" : String(pinSet)}
+      className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between"
+    >
+      <div className="flex min-w-0 flex-col gap-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm font-medium text-foreground">{t("settings.pin.title")}</p>
+          {pinSet !== null && (
+            <Badge tone={pinSet ? "success" : "warning"}>
+              {t(pinSet ? "settings.pin.set" : "settings.pin.notSet")}
+            </Badge>
+          )}
+        </div>
+        <p className="text-sm text-muted-text">{t("settings.pin.desc")}</p>
+      </div>
+      {pinSet ? (
+        <Button variant="outline" className="shrink-0" onClick={() => setChangeOpen(true)}>
+          {t("settings.pin.change")}
+        </Button>
+      ) : (
+        <Button variant="brand" className="shrink-0" onClick={() => setSetupOpen(true)}>
+          {t("settings.pin.create")}
+        </Button>
+      )}
+
+      <PinSetupDialog open={setupOpen} onOpenChange={setSetupOpen} />
+      <PinChangeDialog open={changeOpen} onOpenChange={setChangeOpen} />
+      <PinSetupDialog variant="reset" open={resetOpen} onOpenChange={setResetOpen} />
+    </div>
+  );
+}

@@ -5,9 +5,14 @@ vi.mock("@/lib/env", () => ({
   env: { apiBaseUrl: "", useMock: false },
 }));
 
-import { createCustodialWallet, getCustodialWallet, transferCustodial } from "@/lib/api/wallet-api";
+import {
+  createCustodialWallet,
+  getCustodialWallet,
+  getWalletTransfer,
+  transferCustodial,
+} from "@/lib/api/wallet-api";
 import { configureApiClient } from "@/lib/api/client";
-import type { CustodialWallet, TransferAccepted } from "@/types";
+import type { CustodialWallet, TransferAccepted, WalletTransfer } from "@/types";
 
 function jsonResponse(status: number, payload: unknown): Response {
   return {
@@ -201,6 +206,7 @@ describe("transferCustodial", () => {
   const req = { to: "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed", amount: "25.00", pin: "123456" };
   const KEY = "0193abcd-2c4d-7abc-91ff-9a7fcd0d2bf1";
   const ACCEPTED: TransferAccepted = {
+    id: "0193abce-11aa-7bcd-8e01-5c2f0a9d4e77",
     txHash: "0x" + "ab".repeat(32),
     from: ACTIVE.address!,
     to: req.to,
@@ -224,6 +230,12 @@ describe("transferCustodial", () => {
       expect(JSON.parse(init.body)).toEqual(req);
     });
 
+    test("twoFactorCode travels in the body next to the PIN (USDX-717)", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse(202, { status: "success", data: ACCEPTED }));
+      await transferCustodial({ ...req, twoFactorCode: "492817" }, KEY);
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ ...req, twoFactorCode: "492817" });
+    });
+
     test("a 200 replay unwraps to the same shape as a 202", async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse(200, { status: "success", data: ACCEPTED }));
       await expect(transferCustodial(req, KEY)).resolves.toEqual(ACCEPTED);
@@ -236,6 +248,14 @@ describe("transferCustodial", () => {
         jsonResponse(401, { status: "error", error: { code: "INVALID_PIN", message: "PIN salah" } }),
       );
       await expect(transferCustodial(req, KEY)).rejects.toMatchObject({ status: 401, code: "INVALID_PIN" });
+      expect(onUnauthorized).not.toHaveBeenCalled();
+    });
+
+    test("2FA 401s (USDX-717) are inline errors too — no logout", async () => {
+      for (const code of ["TWO_FACTOR_SETUP_REQUIRED", "TWO_FACTOR_CODE_REQUIRED", "INVALID_TWO_FACTOR_CODE"]) {
+        fetchMock.mockResolvedValueOnce(jsonResponse(401, { status: "error", error: { code, message: "x" } }));
+        await expect(transferCustodial({ ...req, twoFactorCode: "000000" }, KEY)).rejects.toMatchObject({ code });
+      }
       expect(onUnauthorized).not.toHaveBeenCalled();
     });
 
@@ -265,6 +285,72 @@ describe("transferCustodial", () => {
         code: "TOO_MANY_ATTEMPTS",
         retryAfterSeconds: 900,
       });
+    });
+  });
+});
+
+// GET /api/v2/wallet/transfers/{id} (USDX-701, wallet.yaml § transfers / transfer-detail).
+describe("getWalletTransfer", () => {
+  const TRANSFER: WalletTransfer = {
+    id: "0193abce-11aa-7bcd-8e01-5c2f0a9d4e77",
+    txHash: "0x" + "ab".repeat(32),
+    from: ACTIVE.address!,
+    to: "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed",
+    amount: "25.000000",
+    amountWei: "25000000",
+    chain: "polygon",
+    status: "CONFIRMED",
+    failureReason: null,
+    blockNumber: 76543210,
+    submittedAt: "2026-08-28T04:20:11.000Z",
+    finalizedAt: "2026-08-28T04:21:40.000Z",
+  };
+
+  describe("positive", () => {
+    test("detail GETs /api/v2/wallet/transfers/{id} and unwraps the envelope", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse(200, { status: "success", data: TRANSFER }));
+
+      await expect(getWalletTransfer(TRANSFER.id)).resolves.toEqual(TRANSFER);
+      expect(fetchMock.mock.calls[0][0]).toBe(`/api/v2/wallet/transfers/${TRANSFER.id}`);
+    });
+  });
+
+  describe("negative", () => {
+    test("detail 404 WALLET_TRANSFER_NOT_FOUND is thrown to the caller, not swallowed", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(404, {
+          status: "error",
+          error: { code: "WALLET_TRANSFER_NOT_FOUND", message: "Transfer tidak ditemukan" },
+        }),
+      );
+
+      await expect(getWalletTransfer(TRANSFER.id)).rejects.toMatchObject({
+        status: 404,
+        code: "WALLET_TRANSFER_NOT_FOUND",
+      });
+    });
+
+    test("429 RATE_LIMITED carries Retry-After for the tracker backoff", async () => {
+      const res = jsonResponse(429, { status: "error", error: { code: "RATE_LIMITED", message: "x" } });
+      (res.headers as Headers).set("Retry-After", "3");
+      fetchMock.mockResolvedValueOnce(res);
+
+      await expect(getWalletTransfer(TRANSFER.id)).rejects.toMatchObject({
+        status: 429,
+        code: "RATE_LIMITED",
+        retryAfterSeconds: 3,
+      });
+    });
+  });
+
+  describe("edge case", () => {
+
+    test("the id is URL-encoded — a stale value can never rewrite the path", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse(200, { status: "success", data: TRANSFER }));
+
+      await getWalletTransfer("../wallet");
+
+      expect(fetchMock.mock.calls[0][0]).toBe("/api/v2/wallet/transfers/..%2Fwallet");
     });
   });
 });

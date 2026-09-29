@@ -20,6 +20,11 @@ export interface User {
   // → arahkan user membuat PIN dulu, jangan buka dialog PIN yang pasti gagal.
   // Opsional: sesi yang di-persist sebelum field ini ada tidak membawanya.
   pinSet?: boolean;
+  // 2FA TOTP aktif di akun (users.yaml § User.twoFactorEnabled, USDX-314). WAJIB
+  // untuk transfer & redeem custodial (custodial-wallet.md §6.1). Salinan di klien
+  // dikoreksi seketika sesudah aktivasi/matikan (`useProfileCorrection`) supaya
+  // layar uang tidak membaca status basi. Opsional: sesi lama tidak membawanya.
+  twoFactorEnabled?: boolean;
   // Wallet custodial user (users.yaml § User → `custodialWallet`, USDX-607/566).
   // `null` = user tidak punya (mayoritas non-custodial). Ini yang menentukan
   // routing: tawarkan "dikasih wallet" atau tampilkan saldo — TANPA memanggil
@@ -61,13 +66,21 @@ export interface CustodialWallet extends CustodialWalletSummary {
   balanceWei: string | null; // uint256 string; null bersama `balance`
   balanceAt: string | null; // waktu pembacaan; null bersama `balance`
   createdAt: string; // permintaan diterima, bukan waktu ACTIVE
+  // Terisi selama transfer & redeem custodial DITAHAN karena faktor kedua akun baru
+  // dimatikan atau diganti (< 24 jam — wallet.yaml § CustodialWallet.outboundLockedUntil,
+  // custodial-wallet.md §6.1 no.6, USDX-717). Null = tidak terkunci (termasuk kunci
+  // yang sudah lewat). Opsional: backend sebelum USDX-718 tidak mengirimnya.
+  outboundLockedUntil?: string | null;
 }
 
 // POST /api/v2/wallet/transfer → 202 (wallet.yaml § TransferAccepted). **Bukti
 // BROADCAST, bukan bukti settle**: tx sudah di mempool, konfirmasi on-chain terjadi
-// setelahnya dan belum ada endpoint pemantaunya di gelombang 1 (USDX-577). UI
-// menampilkan tx hash + tautan explorer, tidak boleh mengklaim "berhasil".
+// setelahnya dan dipantau lewat `GET /api/v2/wallet/transfers/{id}` memakai `id`
+// (amandemen 22 Sep 2026, USDX-701). UI tidak boleh mengklaim "berhasil" di sini.
 export interface TransferAccepted {
+  // Kunci tracker `GET /api/v2/wallet/transfers/{id}`. Replay (200) dengan key yang
+  // sama mengembalikan id yang SAMA — satu niat transfer = satu tracker.
+  id: string;
   txHash: string; // 0x-prefixed, 66 chars
   from: string; // address custodial pengirim (echo)
   to: string;
@@ -76,6 +89,34 @@ export interface TransferAccepted {
   chain: string;
   // Waktu broadcast. Pada replay idempotency ini tetap waktu broadcast ASLI.
   submittedAt: string;
+}
+
+// Status on-chain transfer yang sudah di-broadcast (wallet.yaml § WalletTransferStatus,
+// USDX-701). Diputuskan watcher receipt backend. Enum boleh bertambah — FE WAJIB punya
+// cabang default: nilai tak dikenal diperlakukan PENDING (`lib/wallet-transfer.ts`).
+export type WalletTransferStatus = "PENDING" | "CONFIRMED" | "FAILED";
+// Sebab FAILED (hanya terisi saat FAILED). Keduanya = USDX tidak berpindah, aman
+// mengirim ulang sebagai niat baru. Enum bisa bertambah.
+export type WalletTransferFailureReason = "REVERTED" | "DROPPED";
+
+// Satu transfer keluar dari wallet custodial (wallet.yaml § WalletTransfer) — item
+// `GET /api/v2/wallet/transfers` dan isi `GET /api/v2/wallet/transfers/{id}`. Field
+// identitas sama persis dengan `TransferAccepted`. `status` / `failureReason` diketik
+// `string` dengan sengaja: nilai di luar enum bisa datang dari backend yang lebih
+// baru, dan hanya `lib/wallet-transfer.ts` yang boleh menafsirkannya.
+export interface WalletTransfer {
+  id: string;
+  txHash: string;
+  from: string;
+  to: string;
+  amount: string; // decimal USDX, selalu 6 desimal
+  amountWei: string;
+  chain: string;
+  status: WalletTransferStatus | (string & {});
+  failureReason: WalletTransferFailureReason | (string & {}) | null;
+  blockNumber: number | null; // null sebelum ada receipt, dan untuk DROPPED
+  submittedAt: string;
+  finalizedAt: string | null; // null selama PENDING
 }
 
 // Siapa yang menandatangani burn sebuah redeem order (common.yaml § BurnMode).
@@ -175,6 +216,22 @@ export interface BankAccount {
 export interface AuthResponse {
   user: User;
   token: string;
+}
+
+// Login langkah 1 pada akun ber-2FA (auth.yaml § loginV2): 200 TANPA token —
+// BUKAN login sukses. Token baru terbit di `POST /auth/2fa/verify-login`.
+export interface TwoFactorRequired {
+  twoFactorRequired: true;
+}
+
+export type LoginResult = AuthResponse | TwoFactorRequired;
+
+// POST /api/v2/auth/2fa/enable (two-factor.yaml § TwoFactorEnroll). `totpUri` =
+// otpauth:// untuk QR — dirender LOKAL, tidak pernah dikirim ke layanan pihak
+// ketiga. `backupCodes` sekali pakai, ditampilkan SEKALI.
+export interface TwoFactorEnrollment {
+  totpUri: string;
+  backupCodes: string[];
 }
 
 // Result of POST /api/v2/auth/register — no session issued (user must verify email first).
@@ -491,9 +548,43 @@ export interface ConsumerTransaction {
   netPayoutIdr: string | null; // REDEEM: IDR received (gross − fee). Null for mint.
   effectiveRate: string; // snapshot rate (buy for mint, sell for redeem)
   chain: string;
+  // MINT: mint destination; REDEEM: burn source (USDX-645). Stored as created —
+  // casing is not guaranteed (a mint can be all lowercase), so compare
+  // case-insensitively (USDX-653, custodial-wallet.md §5.2).
+  userAddress: string;
   paymentStatus: MintPaymentStatus | null; // MINT only. Null for redeem.
   status: MintOrderStatus | RedeemStatus; // MINT → MintOrderStatus; REDEEM → RedeemStatus
   txHash: string | null; // MINT: on-chain tx. REDEEM: burn tx.
   createdAt: string;
   updatedAt: string;
 }
+
+// Jenis baris riwayat terpadu `GET /api/v2/transactions` (common.yaml § HistoryItemType,
+// custodial-wallet.md §5.7, USDX-713). Sengaja BUKAN perluasan `ConsumerOrderType`:
+// transfer bukan order (pelajaran USDX-464). Enum bisa bertambah — baris ber-`type`
+// tak dikenal dilewati di `lib/history-item.ts`, tidak membuat halaman crash.
+export type HistoryItemType = ConsumerOrderType | "TRANSFER_IN" | "TRANSFER_OUT";
+
+// transactions.yaml § TransferHistoryItem — satu transfer USDX wallet custodial di
+// riwayat terpadu. `counterpartyAddress` = PENGIRIM untuk TRANSFER_IN, TUJUAN untuk
+// TRANSFER_OUT (alamat saja, tidak pernah nama user lain). `status`/`failureReason`
+// diketik longgar seperti `WalletTransfer`: hanya `lib/wallet-transfer.ts` yang
+// menafsirkannya (nilai tak dikenal = PENDING).
+export interface TransferHistoryItem {
+  id: string; // TRANSFER_OUT = WalletTransfer.id (detail /send/history/[id])
+  type: "TRANSFER_IN" | "TRANSFER_OUT";
+  amount: string; // decimal USDX, selalu 6 desimal
+  amountWei: string;
+  chain: string;
+  userAddress: string; // wallet custodial milik user (informasi saja)
+  counterpartyAddress: string;
+  txHash: string;
+  status: WalletTransferStatus | (string & {});
+  failureReason: WalletTransferFailureReason | (string & {}) | null;
+  blockNumber: number | null;
+  createdAt: string; // OUT = submittedAt; IN = stempel waktu blok
+  updatedAt: string;
+}
+
+// Satu baris /history: order (mint/redeem) atau transfer.
+export type HistoryItem = ConsumerTransaction | TransferHistoryItem;

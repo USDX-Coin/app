@@ -68,17 +68,17 @@ src/
     (dashboard)/    # Mint, redeem, transactions, profile (SC pages + Client wrappers)
   components/
     auth/           # LoginForm, RegisterForm, ForgotPasswordForm (Client)
-    shared/         # ChainSelector (cross-feature, memo-wrapped)
+    shared/         # Cross-feature: PageHeader, PinConfirmDialog (PIN + authenticator code, USDX-717) + PinField + PinSetupDialog/PinChangeDialog/PinNotSetNotice/ForgotPinLink (PIN, USDX-567/651/696), TwoFactorCodeField/TwoFactorSetupNotice (USDX-714), StepUpNotices/OutboundLockNotice (USDX-717)
     layout/         # AuthLayout, Header, Sidebar, Logo
     mint/           # MintForm, MintReview, MintPageContent, skeletons
     redeem/         # RedeemForm, RedeemReview, RedeemPageContent, skeletons
     wallet/         # Custodial wallet (USDX-566): offer, status panel, receive address + QR, sidebar card, onboarding step
-    settings/       # SettingsPageContent (Pengaturan — home of the custodial wallet)
-    transfer/       # Custodial transfer: TransferForm, TransferReview, TransferResult, TransferPageContent (USDX-567)
-    transactions/   # TransactionList, skeletons
+    settings/       # SettingsPageContent (Pengaturan — home of the custodial wallet) + PinSection (transaction PIN, USDX-651) + TwoFactorSection (2FA, USDX-714)
+    transfer/       # Custodial transfer: TransferForm, TransferReview, TransferResult (tracker), TransferPageContent (USDX-567); TransferStatusPanel/Badge, TransferDetail (USDX-701)
+    transactions/   # TransactionList (unified /history, USDX-713), TransferHistoryRow, HistoryCells, skeletons
     profile/        # ProfileCard, skeleton
     ui/             # shadcn/ui base components (auto-generated)
-  hooks/            # Custom hooks (useAuth, useMint, useRedeem, useCustodialWallet, useTransfer, etc.)
+  hooks/            # Custom hooks (useAuth, useMint, useRedeem, useCustodialWallet, useTransfer, usePin, etc.)
   stores/           # Zustand stores (authStore, mintStore, redeemStore, transferStore)
   lib/              # Utilities, validations, constants, chains (7 EVM), mock API
   providers/
@@ -170,10 +170,20 @@ Mint and Redeem keep their state in Zustand stores; the Ringkasan is a modal:
   or external (the unchanged self-sign path). `burnMode` is decided by the backend, never
   sent by the FE (`redeem.yaml`, USDX-565/567)
 - Transfer (custodial only, `/send`): `form` → Ringkasan modal → `PinConfirmDialog` →
-  `POST /api/v2/wallet/transfer` → `done` (tx hash + explorer link). 202 is proof of
-  BROADCAST, not settlement — the screen never says "berhasil" (USDX-577), and there is
-  no transfer history yet (USDX-576). `Idempotency-Key` (UUID v7) is minted once per
-  intent by `transferStore` and reused by every retry; `setTo`/`setAmount` drop it
+  `POST /api/v2/wallet/transfer` → `done` = confirmation tracker (USDX-701). 202 is proof
+  of BROADCAST, not settlement: the tracker starts at "Terkirim, menunggu konfirmasi" +
+  explorer link and polls `GET /api/v2/wallet/transfers/{id}` (`TransferAccepted.id`)
+  every 3 s via `hooks/useWalletTransferTracker` until CONFIRMED ("Berhasil") or FAILED
+  ("Gagal — USDX tidak berpindah, aman kirim ulang"); it stops at a final status and on
+  unmount, backs off to `Retry-After` on 429, and NEVER infers failure from age. Unknown
+  `status` values read as PENDING (`lib/wallet-transfer.ts`). History: the transfer is a
+  row of `/history` (tab "Keluar", USDX-713); `/send/history/[id]` = the same tracker
+  (404/422 = neutral "not found" + back to `/history?type=TRANSFER_OUT`). `Idempotency-Key` (UUID v7) is minted once per
+  intent by `transferStore` and reused by every retry; `setTo`/`setAmount` drop it.
+  The two `503`s get their own Ringkasan sentence: `WALLET_SERVICE_UNAVAILABLE`
+  ("Layanan wallet sedang tidak tersedia…") vs `NETWORK_CONGESTED` (fees above the
+  safety ceiling → "Jaringan blockchain sedang padat. Saldo Anda aman…", no gas/POL/fee
+  words, USDX-709); both keep the key, since both are safe to retry with the same one
 
 Step state lives in Zustand stores. Form data preserved when going back.
 
@@ -218,27 +228,29 @@ describe('functionOrPage') →
 
 - **Unit tests**: hooks, stores, API, validations, utils, chains
 - **Integration tests**: page interactions + responsive (mobile/tablet/desktop)
-- **E2E tests**: auth flow, mint flow, redeem flows, address book, QR scan, rate limit
+- **E2E tests**: auth flow, mint flow, redeem flows, address book, QR scan, rate limit, custodial transfer/redeem (tracker to CONFIRMED/FAILED + row in /history, USDX-701/713), unified history refresh (USDX-713), PIN created from the money paths, 2FA login + email recovery (USDX-714), 2FA code on custodial transfer/redeem + activation card + 24-hour lock banner (USDX-717)
 
 Test helpers in `tests/helpers/`:
-- `test-utils.tsx`: QueryClient wrapper for renderHook
+- `test-utils.tsx`: QueryClient wrapper for renderHook (`createWrapper`, gcTime 0; `createCachingWrapper` keeps the cache across unmounts like the app)
 - `playwright-utils.ts`: loginViaStorage, clearAuth, VIEWPORTS
 
 ## Route Structure
 
 | Route | Auth | Type | Description |
 |-------|------|------|-------------|
-| `/login` | No | SC | Email/password login |
+| `/login` | No | SC | Email/password login; on a 2FA account the form is replaced by the code screen (authenticator code or backup code → `2fa/verify-login`) with "Can't access your authenticator?" → email recovery (USDX-714, auth.yaml § loginV2) |
 | `/register` | No | SC | Create account |
 | `/forgot-password` | No | SC | Password reset |
 | `/mint` | Yes | SC | Mint USDX (default dashboard) |
 | `/redeem` | Yes | SC | Redeem USDX to bank |
-| `/history` | Yes | SC | Transaction history (mint + redeem, W3) |
+| `/history` | Yes | SC | Unified history (USDX-713, `custodial-wallet.md` §5.7): tabs Semua · Minting · Redeem · Masuk · Keluar over `GET /api/v2/transactions` (Semua = `includeTransfers=true`, the rest = `type`), the active tab mirrored in `?type=` (unknown = Semua). Outgoing rows open `/send/history/[id]`; incoming rows show the sender address only + the explorer/copy-hash menu. Refreshes every 15 s while a transfer is PENDING. Mint/redeem rows to/from the user's custodial wallet carry the mint review's "Wallet custodial saya" marker — `TransactionItem.userAddress` matched case-insensitively, no per-row detail call (USDX-653); transfer rows never do |
 | `/profile` | Yes | SC | User info + verification badge |
-| `/settings` | Yes | SC | Pengaturan: custodial "USDX wallet" (offer with a "Segera hadir" pill instead of a create button / address + QR + balance / status) + link to Profile (USDX-566; pill: `custodial-wallet.md` §1 amandemen 14 Sep 2026) |
-| `/onboarding/wallet` | Yes | SC | "Dikasih wallet" step (USDX-566). **No longer reached from verify-email** — that redirect is off in every environment (verify-email lands on `/mint`, `custodial-wallet.md` §1 amandemen 14 Sep 2026); only a direct URL opens it. "Not now" → `/mint` |
+| `/settings` | Yes | SC | Pengaturan: custodial "USDX wallet" (offer — the "Buatkan saya wallet" button on builds with `env.walletCreateEnabled` ON = dev + mock, the "Segera hadir" pill everywhere else incl. production, USDX-699 / address + QR + balance / status) + Account card with the transaction PIN (create / change, USDX-651) + link to Profile + Security card ("Keamanan") with 2FA (turn on / off, new backup codes, USDX-714) (USDX-566; switch: `custodial-wallet.md` §1 amandemen 14 Sep + 21 Sep 2026) |
+| `/onboarding/wallet` | Yes | SC | "Dikasih wallet" step (USDX-566). **No longer reached from verify-email** — that redirect is off in every environment (verify-email lands on `/mint`, `custodial-wallet.md` §1 amandemen 14 Sep 2026); only a direct URL opens it. Same offer as Settings (button or pill by `env.walletCreateEnabled`, USDX-699). "Not now" → `/mint` |
 | `/bridge` | Yes | SC | ComingSoon (gated — no bridge backend yet; sidebar teaser) |
 | `/send` | Yes | SC | Custodial transfer (`TransferPageContent`) for users with `user.custodialWallet`; ComingSoon for everyone else (no external-wallet send backend) |
+| `/send/history` | Yes | SC | Redirect → `/history?type=TRANSFER_OUT` (the old USDX-701 list, replaced by USDX-713). No "Transfer history" button on `/send` or `/history` any more |
+| `/send/history/[id]` | Yes | SC | One transfer + confirmation tracker (`TransferDetail`, USDX-701); stale/wrong id → neutral "not found"; "back" → `/history?type=TRANSFER_OUT` |
 
 ## Known Limitations
 
@@ -265,10 +277,59 @@ Test helpers in `tests/helpers/`:
 - **Custodial money paths (USDX-567)** — transfer (`/send`), mint destination
   "wallet custodial saya", redeem source custodial. All three read the wallet through
   `useCustodialWallet` (566) — `isActive`, `address`, `balanceState`, `pinSet`. The PIN
-  is the backend's existing mechanism (`pin.yaml`); the app has **no set-PIN UI yet** —
-  `PIN_NOT_SET` / `user.pinSet === false` shows a "buat PIN dulu" notice and disables the
-  step. Mock: `seedMockCustodialWallet` (unit, `mock-custodial-wallet.ts`) /
-  `seedCustodialWallet(page, { status, balance, …seams })` (Playwright), mock PIN `123456`
+  is the backend's existing mechanism (`pin.yaml`). **Create / change PIN (USDX-651)**:
+  `PinSetupDialog` (`POST /auth/pin/set`) and `PinChangeDialog` (`POST /auth/pin/change`)
+  via `hooks/usePin`, at home in Settings → Account (`PinSection`); `PIN_NOT_SET` /
+  `user.pinSet === false` shows the `PinNotSetNotice` ("buat PIN dulu" + a Create PIN
+  button that opens the set dialog in place) and disables the step. `user.pinSet` in the
+  auth store is the single source the money screens read: `/set` success flips it to
+  `true` at once (no /auth/me wait), `401 PIN_NOT_SET` flips it to `false`, `401
+  REAUTH_REQUIRED` follows `details.pinSet` (absent = true; `false` = log in again, then
+  create the PIN — `hooks/useRelogin` + `lib/auth/relogin-intent` bring the user back to
+  the Create PIN dialog on Settings, USDX-697). **Forgot PIN (USDX-696)**: a "Forgot PIN?"
+  link (`ForgotPinLink`) in `PinConfirmDialog` and `PinChangeDialog`, also while locked out
+  → Log in again with the `forgot-pin` intent → Settings opens `PinSetupDialog
+  variant="reset"` ("Create a new PIN", `/set {pin}` without `currentPin` on the fresh
+  session, even though the account has a PIN); there `REAUTH_REQUIRED` = the 5-minute
+  window passed → log in again (`mapPinError(err, "reset")`, never "use Change PIN") — every
+  correction goes through `hooks/usePinSetCorrection`, which writes the store AND the
+  `["session","me"]` cache so a stale cached /auth/me cannot write the old value back. Mock: `seedMockCustodialWallet` (unit, `mock-custodial-wallet.ts`) /
+  `seedCustodialWallet(page, { status, balance, …seams })` (Playwright); the account PIN
+  is its own seam — `mock-pin.ts`, `seedMockPin(pin | null)` (unit) /
+  `seedAccountPin(page, pin | null)` (Playwright), default PIN `123456`; the backend of
+  USDX-698 (first-time PIN on a wallet account needs a fresh login) is ON by default
+  (698 is live on api-dev; `seedMockStrictPinSet(false)` = the old backend) — a flow that
+  starts right after a login arms `seedFreshPasswordAuth(page)` (Playwright)
+- **2FA TOTP (USDX-714, `custodial-wallet.md` §6.1, `two-factor.yaml`)** — required for money
+  leaving the custodial wallet (enforced by backend USDX-718, which deploys AFTER this web —
+  the old backend drops `twoFactorCode` silently). **Transfer & custodial redeem (USDX-717)**:
+  `PinConfirmDialog` has a "Kode authenticator" field under the PIN ("Pakai backup code"
+  swaps it), sent as `twoFactorCode` in the same body; `/send` and the custodial redeem read
+  `user.twoFactorEnabled` (false → activation card, dialog in place) and GET /wallet
+  `outboundLockedUntil` (→ "ditahan sampai …" banner) BEFORE the form, both disabling the
+  send button (`hooks/useCustodialStepUp`, `shared/StepUpNotices`); `401
+  TWO_FACTOR_SETUP_REQUIRED` / `409 CUSTODIAL_OUTBOUND_LOCKED` land on the same card/banner,
+  `INVALID_TWO_FACTOR_CODE` / `TWO_FACTOR_CODE_REQUIRED` under the code field, `429` picks its
+  sentence from `details.scope` (`2fa-stepup` vs `pin`; absent = PIN). The web can now turn it on/off and regenerate backup codes (Settings → Security)
+  and log in to a 2FA account (`login` → `{ twoFactorRequired }` → code screen →
+  `verify-login`; email recovery). `user.twoFactorEnabled` in the auth store is what screens
+  read; every change goes through `hooks/useProfileCorrection` (store + `/auth/me` cache).
+  Turning 2FA off (button or email recovery) holds custodial transfers & withdrawals for 24
+  hours — both screens say so before the user confirms. Mock: `mock-two-factor.ts`
+  (`seedTwoFactor(page, true)`), codes in `mock-two-factor-fixtures.ts`; the mock enforces
+  718 on transfer/redeem by default (`seedOutboundLock(page, iso)`, `seedLegacyStepUp(page)` =
+  the backend before 718)
+- **Custodial transfer history (USDX-701 → unified /history USDX-713)** — mock outgoing
+  ledger in localStorage (`usdx-mock-wallet-transfers`, `lib/api/mock-wallet-transfers.ts`,
+  the `TRANSFER_OUT` rows of mock `/transactions`) + incoming ledger
+  (`usdx-mock-incoming-transfers`, `lib/api/mock-incoming-transfers.ts`, `TRANSFER_IN`): every mock
+  transfer lands as PENDING and the "receipt watcher" decides it 3.5 s later (seam
+  `transferOutcome` on `seedCustodialWallet`: `CONFIRMED` default, `REVERTED`, `DROPPED`,
+  `PENDING` = stuck forever, anything else = a status the FE does not know). Fixtures for
+  the three statuses + two failure reasons: `lib/api/mock-wallet-transfer-fixtures.ts`
+  (types only, so Playwright imports it) — `seedMockWalletTransfers` (unit) /
+  `seedWalletTransfers(page, rows)` (Playwright); incoming: `seedMockIncomingTransfers` /
+  `seedIncomingTransfers(page, rows, { confirmAfterMs })`
 - The `/payment` mock gateway route was deleted (it faked "Payment Successful" with a
   `setTimeout`); the real mint flow uses the cross-origin checkout handoff
 - RainbowKit wallet connection works; the USDX balance is read **on-chain for real**

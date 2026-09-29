@@ -5,7 +5,7 @@ vi.mock("@/lib/env", () => ({
   env: { apiBaseUrl: "", useMock: false },
 }));
 
-import { logout, changePassword } from "@/lib/api/auth-api";
+import { login, logout, changePassword, setPin, changePin } from "@/lib/api/auth-api";
 import { configureApiClient } from "@/lib/api/client";
 
 function jsonResponse(status: number, payload: unknown): Response {
@@ -108,6 +108,160 @@ describe("changePassword", () => {
       });
       // skipUnauthorizedHandler — the session is still valid, so no logout/redirect.
       expect(onUnauthorized).not.toHaveBeenCalled();
+    });
+  });
+});
+
+// PIN akun (pin.yaml § set / change, USDX-651). Both are in-form calls: a 401 is
+// INVALID_PIN / REAUTH_REQUIRED / PIN_NOT_SET, never "session expired", so the
+// global logout handler must stay quiet.
+describe("setPin", () => {
+  describe("positive", () => {
+    test("POSTs /api/v2/auth/pin/set with the bearer token + body (first-time set: no currentPin)", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse(200, { status: "success", data: null }));
+
+      await expect(setPin({ pin: "654321" })).resolves.toBeUndefined();
+
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe("/api/v2/auth/pin/set");
+      expect(init.method).toBe("POST");
+      expect((init.headers as Headers).get("Authorization")).toBe("Bearer session-token");
+      expect(JSON.parse(init.body)).toEqual({ pin: "654321" });
+    });
+  });
+
+  describe("negative", () => {
+    test("401 REAUTH_REQUIRED (overwrite of an existing PIN) rejects WITHOUT firing the global logout handler", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(401, {
+          status: "error",
+          error: { code: "REAUTH_REQUIRED", message: "Re-authentication required" },
+        }),
+      );
+
+      await expect(setPin({ pin: "654321" })).rejects.toMatchObject({
+        status: 401,
+        code: "REAUTH_REQUIRED",
+      });
+      expect(onUnauthorized).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("edge case", () => {
+    test("currentPin, when given, travels in the body as-is", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse(200, { status: "success", data: null }));
+
+      await setPin({ pin: "654321", currentPin: "123456" });
+
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+        pin: "654321",
+        currentPin: "123456",
+      });
+    });
+  });
+});
+
+describe("changePin", () => {
+  const body = { currentPin: "123456", newPin: "654321" };
+
+  describe("positive", () => {
+    test("POSTs /api/v2/auth/pin/change with the bearer token + body", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse(200, { status: "success", data: null }));
+
+      await expect(changePin(body)).resolves.toBeUndefined();
+
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe("/api/v2/auth/pin/change");
+      expect(init.method).toBe("POST");
+      expect((init.headers as Headers).get("Authorization")).toBe("Bearer session-token");
+      expect(JSON.parse(init.body)).toEqual(body);
+    });
+  });
+
+  describe("negative", () => {
+    test("401 INVALID_PIN (wrong current PIN) rejects WITHOUT firing the global logout handler", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(401, {
+          status: "error",
+          error: { code: "INVALID_PIN", message: "PIN salah" },
+        }),
+      );
+
+      await expect(changePin(body)).rejects.toMatchObject({ status: 401, code: "INVALID_PIN" });
+      expect(onUnauthorized).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("edge case", () => {
+    test("429 TOO_MANY_ATTEMPTS carries Retry-After from the body details", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(429, {
+          status: "error",
+          error: {
+            code: "TOO_MANY_ATTEMPTS",
+            message: "x",
+            details: { retryAfterSeconds: 900 },
+          },
+        }),
+      );
+
+      await expect(changePin(body)).rejects.toMatchObject({
+        status: 429,
+        code: "TOO_MANY_ATTEMPTS",
+        retryAfterSeconds: 900,
+      });
+    });
+  });
+});
+
+// Login langkah 1 (auth.yaml § loginV2): akun ber-2FA dibalas 200
+// `{ twoFactorRequired: true }` TANPA token — itu BUKAN login sukses (GAP 22 Sep,
+// USDX-714). Sebelumnya setiap 200 dibaca sebagai AuthTokenV2.
+describe("login", () => {
+  const body = { email: "demo@usdx.com", password: "Demo1234" };
+
+  describe("positive", () => {
+    test("AuthTokenV2 → the session the app stores", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(200, {
+          status: "success",
+          data: { accessToken: "tok", sessionId: "sid", user: { id: "usr_1", email: body.email } },
+        }),
+      );
+
+      await expect(login(body)).resolves.toEqual({
+        token: "tok",
+        user: { id: "usr_1", email: body.email },
+      });
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe("/api/v2/auth/login");
+      expect((init.headers as Headers).get("Authorization")).toBeNull();
+    });
+
+    test("{ twoFactorRequired: true } → the 2FA step, no session", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(200, { status: "success", data: { twoFactorRequired: true } }),
+      );
+
+      await expect(login(body)).resolves.toEqual({ twoFactorRequired: true });
+    });
+  });
+
+  describe("edge case", () => {
+    test("twoFactorRequired other than literal true is not the 2FA branch", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(200, {
+          status: "success",
+          data: {
+            accessToken: "tok",
+            sessionId: "sid",
+            twoFactorRequired: false,
+            user: { id: "usr_1" },
+          },
+        }),
+      );
+
+      await expect(login(body)).resolves.toMatchObject({ token: "tok" });
     });
   });
 });

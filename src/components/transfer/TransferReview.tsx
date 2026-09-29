@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/dialog";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { PinNotSetNotice } from "@/components/shared/PinNotSetNotice";
+import { StepUpNotices } from "@/components/shared/StepUpNotices";
 import { useLang } from "@/providers/LanguageProvider";
 import { formatAmount, truncateAddress } from "@/lib/utils";
 import { getChainById } from "@/lib/chains";
@@ -52,6 +54,12 @@ export function TransferReview({ transfer }: TransferReviewProps) {
     formErrorVars,
     walletBlocked,
     pinNotSet,
+    twoFactorSetupRequired,
+    outboundLockedUntil,
+    // 2FA wajib + kunci 24 jam (custodial-wallet.md §6.1, USDX-717): keduanya bisa
+    // baru ketahuan di sini (401 SETUP_REQUIRED / 409 OUTBOUND_LOCKED menutup dialog
+    // PIN) — kartu/banner yang sama dengan form, dan langkah PIN tidak dibuka.
+    stepUpBlocked,
   } = transfer;
 
   return (
@@ -82,14 +90,17 @@ export function TransferReview({ transfer }: TransferReviewProps) {
           <Alert tone="warning">{t("transfer.note")}</Alert>
 
           {/* Akun tanpa PIN tidak bisa menyetujui apa pun di jalur ini (wallet.yaml
-              401 PIN_NOT_SET → arahkan membuat PIN). Aplikasi belum punya layar
-              set-PIN, jadi yang bisa dilakukan: katakan, dan jangan buka dialog
-              PIN yang pasti gagal. */}
-          {pinNotSet && (
-            <Alert tone="warning" data-testid="transfer-pin-not-set">
-              {t("pin.errNotSet")}
-            </Alert>
-          )}
+              401 PIN_NOT_SET → arahkan membuat PIN). Tombol Buat PIN membuka
+              dialognya di sini juga, tanpa meninggalkan transfer (USDX-651);
+              sampai PIN ada, dialog PIN yang pasti gagal tidak dibuka. */}
+          {pinNotSet && <PinNotSetNotice data-testid="transfer-pin-not-set" />}
+
+          <StepUpNotices
+            setupRequired={twoFactorSetupRequired}
+            lockedUntil={outboundLockedUntil}
+            action="send"
+            testIdPrefix="transfer-review"
+          />
 
           {formErrorKey && (
             <Alert tone="danger" data-testid="transfer-error">
@@ -115,7 +126,7 @@ export function TransferReview({ transfer }: TransferReviewProps) {
             size="lg"
             className="flex-1"
             onClick={openPin}
-            disabled={walletBlocked || pinNotSet}
+            disabled={walletBlocked || pinNotSet || stepUpBlocked}
             loading={isSubmitting}
             loadingLabel={t("common.processing")}
           >

@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { KycGateDialog } from "@/components/kyc/KycGateDialog";
+import { StepUpNotices } from "@/components/shared/StepUpNotices";
 import { BankSelect } from "./BankSelect";
 import { BankAccountPicker, type BankFill } from "./BankAccountPicker";
 import { RedeemReview } from "./RedeemReview";
@@ -138,6 +139,9 @@ export function RedeemForm() {
     custodialAvailable,
     isCustodialSource,
     custodialBalanceState,
+    twoFactorSetupRequired,
+    outboundLockedUntil,
+    stepUpBlocked,
   } = useRedeem();
 
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -313,6 +317,12 @@ export function RedeemForm() {
         )}
       </div>
 
+      <StepUpNotices
+        setupRequired={twoFactorSetupRequired}
+        lockedUntil={outboundLockedUntil}
+        action="redeem"
+        testIdPrefix="redeem"
+      />
       <div className="flex flex-col gap-4">
         {/* Amount boxes with center currency swap (USDX ↔ gross IDR). */}
         <div className="relative flex flex-col gap-2">
@@ -465,7 +475,7 @@ export function RedeemForm() {
         type="button"
         variant="brand"
         size="lg"
-        disabled={gate.verified && !isFormValid}
+        disabled={stepUpBlocked || (gate.verified && !isFormValid)}
         onClick={() => gate.guard(handleRedeem)}
       >
         {t("btn.redeem")}

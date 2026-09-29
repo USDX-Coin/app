@@ -26,10 +26,31 @@
 // dan bagian ini hanya bergantung pada `ApiError` + `USDX_DECIMALS`. mock-api.ts
 // mengimpor `withCustodialWallet` dari sini — arah impor satu jalur, tanpa siklus.
 
-import type { CustodialWallet, CustodialWalletSummary, TransferAccepted, User } from "@/types";
+import type {
+  CustodialWallet,
+  CustodialWalletSummary,
+  TransferAccepted,
+  User,
+  WalletTransfer,
+} from "@/types";
 import type { CreateTransferRequest } from "./types";
 import { ApiError } from "./client";
+import {
+  getMockWalletTransfer,
+  recordMockWalletTransfer,
+  resetMockWalletTransfers,
+  type MockTransferOutcome,
+} from "./mock-wallet-transfers";
+import { isMockPinSet, resetMockPin, verifyMockPin } from "./mock-pin";
+import {
+  assertMockOutboundNotLocked,
+  isMockLegacyStepUp,
+  isMockTwoFactorEnabled,
+  mockOutboundLockedUntil,
+  verifyMockStepUpCode,
+} from "./mock-two-factor";
 import { USDX_DECIMALS } from "@/lib/constants";
+import { uuidv7 } from "@/lib/uuid";
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -59,14 +80,19 @@ export interface MockCustodialState {
   // Seam: PROVISIONING tidak pernah berpindah sampai POST ulang.
   stuck?: boolean;
   // ── Seam USDX-567 (transfer / redeem custodial) ──
-  // Akun belum punya PIN → transfer/redeem custodial → 401 PIN_NOT_SET.
-  pinSet?: boolean;
+  // (PIN akun tidak di sini — lihat `mock-pin.ts`: PIN milik akun, bukan wallet.)
   // Zona kunci mati → transfer → 503 WALLET_SERVICE_UNAVAILABLE.
   serviceDown?: boolean;
+  // Jaringan padat (§5.4) → transfer BERIKUTNYA → 503 NETWORK_CONGESTED, lalu "reda".
+  networkCongested?: boolean;
   // Plafon §6 (kosong = tanpa batas, seperti env backend).
   transferLimit?: { perTx?: string; daily?: string };
   // Transfer pertama tiap key menggantung dulu (409 IN_PROGRESS), lalu selesai.
   slowFirstTransfer?: boolean;
+  // ── Seam USDX-701 (tracker konfirmasi) ──
+  // Keputusan "watcher" untuk transfer BERIKUTNYA (default CONFIRMED). "PENDING" =
+  // macet selamanya; nilai lain = status yang belum dikenal FE (mock-wallet-transfers.ts).
+  transferOutcome?: MockTransferOutcome;
 }
 
 let custodialMemory: MockCustodialState | null = null;
@@ -89,17 +115,18 @@ function writeCustodialState(state: MockCustodialState | null) {
 }
 
 // Dipakai unit test untuk mengembalikan mock ke "user tanpa wallet" (dan
-// membersihkan kunci idempotensi + lockout PIN dari test sebelumnya).
+// membersihkan kunci idempotensi + PIN akun/lockout dari test sebelumnya).
 export function resetMockCustodialWallet() {
   writeCustodialState(null);
   transferRequests.clear();
-  pinFailures = 0;
+  resetMockPin();
+  resetMockWalletTransfers();
   dailyTransferredUsdx = 0;
 }
 
 // Unit test USDX-567: pasang wallet yang SUDAH ada. Tanpa argumen = ACTIVE,
-// saldo 1.000 USDX, PIN sudah diset (onboarding-nya sendiri diuji lewat
-// `mockCreateCustodialWallet`).
+// saldo 1.000 USDX (onboarding-nya sendiri diuji lewat `mockCreateCustodialWallet`;
+// PIN akun diatur terpisah lewat `seedMockPin` di mock-pin.ts).
 export function seedMockCustodialWallet(
   overrides: Partial<MockCustodialState> = {},
 ): MockCustodialState {
@@ -109,11 +136,16 @@ export function seedMockCustodialWallet(
     createdAt: "2026-08-28T04:10:00.000Z",
     activateAt: null,
     balance: "1000.00",
-    pinSet: true,
     ...overrides,
   };
   writeCustodialState(state);
   return state;
+}
+
+// Punya baris di salinan kerja (`custodial_wallet_mirror`), status APA PUN — yang
+// dibaca gerbang first-time set pin.yaml § set (backend USDX-698, seam mock-pin).
+export function hasMockCustodialWallet(): boolean {
+  return readCustodialState() !== null;
 }
 
 // PROVISIONING → ACTIVE berjalan "di latar" (wallet-service), terlihat saat GET.
@@ -144,14 +176,14 @@ function custodialSummary(): CustodialWalletSummary | null {
   return { address: settled.address, status: settled.status };
 }
 
-// `users.yaml § User.custodialWallet` + `pinSet` — ikut terbawa di /auth/me +
-// respons login/verify/reset, null untuk user tanpa wallet.
+// `users.yaml § User.custodialWallet` + `pinSet` + `twoFactorEnabled` (USDX-714) —
+// ikut terbawa di /auth/me + respons login/verify/reset, null untuk user tanpa wallet.
 export function withCustodialWallet(user: User): User {
-  const state = readCustodialState();
   return {
     ...user,
     custodialWallet: custodialSummary(),
-    pinSet: state?.pinSet ?? user.pinSet ?? true,
+    pinSet: isMockPinSet(),
+    twoFactorEnabled: isMockTwoFactorEnabled(),
   };
 }
 
@@ -166,6 +198,8 @@ function toCustodialWallet(state: MockCustodialState): CustodialWallet {
     balanceWei: readable ? String(Math.round(Number(state.balance) * 10 ** USDX_DECIMALS)) : null,
     balanceAt: readable ? new Date().toISOString() : null,
     createdAt: state.createdAt,
+    // §6.1 no.6 (USDX-717); backend lama tidak mengirim field ini sama sekali.
+    ...(isMockLegacyStepUp() ? {} : { outboundLockedUntil: mockOutboundLockedUntil() }),
   };
 }
 
@@ -234,11 +268,6 @@ export async function mockCreateCustodialWallet(): Promise<CustodialWallet> {
 // (422 RECIPIENT_BLACKLISTED), redeem (422 WALLET_BLACKLISTED) dan transfer.
 // Dihosting di sini supaya transfer bisa memakainya tanpa mengimpor mock-api.
 export const MOCK_BLACKLISTED_ADDRESS = "0x000000000000000000000000000000000000dead";
-// PIN akun di mock (pin.yaml: 6 digit, argon2id di backend — di sini plaintext).
-export const MOCK_PIN = "123456";
-// Lockout scope `pin`: 5 salah / 15 menit, dibagi verify/change/transfer/redeem.
-const MOCK_PIN_MAX_ATTEMPTS = 5;
-const MOCK_PIN_LOCKOUT_SECONDS = 15 * 60;
 // Seam `slowFirstTransfer`: transfer pertama sebuah key "masih berjalan" selama ini
 // (409 IDEMPOTENCY_KEY_IN_PROGRESS), lalu selesai — retry dengan key yang SAMA
 // mendapat hasilnya. Meniru dua request identik yang berangkat bersamaan.
@@ -272,7 +301,7 @@ function maybeThrowRateLimited(): void {
 
 // Id user sesi (kunci idempotensi hanya berlaku untuk pemiliknya). Mock hanya
 // punya satu akun demo; sesi yang diseed Playwright dibaca dari `usdx-auth`.
-function currentMockUserId(): string {
+export function currentMockUserId(): string {
   if (typeof localStorage === "undefined") return "usr_1";
   try {
     const raw = localStorage.getItem("usdx-auth");
@@ -280,41 +309,6 @@ function currentMockUserId(): string {
   } catch {
     return "usr_1";
   }
-}
-
-// ── PIN (pin.yaml, mekanisme existing apa adanya) ────────────────────────────
-// Lockout dihitung per page load (modul), seperti `failedLogins` di mock-api.
-// Dipakai transfer dan redeem custodial — satu counter, seperti scope `pin`.
-let pinFailures = 0;
-
-function verifyMockPin(pin: string): void {
-  const state = readCustodialState();
-  if (state?.pinSet === false) {
-    throw new ApiError(401, "PIN_NOT_SET", "Akun belum punya PIN");
-  }
-  if (pinFailures >= MOCK_PIN_MAX_ATTEMPTS) {
-    throw new ApiError(
-      429,
-      "TOO_MANY_ATTEMPTS",
-      "Terlalu banyak percobaan PIN",
-      { retryAfterSeconds: MOCK_PIN_LOCKOUT_SECONDS },
-      MOCK_PIN_LOCKOUT_SECONDS,
-    );
-  }
-  if (pin !== MOCK_PIN) {
-    pinFailures += 1;
-    throw new ApiError(401, "INVALID_PIN", "PIN salah");
-  }
-  pinFailures = 0;
-}
-
-// Jalur redeem custodial (mock-api): bentuk 6 digit dicek DULU (422 tanpa
-// membakar attempt), baru diverifikasi.
-export function requireAndVerifyMockPin(pin: string | undefined): void {
-  if (!pin || !/^[0-9]{6}$/.test(pin)) {
-    throw new ApiError(422, "VALIDATION_ERROR", "PIN harus 6 digit");
-  }
-  verifyMockPin(pin);
 }
 
 // Wallet custodial user yang ACTIVE, atau lempar 409 WALLET_NOT_ACTIVE. Null kalau
@@ -394,8 +388,9 @@ export async function mockTransferCustodial(
     throw new ApiError(422, "VALIDATION_ERROR", "Tidak bisa transfer ke wallet sendiri");
   }
 
-  // 2. PIN (lockout scope `pin`).
+  // 2. PIN (lockout scope `pin`), lalu 2FA (§6.1: lockout scope `2fa-stepup`).
   verifyMockPin(req.pin);
+  verifyMockStepUpCode(req.twoFactorCode);
 
   // 3. Replay / kunci idempotensi — SEBELUM pre-check yang bergantung keadaan
   //    dunia (saldo sudah turun karena transfer pertamanya berhasil).
@@ -419,6 +414,7 @@ export async function mockTransferCustodial(
     }
     if (held.result) return held.result; // replay → hasil identik (200)
   }
+  assertMockOutboundNotLocked(); // kunci 24 jam §6.1 no.6 — SESUDAH replay
 
   // 4. Status salinan kerja → plafon → blacklist → saldo.
   const active = requireActiveCustodialWallet()!;
@@ -457,6 +453,12 @@ export async function mockTransferCustodial(
       "Layanan wallet sedang tidak tersedia, coba lagi sebentar",
     );
   }
+  if (active.networkCongested) {
+    // §5.4/§11: ditolak sebelum tanda tangan, baris REJECTED → kunci dilepas; sekali saja.
+    writeCustodialState({ ...active, networkCongested: false });
+    const msg = "Jaringan blockchain sedang padat, coba lagi beberapa menit lagi";
+    throw new ApiError(503, "NETWORK_CONGESTED", msg);
+  }
 
   // 5. Tulis baris in-flight (menang di "unique index"), lalu "sign & broadcast".
   const settleAt = Date.now() + (active.slowFirstTransfer && !held ? MOCK_TRANSFER_INFLIGHT_MS : 0);
@@ -470,6 +472,7 @@ export async function mockTransferCustodial(
     );
   }
   const result: TransferAccepted = {
+    id: uuidv7(),
     txHash: "0x" + randomHex(32),
     from: active.address!,
     to: req.to,
@@ -479,7 +482,19 @@ export async function mockTransferCustodial(
     submittedAt: new Date().toISOString(),
   };
   row.result = result;
+  // Riwayat (USDX-701): baris PENDING yang diputuskan "watcher" belakangan.
+  recordMockWalletTransfer(result, userId, active.transferOutcome);
   dailyTransferredUsdx += amount;
   if (balance !== null) writeCustodialState({ ...active, balance: idr(balance - amount) });
   return result;
+}
+
+// ── Riwayat & tracker (wallet.yaml § transfers / transfer-detail, USDX-701) ──
+// Buku besarnya di mock-wallet-transfers.ts; di sini hanya pintu yang tahu siapa
+// user sesi + throttle grup `wallet`. Seperti kontrak: tanpa 503 (tidak menyentuh
+// zona kunci). Daftarnya kini lewat /transactions (mock-api, USDX-713).
+export async function mockGetWalletTransfer(id: string): Promise<WalletTransfer> {
+  await delay(150);
+  maybeThrowRateLimited();
+  return getMockWalletTransfer(currentMockUserId(), id);
 }

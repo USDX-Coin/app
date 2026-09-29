@@ -19,6 +19,9 @@
 //   (wallet pre-check) / VALIDATION_ERROR (incl. net < Rp 10.000 / bad txHash)
 // - 409 INVALID_ORDER_STATE (burn-tx on a non-AWAITING_BURN/EXPIRED order)
 // - 429 RATE_LIMITED · 503 REDEEM_DISABLED (no real disbursement provider)
+// - custodial path only: 401 INVALID_PIN / PIN_NOT_SET / TWO_FACTOR_* (no logout),
+//   409 CUSTODIAL_OUTBOUND_LOCKED / WALLET_NOT_ACTIVE, 429 TOO_MANY_ATTEMPTS
+//   `details.scope` (custodial-wallet.md §6.1, USDX-717)
 
 import { env } from "@/lib/env";
 import { apiFetch } from "./client";
@@ -30,7 +33,14 @@ export async function createRedeemOrder(
   req: CreateRedeemOrderRequest,
 ): Promise<RedeemOrderCreated> {
   if (env.useMock) return mockCreateRedeemOrder(req);
-  return apiFetch<RedeemOrderCreated>("/api/v2/redeem", { method: "POST", body: req });
+  return apiFetch<RedeemOrderCreated>("/api/v2/redeem", {
+    method: "POST",
+    body: req,
+    // Jalur custodial (`pin` dikirim): 401 INVALID_PIN / PIN_NOT_SET / TWO_FACTOR_*
+    // adalah jawaban di dialog PIN, bukan sesi mati — pola `transferCustodial`
+    // (USDX-717). SELF_SIGN tetap memakai penangan 401 global.
+    skipUnauthorizedHandler: req.pin !== undefined,
+  });
 }
 
 export async function getRedeemOrder(id: string): Promise<RedeemOrderDetail> {

@@ -1,4 +1,13 @@
 import { expect, type Page } from "@playwright/test";
+import {
+  MOCK_INCOMING_TRANSFER_FIXTURES,
+  MOCK_WALLET_TRANSFER_FIXTURES,
+} from "../../src/lib/api/mock-wallet-transfer-fixtures";
+import {
+  MOCK_BACKUP_CODES as TWO_FACTOR_BACKUP_CODES,
+  MOCK_RECOVERY_OTP as TWO_FACTOR_RECOVERY_OTP,
+  MOCK_TOTP_CODE as TWO_FACTOR_TOTP_CODE,
+} from "../../src/lib/api/mock-two-factor-fixtures";
 
 const AUTH_STATE = {
   state: {
@@ -22,6 +31,8 @@ const AUTH_STATE = {
       },
       // users.yaml § User.pinSet (USDX-567): the custodial money paths need a PIN.
       pinSet: true,
+      // users.yaml § User.twoFactorEnabled (USDX-714): off unless `seedTwoFactor(page, true)`.
+      twoFactorEnabled: false,
     },
     token: "mock-token",
     isAuthenticated: true,
@@ -336,13 +347,20 @@ export async function seedCustodialWallet(
         status: "PROVISIONING" | "ACTIVE" | "SUSPENDED";
         balance?: string | null;
         stuck?: boolean;
-        // USDX-567 seams (mock-custodial-wallet): PIN missing → 401 PIN_NOT_SET;
-        // key zone down → 503; transfer limits → 422 TRANSFER_LIMIT_EXCEEDED;
-        // first transfer per key hangs → 409 IDEMPOTENCY_KEY_IN_PROGRESS then settles.
-        pinSet?: boolean;
+        // USDX-567 seams (mock-custodial-wallet): key zone down → 503; transfer
+        // limits → 422 TRANSFER_LIMIT_EXCEEDED; first transfer per key hangs →
+        // 409 IDEMPOTENCY_KEY_IN_PROGRESS then settles. The account PIN is a
+        // separate seam (`seedAccountPin`): it belongs to the account, not the wallet.
         serviceDown?: boolean;
+        // USDX-709: the NEXT transfer → 503 NETWORK_CONGESTED, then the network
+        // "calms down" so a same-key retry goes through.
+        networkCongested?: boolean;
         transferLimit?: { perTx?: string; daily?: string };
         slowFirstTransfer?: boolean;
+        // USDX-701: the "watcher" verdict for the NEXT transfer (default CONFIRMED
+        // after 3.5 s). "PENDING" = stuck forever; any other value = a status the
+        // FE does not know (mock-wallet-transfers.ts).
+        transferOutcome?: string;
       },
 ) {
   await page.addInitScript(
@@ -362,15 +380,50 @@ export async function seedCustodialWallet(
           activateAt: null,
           balance: s.status === "PROVISIONING" ? null : (s.balance === undefined ? "0.00" : s.balance),
           stuck: s.stuck ?? false,
-          pinSet: s.pinSet ?? true,
           serviceDown: s.serviceDown ?? false,
+          networkCongested: s.networkCongested ?? false,
           transferLimit: s.transferLimit,
           slowFirstTransfer: s.slowFirstTransfer ?? false,
+          transferOutcome: s.transferOutcome,
         }),
       );
     },
     state === null ? null : { ...state, address: MOCK_CUSTODIAL_ADDRESS },
   );
+}
+
+/**
+ * Arm the mock's account-PIN seam (mock-pin "usdx-mock-pin", USDX-651). The
+ * account PIN is separate from the wallet: `null` plays a user who has no PIN
+ * yet (custodial transfer/redeem → 401 PIN_NOT_SET, Settings offers "Create
+ * PIN"); a 6-digit string plays an existing PIN other than the default
+ * `MOCK_PIN`. Unarmed = the demo account with PIN `MOCK_PIN`. Applied ONCE per
+ * tab like `seedCustodialWallet`: the flow under test creates/changes the PIN,
+ * and an init script re-runs on every navigation. Call before the first page.goto().
+ */
+export async function seedAccountPin(page: Page, pin: string | null) {
+  await page.addInitScript((p) => {
+    if (sessionStorage.getItem("usdx-mock-pin-seeded")) return;
+    sessionStorage.setItem("usdx-mock-pin-seeded", "1");
+    localStorage.setItem("usdx-mock-pin", JSON.stringify({ pin: p }));
+  }, pin);
+}
+
+/**
+ * The session was minted by a password login moments ago (mock-pin
+ * "usdx-mock-password-auth-at"): fresh for 5 minutes, as pin.yaml § set counts
+ * it. `loginViaStorage` alone never logs in through the mock, so its session is
+ * stale — and since USDX-698 a custodial-wallet owner without a PIN cannot create
+ * one on a stale session. Arm this for flows that start right after a login.
+ * Applied once per tab (a later login through the form refreshes it anyway).
+ * Call before the first page.goto().
+ */
+export async function seedFreshPasswordAuth(page: Page) {
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem("usdx-mock-password-auth-seeded")) return;
+    sessionStorage.setItem("usdx-mock-password-auth-seeded", "1");
+    localStorage.setItem("usdx-mock-password-auth-at", String(Date.now()));
+  });
 }
 
 /**
@@ -394,4 +447,125 @@ export async function seedCustodialPollBudget(page: Page, ms: number) {
  */
 export async function seedCustodialCreateFailure(page: Page) {
   await page.addInitScript(() => localStorage.setItem("usdx-mock-custodial-fail-create", "1"));
+}
+
+/** Transfer-history fixtures — three statuses, two failure reasons (USDX-701). */
+export const WALLET_TRANSFER_FIXTURES = MOCK_WALLET_TRANSFER_FIXTURES;
+
+/**
+ * Arm the mock's transfer-history ledger (mock-wallet-transfers
+ * "usdx-mock-wallet-transfers", USDX-701) with finished rows for `usr_1` (the
+ * `loginViaStorage` user). Rows keep their status — no watcher runs on them.
+ * Applied ONCE per tab: a transfer sent during the test appends to the same
+ * ledger, and an init script re-runs on every navigation. Call before the first
+ * page.goto().
+ */
+export async function seedWalletTransfers(
+  page: Page,
+  rows: (typeof MOCK_WALLET_TRANSFER_FIXTURES)[keyof typeof MOCK_WALLET_TRANSFER_FIXTURES][] | Record<string, unknown>[],
+) {
+  await page.addInitScript((r) => {
+    if (sessionStorage.getItem("usdx-mock-wallet-transfers-seeded")) return;
+    sessionStorage.setItem("usdx-mock-wallet-transfers-seeded", "1");
+    localStorage.setItem(
+      "usdx-mock-wallet-transfers",
+      JSON.stringify(r.map((row) => ({ settleAt: null, outcome: row.status, userId: "usr_1", ...row }))),
+    );
+  }, rows as Record<string, unknown>[]);
+}
+
+/** USDX that came IN to the custodial wallet — PENDING + CONFIRMED (USDX-713). */
+export const INCOMING_TRANSFER_FIXTURES = MOCK_INCOMING_TRANSFER_FIXTURES;
+
+/**
+ * Arm the mock's incoming-transfer ledger (mock-incoming-transfers
+ * "usdx-mock-incoming-transfers", USDX-713) for `usr_1`. With `confirmAfterMs`,
+ * every PENDING row turns CONFIRMED that long after the tab first loads — the
+ * stand-in for the backend scanner's final pass; without it rows keep their status.
+ * Applied ONCE per tab. Call before the first page.goto().
+ */
+export async function seedIncomingTransfers(
+  page: Page,
+  rows: (typeof MOCK_INCOMING_TRANSFER_FIXTURES)[keyof typeof MOCK_INCOMING_TRANSFER_FIXTURES][] | Record<string, unknown>[],
+  opts: { confirmAfterMs?: number } = {},
+) {
+  await page.addInitScript(
+    ({ r, confirmAfterMs }) => {
+      if (sessionStorage.getItem("usdx-mock-incoming-transfers-seeded")) return;
+      sessionStorage.setItem("usdx-mock-incoming-transfers-seeded", "1");
+      const settleAt = confirmAfterMs == null ? null : Date.now() + confirmAfterMs;
+      localStorage.setItem(
+        "usdx-mock-incoming-transfers",
+        JSON.stringify(
+          r.map((row) => ({ userId: "usr_1", ...row, settleAt: row.status === "PENDING" ? settleAt : null })),
+        ),
+      );
+    },
+    { r: rows as Record<string, unknown>[], confirmAfterMs: opts.confirmAfterMs ?? null },
+  );
+}
+
+// ── 2FA TOTP (USDX-714) ─────────────────────────────────────────────────────
+/** Codes the mock 2FA accepts: authenticator code, backup codes, email OTP. */
+export const MOCK_TOTP_CODE = TWO_FACTOR_TOTP_CODE;
+export const MOCK_BACKUP_CODES = TWO_FACTOR_BACKUP_CODES;
+export const MOCK_RECOVERY_OTP = TWO_FACTOR_RECOVERY_OTP;
+
+/**
+ * Arm the account's 2FA in the mock (mock-two-factor "usdx-mock-two-factor"):
+ * `true` = on with `MOCK_BACKUP_CODES`, `false` = off (the default). Pair `true`
+ * with `twoFactorEnabled: true` on `loginViaStorage` — the first render reads the
+ * persisted profile, the mock `/me` reads the seam. Applied ONCE per tab: the flow
+ * under test turns it on/off. Call before the first page.goto().
+ */
+export async function seedTwoFactor(page: Page, enabled: boolean) {
+  await page.addInitScript(
+    ({ on, codes }) => {
+      if (sessionStorage.getItem("usdx-mock-two-factor-seeded")) return;
+      sessionStorage.setItem("usdx-mock-two-factor-seeded", "1");
+      if (!on) {
+        localStorage.removeItem("usdx-mock-two-factor");
+        return;
+      }
+      localStorage.setItem(
+        "usdx-mock-two-factor",
+        JSON.stringify({ enabled: true, pending: false, backupCodes: codes }),
+      );
+    },
+    { on: enabled, codes: MOCK_BACKUP_CODES },
+  );
+}
+
+/** The login step-1 challenge (10 min) ran out — call while on the code screen. */
+export async function expireTwoFactorChallenge(page: Page) {
+  await page.evaluate(() => {
+    const raw = localStorage.getItem("usdx-mock-2fa-challenge");
+    if (raw) localStorage.setItem("usdx-mock-2fa-challenge", JSON.stringify({ ...JSON.parse(raw), expiresAt: 0 }));
+  });
+}
+
+/**
+ * Money out of the custodial wallet is held for 24 hours (mock-two-factor
+ * "usdx-mock-outbound-lock", custodial-wallet.md §6.1 no.6, USDX-717): `until` is
+ * an ISO time (GET /wallet `outboundLockedUntil`, transfer/redeem → 409
+ * CUSTODIAL_OUTBOUND_LOCKED), `null` = no lock. Applied ONCE per tab: turning 2FA
+ * off inside the flow sets it too. Call before the first page.goto().
+ */
+export async function seedOutboundLock(page: Page, until: string | null) {
+  await page.addInitScript((u) => {
+    if (sessionStorage.getItem("usdx-mock-outbound-lock-seeded")) return;
+    sessionStorage.setItem("usdx-mock-outbound-lock-seeded", "1");
+    if (u === null) localStorage.removeItem("usdx-mock-outbound-lock");
+    else localStorage.setItem("usdx-mock-outbound-lock", JSON.stringify({ until: u }));
+  }, until);
+}
+
+/**
+ * The backend BEFORE USDX-718 (mock-two-factor "usdx-mock-2fa-legacy"): it drops
+ * `twoFactorCode` silently — no 2FA check, no lock, no `outboundLockedUntil`. What
+ * the web meets during the release order of §6.1 (FE first). Call before the first
+ * page.goto().
+ */
+export async function seedLegacyStepUp(page: Page) {
+  await page.addInitScript(() => localStorage.setItem("usdx-mock-2fa-legacy", "true"));
 }

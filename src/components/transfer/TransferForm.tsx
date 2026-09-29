@@ -10,6 +10,11 @@
 // terbaca, tidak pernah 0 palsu. Wallet PROVISIONING/SUSPENDED → form dimatikan
 // dan alasannya dikatakan di atas (409 WALLET_NOT_ACTIVE tidak berubah karena
 // ditekan lagi).
+//
+// 2FA (custodial-wallet.md §6.1, USDX-717) juga dikatakan DULUAN: akun tanpa 2FA
+// mendapat kartu ajakan aktivasi (dialognya terbuka di tempat, USDX-714) dan uang
+// keluar yang sedang ditahan 24 jam mendapat banner "ditahan sampai …" — keduanya
+// mematikan tombol Kirim sampai keadaannya berubah, tanpa reload.
 
 import { useState } from "react";
 import { BookText, ScanLine, Wallet } from "lucide-react";
@@ -32,6 +37,7 @@ import { KycGateDialog } from "@/components/kyc/KycGateDialog";
 import { AddressBookPicker } from "@/components/mint/AddressBookPicker";
 import { AddressScannerDialog } from "@/components/mint/AddressScannerDialog";
 import { PinConfirmDialog } from "@/components/shared/PinConfirmDialog";
+import { StepUpNotices } from "@/components/shared/StepUpNotices";
 import { TransferReview } from "@/components/transfer/TransferReview";
 import { TransferResult } from "@/components/transfer/TransferResult";
 import { useLang } from "@/providers/LanguageProvider";
@@ -68,6 +74,11 @@ export function TransferForm() {
     pinErrorKey,
     pinNotSet,
     pinCooldownSeconds,
+    twoFactorErrorKey,
+    twoFactorCooldownSeconds,
+    twoFactorSetupRequired,
+    outboundLockedUntil,
+    stepUpBlocked,
     parsedAmount,
   } = transfer;
 
@@ -100,6 +111,15 @@ export function TransferForm() {
             ? t("transfer.walletSuspended")
             : t("transfer.walletProvisioning")}
         </Alert>
+      )}
+
+      {isWalletActive && (
+        <StepUpNotices
+          setupRequired={twoFactorSetupRequired}
+          lockedUntil={outboundLockedUntil}
+          action="send"
+          testIdPrefix="transfer"
+        />
       )}
 
       {/* Sumber: wallet custodial saya + saldo. Bukan tombol connect — tidak ada
@@ -221,7 +241,7 @@ export function TransferForm() {
         type="button"
         variant="brand"
         size="lg"
-        disabled={!isWalletActive || (gate.verified && !isFormValid)}
+        disabled={!isWalletActive || stepUpBlocked || (gate.verified && !isFormValid)}
         onClick={() => gate.guard(() => setReviewOpen(true))}
       >
         {t("btn.send")}
@@ -243,10 +263,12 @@ export function TransferForm() {
           amount: formatAmount(parsedAmount),
           to: truncateAddress(to, 6),
         })}
-        onSubmit={(pin) => void submitWithPin(pin)}
+        onSubmit={(pin, code) => void submitWithPin(pin, code)}
         isSubmitting={isSubmitting}
         errorKey={pinErrorKey}
         cooldownSeconds={pinCooldownSeconds}
+        twoFactorErrorKey={twoFactorErrorKey}
+        twoFactorCooldownSeconds={twoFactorCooldownSeconds}
         pinNotSet={pinNotSet}
         confirmLabel={t("btn.send")}
       />

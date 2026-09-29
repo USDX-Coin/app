@@ -177,6 +177,13 @@ export function isWalletNotFound(error: unknown): boolean {
   return isApiError(error) && error.status === 404 && error.code === "WALLET_NOT_FOUND";
 }
 
+// 404 WALLET_TRANSFER_NOT_FOUND — GET /wallet/transfers/{id} (USDX-701): id basi,
+// salah, atau milik user lain (dijawab sama persis). Bukan kegagalan sistem — FE
+// tampilkan pesan netral + jalan kembali ke riwayat.
+export function isWalletTransferNotFound(error: unknown): boolean {
+  return isApiError(error) && error.status === 404 && error.code === "WALLET_TRANSFER_NOT_FOUND";
+}
+
 // 409 WALLET_ALREADY_EXISTS — POST /wallet saat wallet sudah ACTIVE. Satu user =
 // satu wallet; FE arahkan ke GET, bukan menawarkan onboarding lagi.
 export function isWalletAlreadyExists(error: unknown): boolean {
@@ -205,6 +212,14 @@ export function isWalletServiceUnavailable(error: unknown): boolean {
   );
 }
 
+// 503 NETWORK_CONGESTED — fee jaringan Polygon melewati plafon pengaman, transfer
+// ditolak SEBELUM gas disiapkan dan ditandatangani (wallet.yaml § POST
+// /wallet/transfer 503, custodial-wallet.md §5.4 cek no.1). Aman di-retry dengan
+// Idempotency-Key yang SAMA. Bukan kesalahan layanan: user cukup menunggu.
+export function isNetworkCongested(error: unknown): boolean {
+  return isApiError(error) && error.status === 503 && error.code === "NETWORK_CONGESTED";
+}
+
 // 401 INVALID_PIN — PIN salah (pin.yaml; attempt dihitung ke lockout scope `pin`
 // yang dibagi /auth/pin/verify, /change, /wallet/transfer, POST /redeem). Bukan
 // sesi kedaluwarsa: pemanggil WAJIB `skipUnauthorizedHandler` supaya user tidak
@@ -217,6 +232,35 @@ export function isInvalidPin(error: unknown): boolean {
 // (POST /api/v2/auth/pin/set), bukan minta PIN lagi.
 export function isPinNotSet(error: unknown): boolean {
   return isApiError(error) && error.status === 401 && error.code === "PIN_NOT_SET";
+}
+
+// 401 REAUTH_REQUIRED — POST /auth/pin/set tanpa sesi password-auth segar (pin.yaml
+// § set). Dua arti, dibedakan `details.pinSet` (`getReauthPinSet`): menimpa PIN
+// yang sudah ada tanpa `currentPin` (USDX-328), atau first-time set di akun
+// ber-wallet custodial (USDX-698). Bukan logout: sesinya masih valid.
+export function isReauthRequired(error: unknown): boolean {
+  return isApiError(error) && error.status === 401 && error.code === "REAUTH_REQUIRED";
+}
+
+// `details.pinSet` dari 401 REAUTH_REQUIRED (pin.yaml § set, additive 21 Sep 2026;
+// USDX-697). `false` = akun BELUM punya PIN tapi punya wallet custodial, sesinya
+// tidak segar → login ulang lalu buat PIN dalam 5 menit. `true` = akun SUDAH
+// punya PIN → ubah PIN. Absen (backend lama) atau bukan boolean dibaca `true`:
+// hanya `false` eksplisit yang berarti "belum punya PIN". Null = bukan
+// REAUTH_REQUIRED.
+export function getReauthPinSet(error: unknown): boolean | null {
+  if (!isReauthRequired(error)) return null;
+  const details = (error as ApiError).details;
+  if (!details || typeof details !== "object") return true;
+  return (details as Record<string, unknown>).pinSet !== false;
+}
+
+// 422 PIN_UNCHANGED — POST /auth/pin/change dengan `newPin` sama dengan
+// `currentPin` (pin.yaml § change). Hanya keluar sesudah `currentPin` terbukti
+// BENAR; PIN lama salah + PIN baru sama = 401 INVALID_PIN (attempt terbakar).
+// FE menolak `newPin == currentPin` sebelum berangkat.
+export function isPinUnchanged(error: unknown): boolean {
+  return isApiError(error) && error.status === 422 && error.code === "PIN_UNCHANGED";
 }
 
 // 429 TOO_MANY_ATTEMPTS — lockout PIN scope `pin` (5 salah / 15 menit). Beda dari
@@ -279,6 +323,76 @@ export function getTransferLimitDetails(error: unknown): TransferLimitDetails | 
     remaining,
     resetAt: typeof resetAt === "string" ? resetAt : null,
   };
+}
+
+// ── 2FA TOTP (two-factor.yaml, USDX-714) ─────────────────────────────────────
+// Semua 401 di bawah adalah jawaban DI DALAM form, bukan sesi mati: endpoint
+// 2FA yang session-gated dipanggil dengan `skipUnauthorizedHandler` (pola PIN).
+
+// 401 INVALID_TWO_FACTOR_CODE — kode TOTP / backup code / OTP pemulihan email
+// salah atau kedaluwarsa (verify, disable ber-kode, verify-login, recovery).
+export function isInvalidTwoFactorCode(error: unknown): boolean {
+  return isApiError(error) && error.status === 401 && error.code === "INVALID_TWO_FACTOR_CODE";
+}
+
+// 401 TWO_FACTOR_CHALLENGE_EXPIRED — cookie challenge login langkah-1 (TTL 10
+// menit, sekali pakai) hilang/kedaluwarsa di verify-login atau pemulihan email.
+// Jalan keluarnya hanya login ulang dengan email + password.
+export function isTwoFactorChallengeExpired(error: unknown): boolean {
+  return (
+    isApiError(error) && error.status === 401 && error.code === "TWO_FACTOR_CHALLENGE_EXPIRED"
+  );
+}
+
+// 400 TWO_FACTOR_NOT_ENABLED — regenerate backup code saat 2FA belum aktif
+// (salinan `twoFactorEnabled` di klien basi).
+export function isTwoFactorNotEnabled(error: unknown): boolean {
+  return isApiError(error) && error.status === 400 && error.code === "TWO_FACTOR_NOT_ENABLED";
+}
+
+// ── 2FA wajib untuk uang keluar custodial (custodial-wallet.md §6.1, USDX-717) ──
+// Transfer (`POST /api/v2/wallet/transfer`) dan redeem custodial (`POST
+// /api/v2/redeem`). Seperti PIN: 401 di sini jawaban di dalam dialog, bukan sesi
+// mati. `INVALID_TWO_FACTOR_CODE` memakai `isInvalidTwoFactorCode` di atas.
+
+// 401 TWO_FACTOR_SETUP_REQUIRED — pemilik wallet custodial belum mengaktifkan 2FA
+// (pola PIN_NOT_SET) → salinan `twoFactorEnabled` dikoreksi, arahkan ke aktivasi.
+export function isTwoFactorSetupRequired(error: unknown): boolean {
+  return isApiError(error) && error.status === 401 && error.code === "TWO_FACTOR_SETUP_REQUIRED";
+}
+
+// 401 TWO_FACTOR_CODE_REQUIRED — `twoFactorCode` kosong/absen pada user ber-2FA.
+export function isTwoFactorCodeRequired(error: unknown): boolean {
+  return isApiError(error) && error.status === 401 && error.code === "TWO_FACTOR_CODE_REQUIRED";
+}
+
+// 409 CUSTODIAL_OUTBOUND_LOCKED — faktor kedua baru dimatikan/diganti (< 24 jam):
+// transfer & redeem custodial ditahan sampai `details.lockedUntil`.
+export function isCustodialOutboundLocked(error: unknown): boolean {
+  return isApiError(error) && error.status === 409 && error.code === "CUSTODIAL_OUTBOUND_LOCKED";
+}
+
+// `details.lockedUntil` (ISO 8601) dari 409 CUSTODIAL_OUTBOUND_LOCKED; null kalau
+// bukan error itu atau bentuknya tidak seperti kontrak.
+export function getOutboundLockedUntil(error: unknown): string | null {
+  if (!isCustodialOutboundLocked(error)) return null;
+  const details = (error as ApiError).details;
+  if (!details || typeof details !== "object") return null;
+  const { lockedUntil } = details as Record<string, unknown>;
+  return typeof lockedUntil === "string" ? lockedUntil : null;
+}
+
+export type LockoutScope = "pin" | "2fa-stepup";
+
+// `details.scope` dari 429 TOO_MANY_ATTEMPTS di transfer/redeem custodial (additive
+// 25 Sep 2026): FE memilih kalimat lockout dari sini. Null = bukan lockout, atau
+// scope absen (backend sebelum USDX-718) / tak dikenal — pemanggil memakai kalimat PIN.
+export function getLockoutScope(error: unknown): LockoutScope | null {
+  if (!isTooManyAttempts(error)) return null;
+  const details = (error as ApiError).details;
+  if (!details || typeof details !== "object") return null;
+  const { scope } = details as Record<string, unknown>;
+  return scope === "pin" || scope === "2fa-stepup" ? scope : null;
 }
 
 // Narrow to a specific SoT error code (e.g. PASSWORD_MISMATCH, WEAK_PASSWORD)

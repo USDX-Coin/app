@@ -1,0 +1,91 @@
+import { describe, test, expect } from "vitest";
+import { dictionaries } from "@/lib/i18n/dictionaries";
+
+// Copy tracker + riwayat transfer (USDX-701): lengkap di EN dan ID, dan tanpa jargon
+// — "custodial", "nonce", "receipt", "revert" tidak boleh muncul di layar.
+const PREFIXES = [
+  "transfer.status.",
+  "transfer.tracker.",
+  "transfer.failure.",
+  "transfer.history.",
+  "transfer.detail.",
+];
+const JARGON = /custodial|nonce|receipt|revert/i;
+
+function keysOf(lang: "en" | "id") {
+  return Object.keys(dictionaries[lang]).filter((k) => PREFIXES.some((p) => k.startsWith(p)));
+}
+
+describe("transfer tracker/history copy", () => {
+  describe("positive", () => {
+    test("every key exists in both languages", () => {
+      expect(keysOf("en").sort()).toEqual(keysOf("id").sort());
+      expect(keysOf("en").length).toBeGreaterThan(0);
+    });
+
+    test("each status and failure reason has a label", () => {
+      for (const lang of ["en", "id"] as const) {
+        for (const k of [
+          "transfer.status.PENDING",
+          "transfer.status.CONFIRMED",
+          "transfer.status.FAILED",
+          "transfer.failure.REVERTED",
+          "transfer.failure.DROPPED",
+        ]) {
+          expect(dictionaries[lang][k], `${lang} ${k}`).toBeTruthy();
+        }
+      }
+    });
+  });
+
+  describe("negative", () => {
+    test("no sentence uses custodial / nonce / receipt / revert", () => {
+      for (const lang of ["en", "id"] as const) {
+        for (const k of keysOf(lang)) {
+          expect(dictionaries[lang][k], `${lang} ${k}`).not.toMatch(JARGON);
+        }
+      }
+    });
+  });
+
+  describe("edge case", () => {
+    test("nothing before CONFIRMED says successful / berhasil", () => {
+      for (const lang of ["en", "id"] as const) {
+        for (const k of ["transfer.status.PENDING", "transfer.tracker.pendingTitle", "transfer.tracker.pendingDesc"]) {
+          expect(dictionaries[lang][k], `${lang} ${k}`).not.toMatch(/success|berhasil/i);
+        }
+      }
+    });
+  });
+});
+
+// 503 NETWORK_CONGESTED (USDX-709, wallet.yaml § POST /wallet/transfer 503): kalimat
+// awam — jaringan padat, saldo aman, tidak ada yang terkirim — tanpa "gas", "POL",
+// atau "fee" (user tidak pernah melihat POL).
+describe("network-congested copy", () => {
+  const KEY = "transfer.errNetworkCongested";
+
+  describe("positive", () => {
+    test("exists in both languages and says nothing was sent", () => {
+      expect(dictionaries.en[KEY]).toMatch(/nothing was sent/i);
+      expect(dictionaries.id[KEY]).toMatch(/tidak ada yang terkirim/i);
+    });
+  });
+
+  describe("negative", () => {
+    test("no gas / POL / fee jargon", () => {
+      for (const lang of ["en", "id"] as const) {
+        expect(dictionaries[lang][KEY], lang).toBeTruthy();
+        expect(dictionaries[lang][KEY], lang).not.toMatch(/\b(gas|pol|fee|biaya)\b/i);
+      }
+    });
+  });
+
+  describe("edge case", () => {
+    test("does not blame the wallet service — that is the other 503", () => {
+      expect(dictionaries.en[KEY]).not.toBe(dictionaries.en["transfer.errServiceUnavailable"]);
+      expect(dictionaries.en[KEY]).not.toMatch(/wallet service/i);
+      expect(dictionaries.id[KEY]).not.toMatch(/layanan wallet/i);
+    });
+  });
+});

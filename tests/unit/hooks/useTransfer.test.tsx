@@ -1,10 +1,14 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
-import { createWrapper } from "../../helpers/test-utils";
+import { createWrapper, createCachingWrapper } from "../../helpers/test-utils";
 import { useTransfer, mapTransferError } from "@/hooks/useTransfer";
+import { useSession } from "@/hooks/useSession";
+import { useTransactions } from "@/hooks/useTransactions";
 import { useTransferStore } from "@/stores/transferStore";
 import { useAuthStore } from "@/stores/authStore";
 import { getCustodialWallet, transferCustodial } from "@/lib/api/wallet-api";
+import { listTransactions } from "@/lib/api/transactions-api";
+import { getMe } from "@/lib/api/auth-api";
 import { ApiError } from "@/lib/api/client";
 import type { CustodialWallet, TransferAccepted, User } from "@/types";
 
@@ -13,13 +17,21 @@ vi.mock("@/lib/api/wallet-api", () => ({
   createCustodialWallet: vi.fn(),
   transferCustodial: vi.fn(),
 }));
+vi.mock("@/lib/api/transactions-api", () => ({ listTransactions: vi.fn() }));
 const getWalletMock = vi.mocked(getCustodialWallet);
+const listTransfersMock = vi.mocked(listTransactions);
 const transferMock = vi.mocked(transferCustodial);
+vi.mock("@/lib/api/auth-api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/auth-api")>()),
+  getMe: vi.fn(),
+}));
+const getMeMock = vi.mocked(getMe);
 
 const OWN = "0x000000C528aE908fB929a0898B65e913623c9aFf";
 const TO = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const t = (key: string) => key;
+const CODE = "492817";
 
 const USER: User = {
   id: "usr_1",
@@ -33,6 +45,7 @@ const USER: User = {
   createdAt: "2026-01-01T00:00:00Z",
   updatedAt: "2026-01-01T00:00:00Z",
   pinSet: true,
+  twoFactorEnabled: true,
   custodialWallet: { address: OWN, status: "ACTIVE" },
 };
 const WALLET: CustodialWallet = {
@@ -46,6 +59,7 @@ const WALLET: CustodialWallet = {
   createdAt: "2026-08-28T04:10:00.000Z",
 };
 const ACCEPTED: TransferAccepted = {
+  id: "0193abce-11aa-7bcd-8e01-5c2f0a9d4e77",
   txHash: "0x" + "ab".repeat(32),
   from: OWN,
   to: TO,
@@ -74,6 +88,8 @@ beforeEach(() => {
   getWalletMock.mockResolvedValue(WALLET);
   transferMock.mockReset();
   transferMock.mockResolvedValue(ACCEPTED);
+  getMeMock.mockReset();
+  listTransfersMock.mockReset();
 });
 
 describe("useTransfer", () => {
@@ -127,11 +143,11 @@ describe("useTransfer", () => {
         fillValidForm();
         const { result } = await renderReady();
         await act(async () => {
-          await result.current.submitWithPin("123456");
+          await result.current.submitWithPin("123456", CODE);
         });
         expect(transferMock).toHaveBeenCalledTimes(1);
         const [body, key] = transferMock.mock.calls[0];
-        expect(body).toEqual({ to: TO, amount: "25", pin: "123456" });
+        expect(body).toEqual({ to: TO, amount: "25", pin: "123456", twoFactorCode: CODE });
         expect(key).toMatch(UUID);
         const s = useTransferStore.getState();
         expect(s.step).toBe("done");
@@ -139,11 +155,32 @@ describe("useTransfer", () => {
         expect(s.idempotencyKey).toBeNull(); // intent finished
       });
 
+      test("a broadcast refreshes the cached /history list — the new row shows at once (review app#79, USDX-713)", async () => {
+        // The history was opened moments ago and is still "fresh" (staleTime 15 s).
+        listTransfersMock.mockResolvedValue({ data: [], metadata: { page: 1, limit: 10, total: 0 } });
+        fillValidForm();
+        const Wrapper = createCachingWrapper();
+        const { result } = renderHook(
+          () => ({ transfer: useTransfer(t), history: useTransactions({ page: 1, take: 10, type: "TRANSFER_OUT" }) }),
+          { wrapper: Wrapper },
+        );
+        await waitFor(() => expect(result.current.history.isSuccess).toBe(true));
+        await waitFor(() => expect(result.current.transfer.balanceUsdx).toBe(100));
+        expect(listTransfersMock).toHaveBeenCalledTimes(1);
+
+        await act(async () => {
+          await result.current.transfer.submitWithPin("123456", CODE);
+        });
+
+        // Without the invalidation the fresh cache is kept and the empty list stays.
+        await waitFor(() => expect(listTransfersMock).toHaveBeenCalledTimes(2));
+      });
+
       test("the wallet balance is re-read after a broadcast", async () => {
         fillValidForm();
         const { result } = await renderReady();
         await act(async () => {
-          await result.current.submitWithPin("123456");
+          await result.current.submitWithPin("123456", CODE);
         });
         await waitFor(() => expect(getWalletMock.mock.calls.length).toBeGreaterThanOrEqual(2));
       });
@@ -156,7 +193,7 @@ describe("useTransfer", () => {
         const { result } = await renderReady();
         act(() => result.current.openPin());
         await act(async () => {
-          await result.current.submitWithPin("000000");
+          await result.current.submitWithPin("000000", CODE);
         });
         await waitFor(() => expect(result.current.pinErrorKey).toBe("pin.errInvalid"));
         expect(result.current.formErrorKey).toBeNull();
@@ -164,7 +201,29 @@ describe("useTransfer", () => {
         const firstKey = transferMock.mock.calls[0][1];
 
         await act(async () => {
-          await result.current.submitWithPin("123456");
+          await result.current.submitWithPin("123456", CODE);
+        });
+        expect(transferMock.mock.calls[1][1]).toBe(firstKey);
+        expect(useTransferStore.getState().step).toBe("done");
+      });
+
+      test("NETWORK_CONGESTED → its own sentence on the Ringkasan, and the retry reuses the SAME key (USDX-709)", async () => {
+        fillValidForm();
+        transferMock.mockRejectedValueOnce(new ApiError(503, "NETWORK_CONGESTED", "x"));
+        const { result } = await renderReady();
+        act(() => result.current.openPin());
+        await act(async () => {
+          await result.current.submitWithPin("123456", CODE);
+        });
+        await waitFor(() => expect(result.current.formErrorKey).toBe("transfer.errNetworkCongested"));
+        // Not a PIN problem: the PIN dialog closes so the Ringkasan message shows.
+        expect(result.current.pinErrorKey).toBeNull();
+        expect(useTransferStore.getState().pinOpen).toBe(false);
+        const firstKey = transferMock.mock.calls[0][1];
+        expect(useTransferStore.getState().idempotencyKey).toBe(firstKey);
+
+        await act(async () => {
+          await result.current.submitWithPin("123456", CODE);
         });
         expect(transferMock.mock.calls[1][1]).toBe(firstKey);
         expect(useTransferStore.getState().step).toBe("done");
@@ -176,7 +235,7 @@ describe("useTransfer", () => {
         const { result } = await renderReady();
         act(() => result.current.openPin());
         await act(async () => {
-          await result.current.submitWithPin("123456");
+          await result.current.submitWithPin("123456", CODE);
         });
         await waitFor(() => expect(result.current.formErrorKey).toBe("transfer.errWalletNotActive"));
         expect(result.current.formErrorVars).toEqual({ status: "wallet.status.notActive" });
@@ -196,7 +255,7 @@ describe("useTransfer", () => {
         );
         const { result } = await renderReady();
         await act(async () => {
-          await result.current.submitWithPin("123456");
+          await result.current.submitWithPin("123456", CODE);
         });
         await waitFor(() => expect(result.current.formErrorKey).toBe("transfer.errLimitDaily"));
         expect(result.current.formErrorVars).toMatchObject({ limit: "5,000", remaining: "120" });
@@ -211,7 +270,7 @@ describe("useTransfer", () => {
         );
         const { result } = await renderReady();
         await act(async () => {
-          await result.current.submitWithPin("123456");
+          await result.current.submitWithPin("123456", CODE);
         });
         await waitFor(() => expect(result.current.pinCooldownSeconds).toBe(900));
         expect(result.current.pinErrorKey).toBeNull(); // the countdown is the message
@@ -222,9 +281,33 @@ describe("useTransfer", () => {
         transferMock.mockRejectedValueOnce(new ApiError(401, "PIN_NOT_SET", "x"));
         const { result } = await renderReady();
         await act(async () => {
-          await result.current.submitWithPin("123456");
+          await result.current.submitWithPin("123456", CODE);
         });
         await waitFor(() => expect(result.current.pinNotSet).toBe(true));
+      });
+
+      test("PIN_NOT_SET → a cached /auth/me saying true does not bring the PIN back when Settings reopens", async () => {
+        // Settings (useSession) cached /auth/me with pinSet true, then the user left
+        // for /send, which does not mount useSession (custodial-wallet.md §5.1).
+        const wrapper = createCachingWrapper();
+        getMeMock.mockResolvedValueOnce(USER);
+        const settings = renderHook(() => useSession(), { wrapper });
+        await waitFor(() => expect(settings.result.current.data).toBeTruthy());
+        settings.unmount();
+
+        fillValidForm();
+        transferMock.mockRejectedValueOnce(new ApiError(401, "PIN_NOT_SET", "x"));
+        const { result } = renderHook(() => useTransfer(t), { wrapper });
+        await waitFor(() => expect(result.current.balanceUsdx).toBe(100));
+        await act(async () => {
+          await result.current.submitWithPin("123456", CODE);
+        });
+        await waitFor(() => expect(useAuthStore.getState().user?.pinSet).toBe(false));
+
+        getMeMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+        const again = renderHook(() => useSession(), { wrapper });
+        await waitFor(() => expect(again.result.current.isFetching).toBe(false));
+        expect(useAuthStore.getState().user?.pinSet).toBe(false);
       });
     });
 
@@ -238,7 +321,7 @@ describe("useTransfer", () => {
             .mockResolvedValueOnce(ACCEPTED);
           const { result } = await renderReady();
           await act(async () => {
-            await result.current.submitWithPin("123456");
+            await result.current.submitWithPin("123456", CODE);
           });
           expect(transferMock).toHaveBeenCalledTimes(2);
           expect(transferMock.mock.calls[1][1]).toBe(transferMock.mock.calls[0][1]);
@@ -247,13 +330,34 @@ describe("useTransfer", () => {
         10_000,
       );
 
+      test("a lost 202 then a 200 replay with the same key lands on the SAME tracker id (USDX-701)", async () => {
+        fillValidForm();
+        // First attempt: broadcast happened but the answer never arrived (network drop).
+        transferMock
+          .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+          .mockResolvedValueOnce({ ...ACCEPTED }); // 200 replay — identical, same id
+        const { result } = await renderReady();
+        await act(async () => {
+          await result.current.submitWithPin("123456", CODE);
+        });
+        expect(useTransferStore.getState().step).toBe("form");
+
+        await act(async () => {
+          await result.current.submitWithPin("123456", CODE);
+        });
+        expect(transferMock.mock.calls[1][1]).toBe(transferMock.mock.calls[0][1]);
+        const s = useTransferStore.getState();
+        expect(s.step).toBe("done");
+        expect(s.result?.id).toBe(ACCEPTED.id);
+      });
+
       test("IDEMPOTENCY_KEY_REUSED (FE bug) → key dropped, generic message", async () => {
         fillValidForm();
         const spy = vi.spyOn(console, "error").mockImplementation(() => {});
         transferMock.mockRejectedValueOnce(new ApiError(409, "IDEMPOTENCY_KEY_REUSED", "x"));
         const { result } = await renderReady();
         await act(async () => {
-          await result.current.submitWithPin("123456");
+          await result.current.submitWithPin("123456", CODE);
         });
         await waitFor(() => expect(result.current.formErrorKey).toBe("transfer.errGeneric"));
         expect(useTransferStore.getState().idempotencyKey).toBeNull();
@@ -266,7 +370,7 @@ describe("useTransfer", () => {
         useTransferStore.getState().setAmount("007.50");
         const { result } = await renderReady();
         await act(async () => {
-          await result.current.submitWithPin("123456");
+          await result.current.submitWithPin("123456", CODE);
         });
         expect(transferMock.mock.calls[0][0].amount).toBe("7.5");
       });
@@ -277,13 +381,13 @@ describe("useTransfer", () => {
         const { result } = await renderReady();
         act(() => result.current.openPin());
         await act(async () => {
-          await result.current.submitWithPin("123456");
+          await result.current.submitWithPin("123456", CODE);
         });
         expect(useTransferStore.getState().pinOpen).toBe(true);
         expect(result.current.formErrorKey).toBeNull();
         const firstKey = transferMock.mock.calls[0][1];
         await act(async () => {
-          await result.current.submitWithPin("123456");
+          await result.current.submitWithPin("123456", CODE);
         });
         expect(transferMock.mock.calls[1][1]).toBe(firstKey);
       });
@@ -293,13 +397,13 @@ describe("useTransfer", () => {
         transferMock.mockRejectedValueOnce(new ApiError(503, "WALLET_SERVICE_UNAVAILABLE", "x"));
         const { result } = await renderReady();
         await act(async () => {
-          await result.current.submitWithPin("123456");
+          await result.current.submitWithPin("123456", CODE);
         });
         await waitFor(() => expect(result.current.formErrorKey).toBe("transfer.errServiceUnavailable"));
         const firstKey = transferMock.mock.calls[0][1];
         act(() => result.current.setAmount("26"));
         await act(async () => {
-          await result.current.submitWithPin("123456");
+          await result.current.submitWithPin("123456", CODE);
         });
         expect(transferMock.mock.calls[1][1]).not.toBe(firstKey);
       });
@@ -313,6 +417,10 @@ describe("useTransfer", () => {
         expect(mapTransferError(new ApiError(422, "RECIPIENT_BLACKLISTED", "x"), t, "ACTIVE")?.key).toBe("transfer.errBlacklisted");
         expect(mapTransferError(new ApiError(422, "INSUFFICIENT_BALANCE", "x"), t, "ACTIVE")?.key).toBe("transfer.errInsufficient");
         expect(mapTransferError(new ApiError(503, "WALLET_SERVICE_UNAVAILABLE", "x"), t, "ACTIVE")?.key).toBe("transfer.errServiceUnavailable");
+        expect(mapTransferError(new ApiError(503, "NETWORK_CONGESTED", "x"), t, "ACTIVE")).toEqual({
+          where: "form",
+          key: "transfer.errNetworkCongested",
+        });
         expect(mapTransferError(new ApiError(403, "KYC_NOT_VERIFIED", "x"), t, "ACTIVE")?.key).toBe("transfer.errGate");
       });
 
@@ -350,6 +458,99 @@ describe("useTransfer", () => {
           key: "transfer.errLimitGeneric",
         });
       });
+    });
+  });
+});
+
+// 2FA wajib untuk transfer custodial (custodial-wallet.md §6.1, USDX-717): kode ikut di
+// body; galat kode tetap di dialog PIN; kunci idempotensi TIDAK berubah saat kode
+// diganti (kode bukan identitas niat); SETUP_REQUIRED / OUTBOUND_LOCKED menutup dialog
+// dan tampil lewat kartu/banner, bukan kalimat galat Ringkasan.
+describe("useTransfer — 2FA step-up", () => {
+  async function submitFailing(error: ApiError, code = CODE) {
+    transferMock.mockRejectedValueOnce(error);
+    fillValidForm();
+    const utils = await renderReady();
+    act(() => utils.result.current.openPin());
+    await act(async () => {
+      await utils.result.current.submitWithPin("123456", code);
+    });
+    return utils;
+  }
+
+  describe("positive", () => {
+    test("a wrong code stays in the PIN dialog; the retry with a new code keeps the SAME key", async () => {
+      const { result } = await submitFailing(new ApiError(401, "INVALID_TWO_FACTOR_CODE", "x"), "000000");
+      await waitFor(() => expect(result.current.twoFactorErrorKey).toBe("stepUp.errInvalid"));
+      expect(result.current.pinErrorKey).toBeNull();
+      expect(result.current.formErrorKey).toBeNull();
+      expect(useTransferStore.getState().pinOpen).toBe(true);
+      await act(async () => {
+        await result.current.submitWithPin("123456", CODE);
+      });
+      expect(transferMock.mock.calls[1][0]).toMatchObject({ twoFactorCode: CODE });
+      expect(transferMock.mock.calls[1][1]).toBe(transferMock.mock.calls[0][1]);
+    });
+
+    test("TWO_FACTOR_CODE_REQUIRED asks for the code under the field", async () => {
+      const { result } = await submitFailing(new ApiError(401, "TWO_FACTOR_CODE_REQUIRED", "x"));
+      await waitFor(() => expect(result.current.twoFactorErrorKey).toBe("stepUp.errRequired"));
+    });
+  });
+
+  describe("negative", () => {
+    test("TWO_FACTOR_SETUP_REQUIRED → dialog closes, profile copy 2FA off, no Ringkasan error", async () => {
+      const { result } = await submitFailing(new ApiError(401, "TWO_FACTOR_SETUP_REQUIRED", "x"));
+      expect(useTransferStore.getState().pinOpen).toBe(false);
+      expect(result.current.twoFactorSetupRequired).toBe(true);
+      expect(result.current.formErrorKey).toBeNull();
+    });
+
+    test("409 CUSTODIAL_OUTBOUND_LOCKED → dialog closes, lock banner data, no Ringkasan error", async () => {
+      const until = new Date(Date.now() + 3_600_000).toISOString();
+      const { result } = await submitFailing(
+        new ApiError(409, "CUSTODIAL_OUTBOUND_LOCKED", "x", { lockedUntil: until }),
+      );
+      expect(useTransferStore.getState().pinOpen).toBe(false);
+      expect(result.current.outboundLockedUntil).toBe(until);
+      expect(result.current.formErrorKey).toBeNull();
+    });
+
+    test("pre-check: 2FA off on the profile → twoFactorSetupRequired before any submit", async () => {
+      useAuthStore.setState({ user: { ...USER, twoFactorEnabled: false } });
+      const { result } = await renderReady();
+      expect(result.current.twoFactorSetupRequired).toBe(true);
+    });
+  });
+
+  describe("edge case", () => {
+    test("429 scope 2fa-stepup → code countdown, not the PIN one", async () => {
+      const { result } = await submitFailing(
+        new ApiError(429, "TOO_MANY_ATTEMPTS", "x", { retryAfterSeconds: 900, scope: "2fa-stepup" }, 900),
+      );
+      await waitFor(() => expect(result.current.twoFactorCooldownSeconds).toBe(900));
+      expect(result.current.pinCooldownSeconds).toBe(0);
+      expect(useTransferStore.getState().pinOpen).toBe(true);
+    });
+
+    test("429 without scope (backend before USDX-718) → the PIN countdown as before", async () => {
+      const { result } = await submitFailing(
+        new ApiError(429, "TOO_MANY_ATTEMPTS", "x", { retryAfterSeconds: 900 }, 900),
+      );
+      await waitFor(() => expect(result.current.pinCooldownSeconds).toBe(900));
+      expect(result.current.twoFactorCooldownSeconds).toBe(0);
+    });
+
+    test("mapTransferError: 2FA codes land in the code field or the guard, never the Ringkasan", () => {
+      expect(mapTransferError(new ApiError(401, "INVALID_TWO_FACTOR_CODE", "x"), t, "ACTIVE")).toEqual({
+        where: "twoFactor",
+        key: "stepUp.errInvalid",
+      });
+      expect(
+        mapTransferError(new ApiError(429, "TOO_MANY_ATTEMPTS", "x", { scope: "2fa-stepup" }), t, "ACTIVE"),
+      ).toEqual({ where: "twoFactor", key: "stepUp.errLocked" });
+      expect(mapTransferError(new ApiError(401, "TWO_FACTOR_SETUP_REQUIRED", "x"), t, "ACTIVE")?.where).toBe("guard");
+      expect(mapTransferError(new ApiError(409, "CUSTODIAL_OUTBOUND_LOCKED", "x"), t, "ACTIVE")?.where).toBe("guard");
     });
   });
 });

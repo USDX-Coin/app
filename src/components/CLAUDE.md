@@ -7,14 +7,14 @@ components/
   ui/          # Design system. OURS — hand-written wrappers, meant to be edited.
   animate-ui/  # Animate UI primitives (motion + Radix). Registry files, edit sparingly.
   layout/      # App layout: AuthLayout, Sidebar, Logo, ThemeToggle
-  shared/      # Cross-feature: PageHeader, ComingSoonPage, RouteErrorState, PinConfirmDialog (USDX-567)
-  auth/        # Login, Register, Forgot/Reset password, CheckEmail, VerifyEmail
+  shared/      # Cross-feature: PageHeader, PagePagination (server-paginated lists), ComingSoonPage, RouteErrorState, PinConfirmDialog (USDX-567), PinField + PinSetupDialog + PinChangeDialog + PinNotSetNotice (USDX-651), ForgotPinLink (USDX-696), TwoFactorCodeField + TwoFactorSetupNotice (2FA, USDX-714), OutboundLockNotice + StepUpNotices (2FA on the money paths, USDX-717)
+  auth/        # Login (+ TwoFactorLoginStep: code screen + email recovery, USDX-714), Register, Forgot/Reset password, CheckEmail, VerifyEmail
   kyc/         # KYC form: identity + CDD blocks, document dropzones
   mint/        # Mint flow: MintForm, MintReview, ChainSelector
   redeem/      # Redeem flow: RedeemForm, RedeemReview, RedeemStatus (tracker), BankSelect, BankAccountPicker + AddBankAccountModal (bank book, USDX-261). Custodial source switch + PIN dialog in the review (USDX-567)
   wallet/      # Custodial wallet (USDX-566): CustodialWalletOffer, CustodialWalletPanel, ReceiveAddress (QR + copy), CustodialWalletSection (offer-or-panel), CustodialBalanceCard (sidebar), WalletOnboardingContent
-  settings/    # SettingsPageContent — Pengaturan is a real page since USDX-566
-  transfer/    # Custodial transfer (USDX-567): TransferPageContent (custodial owner → form, else ComingSoon), TransferForm, TransferReview, TransferResult
+  settings/    # SettingsPageContent — Pengaturan is a real page since USDX-566; PinSection = the transaction PIN row in the Account card (USDX-651); TwoFactorSection + TwoFactorEnableDialog / TwoFactorDisableDialog / BackupCodesRegenerateDialog + BackupCodesPanel + TwoFactorPasswordField = the 2FA row in the Security card (USDX-714)
+  transfer/    # Custodial transfer (USDX-567): TransferPageContent (custodial owner → form, else ComingSoon), TransferForm, TransferReview, TransferResult (= confirmation tracker, USDX-701). History (USDX-701): TransferDetail (/send/history/[id]), TransferStatusPanel + TransferStatusBadge (shared by tracker, detail and the /history rows). The transfer LIST lives in /history since USDX-713 (`transactions/TransferHistoryRow`); `/send/history` redirects there
   transactions/ profile/ system/
 ```
 
@@ -77,10 +77,68 @@ components/
   does not call an API: the caller sends the PIN inside the transfer/redeem body and maps
   `401 INVALID_PIN` / `PIN_NOT_SET` / `429 TOO_MANY_ATTEMPTS` into `errorKey` /
   `pinNotSet` / `cooldownSeconds`. Non-PIN failures close the dialog and show in the
-  Ringkasan next to the figures.
+  Ringkasan next to the figures. Under the PIN sits the **"Kode authenticator"** field
+  (`TwoFactorCodeField`, 6 digits; "Pakai backup code" swaps in the backup-code field) —
+  `onSubmit(pin, twoFactorCode)`, both travel in the same body (`custodial-wallet.md` §6.1,
+  USDX-717). A wrong/missing code (`twoFactorErrorKey`) and the `2fa-stepup` lockout
+  (`twoFactorCooldownSeconds`, its own sentence) show under the code field; the typed PIN
+  is kept.
+- **2FA on the money paths (USDX-717)** — `shared/StepUpNotices` = the pair shown on the
+  transfer form + Ringkasan and the custodial redeem form + Ringkasan: `TwoFactorSetupNotice`
+  when `user.twoFactorEnabled === false` (activation dialog in place — the form opens again
+  without a reload) and `OutboundLockNotice` ("ditahan sampai [waktu lokal]") while
+  `outboundLockedUntil` is set (GET /wallet or a `409 CUSTODIAL_OUTBOUND_LOCKED`). Either
+  disables Send / Redeem / "Lanjut ke PIN" (`stepUpBlocked` from the hook). The external
+  redeem source is untouched.
+- **PIN create / change (USDX-651)** — `PinSetupDialog` (new PIN + repeat, `POST
+  /auth/pin/set`) and `PinChangeDialog` (current + new + repeat, `POST /auth/pin/change`)
+  own their calls through `hooks/usePin`; both share `PinField` (password + one-time-code
+  + numeric, letters dropped, 6 max) with `PinConfirmDialog`. `PinNotSetNotice` is the
+  "no PIN yet" alert with a Create PIN button that opens `PinSetupDialog` in place — used
+  by `TransferReview`, `RedeemReview` and `PinConfirmDialog`, so the user never leaves
+  the transfer/redeem to get a PIN. `401 REAUTH_REQUIRED` with `details.pinSet: false`
+  (a custodial-wallet account without a PIN on a stale session, backend USDX-698) shows
+  "log in again" + a **Log in again** button (`hooks/useRelogin`) in `PinSetupDialog` —
+  every create door gets it; after the login `PinSection` takes the intent and opens the
+  dialog (USDX-697). `CustodialWalletSection` shows one `PinNotSetNotice` invite when a
+  wallet created on that screen turns ACTIVE on an account without a PIN.
+- **Forgot PIN (USDX-696, `custodial-wallet.md` §5.1 "Lupa PIN di web")** — `ForgotPinLink`
+  ("Forgot PIN?" → one sentence + **Log in again**, `useRelogin("forgot-pin")`; Cancel leaves
+  no marker) sits under the PIN field of `PinConfirmDialog` (not when there is no PIN;
+  disabled mid-request) and under the current-PIN field of `PinChangeDialog` — still usable
+  during a lockout countdown. After the login `PinSection` takes `forgot-pin` and opens
+  `PinSetupDialog variant="reset"` ("Create a new PIN", `usePin.resetPin`) even when the
+  account has a PIN. The submit handlers of both dialogs
+  `stopPropagation()`: a portal's submit still bubbles through the React tree into
+  `PinConfirmDialog`'s `<form>`.
+- **2FA (USDX-714, `custodial-wallet.md` §6.1 "Web")** — `settings/TwoFactorSection` reads
+  `useTwoFactor().twoFactorEnabled`: off → Turn on (`TwoFactorEnableDialog`: password → QR
+  rendered locally with `qrcode.react` + the key for manual entry + `BackupCodesPanel`, shown
+  once, copy / download .txt, "I have saved" gates the 6-digit code); on → New backup codes
+  (`BackupCodesRegenerateDialog`) + Turn off (`TwoFactorDisableDialog`: the 24-hour hold warning
+  sits above the field BEFORE confirming; password or authenticator code); `null` (older
+  session) → no action. `auth/TwoFactorLoginStep` replaces the password form when login
+  answers `twoFactorRequired`: code (TOTP or backup) → verify-login; "Can't access your
+  authenticator?" → email OTP with the 24-hour warning → 2FA off → it logs in again with the
+  email + password still in memory; an expired challenge returns to the form with a sentence.
+  `shared/TwoFactorSetupNotice` = "turn on 2FA" alert + button opening the enable dialog in
+  place — `CustodialWalletSection` shows it once when a wallet created on that screen turns
+  ACTIVE on an account with 2FA off.
 - `mint/MintForm` shows a destination switch (custodial default · another address) only
   when `useMint().custodialAvailable`; `MintReview` marks the recipient "wallet custodial
   saya" by a byte-identical address match — there is no flag on the order.
+- `transactions/TransactionList` marks MINT and REDEEM history rows with the mint review's
+  own label (`mint.destCustodial`, "Wallet custodial saya") when `tx.userAddress` equals
+  `useCustodialWallet().address` **case-insensitively** (`isSameAddress`, `lib/utils.ts`)
+  — unlike the review, a stored mint address may be all lowercase. No wallet = no marker
+  and no request; never a detail call per row (USDX-653, `custodial-wallet.md` §5.2).
+  Transfer rows never get that marker — they are always the user's own wallet (USDX-713).
+- `transactions/TransactionList` = the unified history (USDX-713, `custodial-wallet.md`
+  §5.7): tabs Semua · Minting · Redeem · Masuk · Keluar, the active one mirrored in
+  `?type=` (read on open via `useSearchParams`, so `/history` wraps it in `Suspense`;
+  unknown value = Semua). Transfer rows are `transactions/TransferHistoryRow` (outgoing →
+  `/send/history/[id]`; incoming → the row menu of `transactions/HistoryCells`, sender
+  address only). A failed background refresh keeps the rows on screen.
 - `redeem/RedeemStatus` hides `BurnGate` for `order.burnMode === "CUSTODIAL"` and shows
   the "sistem sedang memproses burn" strip instead; `useRedeemBurn.runBurn` refuses such
   an order too, so the resume-from-history path cannot trigger a wallet either.

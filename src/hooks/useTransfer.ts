@@ -10,8 +10,9 @@
 //
 // Yang menjadikan hook ini lebih dari form biasa adalah `Idempotency-Key`:
 //   - dibuat SEKALI per niat (transferStore.ensureIdempotencyKey), dipakai ulang
-//     oleh semua retry — salah PIN, 503, jaringan putus — dan dibuang hanya saat
-//     user mengubah tujuan/jumlah (store yang menjaga itu);
+//     oleh semua retry — salah PIN, 503 (termasuk NETWORK_CONGESTED), jaringan
+//     putus — dan dibuang hanya saat user mengubah tujuan/jumlah (store yang
+//     menjaga itu);
 //   - 409 IDEMPOTENCY_KEY_IN_PROGRESS → tunggu lalu coba lagi dengan key yang
 //     SAMA (bukan transfer baru) beberapa kali; kalau masih berjalan, user
 //     diberi tahu dan tombol kirim memakai key yang sama lagi;
@@ -22,11 +23,26 @@
 // `pinCooldownSeconds`) tetap di dialog PIN supaya user mengetik ulang di situ;
 // yang lain (`errorKey`) menutup dialog PIN dan tampil di Ringkasan, di samping
 // angka yang menghasilkannya. 429 RATE_LIMITED dibiarkan ke toast global.
+//
+// 2FA (custodial-wallet.md §6.1, USDX-717): kode authenticator ikut di body yang
+// sama (`twoFactorCode`) dan BUKAN identitas niat — mengganti kode setelah salah
+// memakai key yang sama. Galat kode (`twoFactorErrorKey`, lockout `2fa-stepup`)
+// tetap di dialog PIN; 401 TWO_FACTOR_SETUP_REQUIRED dan 409 CUSTODIAL_OUTBOUND_LOCKED
+// (`where: "guard"`) menutup dialog dan tampil lewat kartu ajakan / banner kunci
+// milik `useCustodialStepUp`, bukan kalimat galat Ringkasan.
+//
+// `pinNotSet` dibaca dari salinan profil `user.pinSet` saja (USDX-651): 401
+// PIN_NOT_SET mengoreksi salinan itu ke `false`, dan PinSetupDialog (dibuka dari
+// notice) mengembalikannya ke `true` — dialog PIN lalu terbuka lagi tanpa
+// state lokal yang harus disinkronkan.
 
-import { useCallback, useMemo, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useCallback, useMemo } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTransferStore } from "@/stores/transferStore";
+import { usePinSetCorrection } from "@/hooks/usePinSetCorrection";
 import { useCustodialWallet } from "@/hooks/useCustodialWallet";
+import { useCustodialStepUp, stepUpErrorKey, isPinLockout } from "@/hooks/useCustodialStepUp";
+import { TRANSACTIONS_KEY } from "@/hooks/useTransactions";
 import { useCooldown, DEFAULT_COOLDOWN_SECONDS } from "@/hooks/useCooldown";
 import { transferCustodial } from "@/lib/api/wallet-api";
 import {
@@ -42,9 +58,12 @@ import {
   isInvalidPin,
   isPinNotSet,
   isTooManyAttempts,
+  isTwoFactorSetupRequired,
+  isCustodialOutboundLocked,
   isWalletNotActive,
   isWalletNotFound,
   isWalletServiceUnavailable,
+  isNetworkCongested,
   isIdempotencyKeyInProgress,
   isIdempotencyKeyReused,
   isRecipientBlacklisted,
@@ -63,8 +82,12 @@ export const IN_PROGRESS_RETRY_MS = 1_500;
 export const IN_PROGRESS_MAX_RETRIES = 4;
 
 export interface TransferError {
-  /** Di mana pesannya tampil: dialog PIN (`pin`) atau Ringkasan (`form`). */
-  where: "pin" | "form";
+  /**
+   * Di mana pesannya tampil: kolom PIN (`pin`), kolom kode authenticator
+   * (`twoFactor`), Ringkasan (`form`), atau kartu ajakan 2FA / banner kunci milik
+   * `useCustodialStepUp` (`guard` — tidak ada kalimat galat tambahan).
+   */
+  where: "pin" | "twoFactor" | "form" | "guard";
   key: string;
   vars?: Record<string, string>;
 }
@@ -89,7 +112,12 @@ export function mapTransferError(
   if (isRateLimited(error)) return null;
   if (isInvalidPin(error)) return { where: "pin", key: "pin.errInvalid" };
   if (isPinNotSet(error)) return { where: "pin", key: "pin.errNotSet" };
-  if (isTooManyAttempts(error)) return { where: "pin", key: "pin.errLocked" };
+  if (isPinLockout(error)) return { where: "pin", key: "pin.errLocked" };
+  if (isTooManyAttempts(error)) return { where: "twoFactor", key: "stepUp.errLocked" };
+  const codeKey = stepUpErrorKey(error);
+  if (codeKey) return { where: "twoFactor", key: codeKey };
+  if (isTwoFactorSetupRequired(error)) return { where: "guard", key: "stepUp.setupRequiredSend" };
+  if (isCustodialOutboundLocked(error)) return { where: "guard", key: "stepUp.locked" };
   if (isWalletNotActive(error)) {
     return {
       where: "form",
@@ -121,6 +149,9 @@ export function mapTransferError(
   if (isValidationError(error)) return { where: "form", key: "transfer.errValidation" };
   if (isWalletNotFound(error)) return { where: "form", key: "transfer.errNoWallet" };
   if (isWalletServiceUnavailable(error)) return { where: "form", key: "transfer.errServiceUnavailable" };
+  // Fee jaringan di atas plafon: ditolak sebelum tanda tangan. Kunci TIDAK dibuang —
+  // kontraknya "aman di-retry dengan key yang SAMA" (USDX-709).
+  if (isNetworkCongested(error)) return { where: "form", key: "transfer.errNetworkCongested" };
   if (isIdempotencyKeyInProgress(error)) return { where: "form", key: "transfer.errInProgress" };
   if (isIdempotencyKeyReused(error)) return { where: "form", key: "transfer.errGeneric" };
   if (isApiError(error) && error.status === 403) return { where: "form", key: "transfer.errGate" };
@@ -138,9 +169,9 @@ export function useTransfer(
   const store = useTransferStore();
   const wallet = useCustodialWallet();
   const pinCooldown = useCooldown();
-  // Dipisah dari state mutasi: `mutation.error` ikut hilang saat `reset()`, tapi
-  // "PIN belum diset" adalah fakta akun yang harus tetap tampil di dialog.
-  const [pinNotSet, setPinNotSet] = useState(false);
+  const stepUp = useCustodialStepUp();
+  const setPinSet = usePinSetCorrection();
+  const queryClient = useQueryClient();
 
   const parsedAmount = parseAmount(store.amount);
   const addressError = store.to ? validateTransferAddress(store.to, wallet.address) : null;
@@ -155,11 +186,16 @@ export function useTransfer(
     parsedAmount > 0;
 
   const mutation = useMutation({
-    mutationFn: async (pin: string) => {
+    mutationFn: async ({ pin, twoFactorCode }: { pin: string; twoFactorCode: string }) => {
       const key = store.ensureIdempotencyKey();
       // Jumlah dinormalkan ke bentuk kontrak ("25." → "25", "007" → "7"): yang
       // lolos validator FE tidak boleh ditolak 422 oleh regex backend.
-      const body = { to: store.to.trim(), amount: normalizeTransferAmount(store.amount), pin };
+      const body = {
+        to: store.to.trim(),
+        amount: normalizeTransferAmount(store.amount),
+        pin,
+        twoFactorCode,
+      };
       // Retry IN_PROGRESS dengan key yang SAMA. Yang pertama bisa saja sudah
       // ter-broadcast — key baru = transfer kedua, persis yang kontrak cegah.
       for (let attempt = 0; ; attempt++) {
@@ -176,16 +212,22 @@ export function useTransfer(
       }
     },
     onSuccess: (accepted) => {
-      setPinNotSet(false);
       store.setResult(accepted);
       // Saldo turun begitu tx masuk blok; segarkan di latar.
       wallet.invalidate();
+      // Riwayat yang dibuka < 15 s lalu masih dianggap segar — tanpa ini tombol
+      // "Riwayat transfer" di layar hasil menampilkan /history tab Keluar tanpa
+      // transfer yang baru dikirim (review app#79, USDX-701 → USDX-713).
+      void queryClient.invalidateQueries({ queryKey: TRANSACTIONS_KEY });
     },
     onError: (error) => {
-      if (isPinNotSet(error)) setPinNotSet(true);
-      if (isTooManyAttempts(error)) {
+      // Fakta akun, bukan state mutasi: salinan profil yang dikoreksi, supaya tetap
+      // tampil setelah `reset()` dan hilang begitu PIN dibuat.
+      if (isPinNotSet(error)) setPinSet(false);
+      if (isPinLockout(error)) {
         pinCooldown.start(getRateLimitSeconds(error) || DEFAULT_COOLDOWN_SECONDS);
       }
+      stepUp.onError(error);
       // Backend menolak karena statusnya bukan ACTIVE → salinan di profil basi;
       // tarik status sebenarnya supaya pesan dan tombol mengikuti keadaan nyata.
       if (isWalletNotActive(error)) wallet.invalidate();
@@ -198,7 +240,7 @@ export function useTransfer(
       // Error non-PIN tampil di Ringkasan: tutup dialog PIN supaya pesannya terlihat.
       // `null` (RATE_LIMITED → toast global) membiarkan dialog apa adanya: user
       // cukup menekan kirim lagi setelah throttle lewat, dengan key yang sama.
-      if (mapped && mapped.where !== "pin") store.setPinOpen(false);
+      if (mapped && mapped.where !== "pin" && mapped.where !== "twoFactor") store.setPinOpen(false);
     },
   });
 
@@ -248,17 +290,29 @@ export function useTransfer(
     setPinOpen: store.setPinOpen,
     reset: () => {
       mutation.reset();
-      setPinNotSet(false);
       store.reset();
     },
     // submit
-    submitWithPin: (pin: string) => mutation.mutateAsync(pin).catch(() => undefined),
+    submitWithPin: (pin: string, twoFactorCode: string) =>
+      mutation.mutateAsync({ pin, twoFactorCode }).catch(() => undefined),
     isSubmitting: mutation.isPending,
     // errors — PIN-related stay in the PIN dialog, the rest go to the Ringkasan
     formErrorKey: error?.where === "form" ? error.key : null,
     formErrorVars: error?.where === "form" ? error.vars : undefined,
-    pinErrorKey: error?.where === "pin" && error.key !== "pin.errLocked" ? error.key : null,
-    pinNotSet: pinNotSet || wallet.pinSet === false,
+    // errLocked → `pinCooldownSeconds`, errNotSet → `pinNotSet`: keduanya punya
+    // tampilan sendiri di dialog, bukan kalimat error di bawah kolom.
+    pinErrorKey:
+      error?.where === "pin" && error.key !== "pin.errLocked" && error.key !== "pin.errNotSet"
+        ? error.key
+        : null,
+    pinNotSet: wallet.pinSet === false,
     pinCooldownSeconds: pinCooldown.remaining,
+    // 2FA (USDX-717) — errLocked → `twoFactorCooldownSeconds` (hitung mundur sendiri).
+    twoFactorErrorKey:
+      error?.where === "twoFactor" && error.key !== "stepUp.errLocked" ? error.key : null,
+    twoFactorCooldownSeconds: stepUp.twoFactorCooldownSeconds,
+    twoFactorSetupRequired: stepUp.twoFactorSetupRequired,
+    outboundLockedUntil: stepUp.lockedUntil,
+    stepUpBlocked: stepUp.blocked,
   };
 }

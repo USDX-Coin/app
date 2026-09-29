@@ -8,14 +8,16 @@ import {
   mockCreateRedeem,
   mockGetBankAccounts,
 } from "@/lib/api/mock-api";
+import type { AuthResponse } from "@/types";
 
 describe("mockLogin", () => {
   describe("positive", () => {
     test("returns user and token for valid credentials", async () => {
-      const result = await mockLogin({
+      // 2FA mati (bawaan mock) → sesi langsung, bukan twoFactorRequired.
+      const result = (await mockLogin({
         email: "demo@usdx.com",
         password: "Demo1234",
-      });
+      })) as AuthResponse;
       expect(result.user).toBeDefined();
       expect(result.user.email).toBe("demo@usdx.com");
       expect(result.token).toContain("mock-jwt-token");
@@ -188,7 +190,7 @@ describe("mockChangePassword", () => {
         }),
       ).resolves.toBeUndefined();
 
-      const result = await mockLogin({ email: "demo@usdx.com", password: "NewPass1" });
+      const result = (await mockLogin({ email: "demo@usdx.com", password: "NewPass1" })) as AuthResponse;
       expect(result.user.email).toBe("demo@usdx.com");
 
       // Restore the demo secret so other suites keep working (module-scope state).

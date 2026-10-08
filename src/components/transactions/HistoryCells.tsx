@@ -44,7 +44,7 @@ export function AmountCell({ amount }: { amount: string }) {
   const { lang } = useLang();
   return (
     <span className="flex items-center justify-end gap-1.5 tabular-nums text-foreground">
-      <img src="/image/usdx-coin.svg" alt="" className="size-4 rounded-full" />
+      <img src="/image/logo-coin.png" alt="" className="size-4 rounded-full" />
       {formatTokenAmount(amount, lang)}
     </span>
   );

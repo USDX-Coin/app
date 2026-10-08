@@ -491,7 +491,7 @@ const en: Dict = {
   "route.send.desc": "No transfer was made and your balance did not change.",
   "route.send.title": "The send page could not be loaded",
   // auth — branding panel
-  "auth.brand.headline": "The Transparent & Regulated USD Stablecoin",
+  "auth.brand.headline": "The Transparent & Fully Backed USD Stablecoin",
   "auth.brand.tagline": "Mint, redeem, bridge, and send USDX across 8 networks — fast, secure, and fully backed.",
   "auth.brand.point1": "Fully backed & audited reserves",
   "auth.brand.point2": "Multi-chain — 8 EVM networks",
@@ -1661,7 +1661,7 @@ const id: Dict = {
   "route.send.desc": "Tidak ada transfer yang dibuat dan saldo Anda tidak berubah.",
   "route.send.title": "Halaman kirim gagal dimuat",
   // auth — branding panel
-  "auth.brand.headline": "Stablecoin USD yang Transparan & Teregulasi",
+  "auth.brand.headline": "Stablecoin USD yang Transparan & Dijamin Penuh",
   "auth.brand.tagline": "Mint, redeem, bridge, dan kirim USDX di 8 jaringan — cepat, aman, dan sepenuhnya dijamin.",
   "auth.brand.point1": "Cadangan dijamin penuh & teraudit",
   "auth.brand.point2": "Multi-chain — 8 jaringan EVM",

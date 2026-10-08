@@ -53,8 +53,11 @@ jadi dipakai lewat `duration-(--dur-3)`. Preset spring untuk Animate UI ada di
 `src/lib/motion.ts` — jangan tulis angka spring di komponen. Aturannya: keluar
 selalu lebih cepat daripada masuk.
 
-**Logo**: pakai `/image/usdx-coin.svg` (vektor, 2,3 kB). `usdx-logo.png` hanya
-tersisa sebagai cadangan favicon. **`Logo.svg` adalah logo LAMA — jangan dipakai.**
+**Logo**: satu sumber dengan landing (`usdx.co.id`) — `/image/logo-coin.png`
+(koin, juga favicon) dan `/image/logo-lockup.png` (koin + tulisan USDX). File
+disalin persis dari `landing-page/public/image/`; jangan digambar ulang. Di atas
+panel maroon pakai koin + teks putih (`UsdxMark tone="brand"`), karena tulisan
+coklat-emas di lockup tidak terbaca di maroon.
 
 Spesifikasi lengkap ada di file Figma `USDX (Copy)` → page `DS · Standar 2026-09`,
 dan catatan auditnya di `catatan/audit-ui-2026-09-03/`.

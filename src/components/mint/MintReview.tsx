@@ -82,7 +82,7 @@ export function MintReview({ open, onOpenChange }: MintReviewProps) {
         <DialogBody>
           <div className="flex flex-col gap-3">
             <Row label={t("sum.mintAmount")}>
-              <img src="/image/usdx-coin.svg" alt="" className="size-5 rounded-full" />
+              <img src="/image/logo-coin.png" alt="" className="size-5 rounded-full" />
               {formatAmount(amountUsdx)} USDX
             </Row>
             <Row label={t("sum.network")}>

@@ -92,7 +92,7 @@ export function ComingSoonPage({
         />
 
         <img
-          src="/image/usdx-coin.svg"
+          src="/image/logo-coin.png"
           alt=""
           aria-hidden
           className="relative size-14 rounded-full md:size-16"

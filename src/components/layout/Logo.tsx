@@ -2,9 +2,8 @@
 
 export function Logo({ className = "" }: { className?: string }) {
   return (
-    <div className={`flex items-center gap-2 ${className}`}>
-      <img src="/image/usdx-coin.svg" alt="USDX" className="h-9 w-9" />
-      <span className="text-xl font-bold text-primary">USDX</span>
+    <div className={`flex items-center ${className}`}>
+      <img src="/image/logo-lockup.png" alt="USDX" className="h-9 w-auto" />
     </div>
   );
 }

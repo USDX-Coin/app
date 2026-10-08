@@ -127,7 +127,7 @@ export default function DashboardLayout({
               </TooltipTrigger>
               <TooltipContent side="bottom">{t("nav.openMenu")}</TooltipContent>
             </Tooltip>
-            <img src="/image/usdx-coin.svg" alt="USDX" className="size-7 shrink-0 rounded-full" />
+            <img src="/image/logo-coin.png" alt="USDX" className="size-7 shrink-0 rounded-full" />
             <span className="max-w-40 truncate text-sm font-medium text-foreground">{name}</span>
           </header>
 

@@ -20,7 +20,7 @@ test.describe("Auth Responsive (1440)", () => {
   test("login shows branding panel and form side by side", async ({ page }) => {
     await gotoClean(page, "/login");
     await expect(
-      page.getByRole("heading", { name: "The Transparent & Regulated USD Stablecoin" })
+      page.getByRole("heading", { name: "The Transparent & Fully Backed USD Stablecoin" })
     ).toBeVisible();
     await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Login" })).toBeVisible();
@@ -46,7 +46,7 @@ test.describe("Auth Responsive (375)", () => {
   test("login hides branding panel but keeps the form usable", async ({ page }) => {
     await gotoClean(page, "/login");
     await expect(
-      page.getByRole("heading", { name: "The Transparent & Regulated USD Stablecoin" })
+      page.getByRole("heading", { name: "The Transparent & Fully Backed USD Stablecoin" })
     ).toBeHidden();
     await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
     await expect(page.getByPlaceholder("name@email.com")).toBeVisible();

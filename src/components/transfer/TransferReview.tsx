@@ -72,7 +72,7 @@ export function TransferReview({ transfer }: TransferReviewProps) {
         <DialogBody>
           <div className="flex flex-col gap-3">
             <Row label={t("sum.youWillSend")}>
-              <img src="/image/usdx-coin.svg" alt="" className="size-5 rounded-full" />
+              <img src="/image/logo-coin.png" alt="" className="size-5 rounded-full" />
               {formatAmount(parsedAmount)} USDX
             </Row>
             <Row label={t("sum.network")}>

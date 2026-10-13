@@ -3,17 +3,27 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { createWrapper } from "../../helpers/test-utils";
 import { useAppConfig } from "@/hooks/useAppConfig";
 import { getAppConfig } from "@/lib/api/config-api";
-import type { AppConfig } from "@/types";
+import type { AppConfig, PaymentMethodSummary } from "@/types";
 
 vi.mock("@/lib/api/config-api", () => ({ getAppConfig: vi.fn() }));
 const getAppConfigMock = vi.mocked(getAppConfig);
+
+const VA_NOBU: PaymentMethodSummary = {
+  channel: "VA",
+  bank: "NOBU",
+  provider: "DURIANPAY_SNAP",
+  feeType: "FLAT_IDR",
+  feeValue: "4000.00",
+};
 
 function config(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
     minMintIdr: "20000.00",
     minRedeemIdr: "20000.00",
     mintFeePct: "1.0",
+    // Deprecated (rev-16) — still sent by the backend, never read by the app.
     pgFeeVaFlat: "4000.00",
+    paymentMethods: [VA_NOBU],
     contractAddress: "0x1FF2000000000000000000000000000000000000",
     chain: "polygon",
     ...overrides,
@@ -35,7 +45,9 @@ describe("useAppConfig", () => {
       expect(result.current.minMintIdr).toBe(20_000);
       expect(result.current.minRedeemIdr).toBe(20_000);
       expect(result.current.mintFeePct).toBe(1);
-      expect(result.current.pgFeeVaFlat).toBe(4_000);
+      // rev-16: the offered methods, as sent — admin-set, never hardcoded.
+      expect(result.current.paymentMethods).toEqual([VA_NOBU]);
+      expect(result.current).not.toHaveProperty("pgFeeVaFlat");
       expect(result.current.contractAddress).toBe(
         "0x1FF2000000000000000000000000000000000000",
       );
@@ -90,7 +102,7 @@ describe("useAppConfig", () => {
       expect(result.current.isReady).toBe(false);
       expect(result.current.minMintIdr).toBeNull();
       expect(result.current.minRedeemIdr).toBeNull();
-      expect(result.current.pgFeeVaFlat).toBeNull();
+      expect(result.current.paymentMethods).toBeNull();
       expect(result.current.contractAddress).toBeNull();
       // An unknown mode must never read as a test one.
       expect(result.current.mintMode).toBe("PROD");
@@ -185,14 +197,13 @@ describe("useAppConfig", () => {
       // 0 is a plausible minimum and a plausible fee, so it must never be what a
       // malformed field turns into.
       getAppConfigMock.mockResolvedValue(
-        config({ minMintIdr: "", minRedeemIdr: "abc", pgFeeVaFlat: "abc" }),
+        config({ minMintIdr: "", minRedeemIdr: "abc" }),
       );
       const { result } = renderHook(() => useAppConfig(), { wrapper: createWrapper() });
 
       await waitFor(() => expect(result.current.mintFeePct).toBe(1));
       expect(result.current.minMintIdr).toBeNull();
       expect(result.current.minRedeemIdr).toBeNull();
-      expect(result.current.pgFeeVaFlat).toBeNull();
       expect(result.current.isReady).toBe(false);
     });
 
@@ -204,6 +215,43 @@ describe("useAppConfig", () => {
 
       await waitFor(() => expect(result.current.isReady).toBe(true));
       expect(result.current.contractAddress).toBeNull();
+    });
+  });
+
+  // rev-16 (§4.3.11): the offered payment methods come from the back office via
+  // `paymentMethods[]`. Absent (a backend from before USDX-749) is "not known",
+  // never "no methods"; an empty list is a real answer (⟺ 503 MINT_DISABLED).
+  describe("paymentMethods", () => {
+    describe("positive", () => {
+      test("an empty list is a known answer — ready, with no methods", async () => {
+        getAppConfigMock.mockResolvedValue(config({ paymentMethods: [] }));
+        const { result } = renderHook(() => useAppConfig(), { wrapper: createWrapper() });
+
+        await waitFor(() => expect(result.current.isReady).toBe(true));
+        expect(result.current.paymentMethods).toEqual([]);
+      });
+    });
+
+    describe("negative", () => {
+      test("absent from the response → null and NOT ready", async () => {
+        const { paymentMethods: _omit, ...legacy } = config();
+        void _omit;
+        getAppConfigMock.mockResolvedValue(legacy as AppConfig);
+        const { result } = renderHook(() => useAppConfig(), { wrapper: createWrapper() });
+
+        await waitFor(() => expect(result.current.config).not.toBeNull());
+        expect(result.current.paymentMethods).toBeNull();
+        expect(result.current.isReady).toBe(false);
+      });
+    });
+
+    describe("edge cases", () => {
+      test("readiness no longer hangs on the deprecated pgFeeVaFlat", async () => {
+        getAppConfigMock.mockResolvedValue(config({ pgFeeVaFlat: undefined }));
+        const { result } = renderHook(() => useAppConfig(), { wrapper: createWrapper() });
+
+        await waitFor(() => expect(result.current.isReady).toBe(true));
+      });
     });
   });
 });

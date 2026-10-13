@@ -252,6 +252,21 @@ export async function seedMintAvailable(
 }
 
 /**
+ * Which mint payment methods the mock back office offers (mock-api
+ * PAYMENT_METHODS_KEY, D25 rev-16): `["VA"]` = Transfer BNI off (production
+ * until §4.3.7), `[]` = none offered (503 MINT_DISABLED). Default (not armed) =
+ * Transfer BNI + VA.
+ */
+export async function seedPaymentMethods(
+  page: import("@playwright/test").Page,
+  channels: Array<"VA" | "BANK_TRANSFER">,
+) {
+  await page.addInitScript((c) => {
+    localStorage.setItem("usdx-mock-payment-methods", c.join(","));
+  }, channels);
+}
+
+/**
  * Arm the one-shot mint-maintenance seam (mock-api MINT_MAINTENANCE_KEY,
  * USDX-640): the next `POST /api/v2/mint` replies 503 MINT_UNDER_MAINTENANCE —
  * the gate closing after the config was already read as open. Disarms itself, so

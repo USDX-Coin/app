@@ -22,7 +22,8 @@ import {
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useMint } from "@/hooks/useMint";
-import { formatAmount, formatIDR, truncateAddress } from "@/lib/utils";
+import { formatAmount, truncateAddress } from "@/lib/utils";
+import { formatRateIDR } from "@/components/mint/MintRatesPopover";
 import { useLang } from "@/providers/LanguageProvider";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -46,11 +47,10 @@ export function MintReview({ open, onOpenChange }: MintReviewProps) {
     destinationAddress,
     isCustodialDestination,
     amountUsdx,
-    subtotalIdr,
-    mintFeeIdr,
-    vaFeeIdr,
-    totalPayIdr,
-    effectiveBuyRate,
+    conversionRate,
+    bniTransferBuyRate,
+    gatewayBuyRate,
+    isMintDisabled,
     submitMint,
     isSubmitting,
     createErrorKey,
@@ -82,7 +82,7 @@ export function MintReview({ open, onOpenChange }: MintReviewProps) {
         <DialogBody>
           <div className="flex flex-col gap-3">
             <Row label={t("sum.mintAmount")}>
-              <img src="/image/usdx-coin.svg" alt="" className="size-5 rounded-full" />
+              <img src="/image/logo-coin.png" alt="" className="size-5 rounded-full" />
               {formatAmount(amountUsdx)} USDX
             </Row>
             <Row label={t("sum.network")}>
@@ -102,30 +102,31 @@ export function MintReview({ open, onOpenChange }: MintReviewProps) {
               )}
               {truncateAddress(destinationAddress)}
             </Row>
-            <Row label={t("sum.exchangeRate")}>
-              1 USDX ≈ {effectiveBuyRate ? formatAmount(effectiveBuyRate) : "—"} IDR
-            </Row>
-          </div>
-
-          {/* What the user is about to be billed, itemised (USDX-638). This block
-              used to print the SUBTOTAL under the label "Total Pembayaran" and
-              then a sentence saying a fee would be added later — so on a Rp 20.000
-              purchase the Rp 4.000 VA fee, a fifth of the order, first appeared
-              on the next origin. The rates are the backend's (`mintFeePct`,
-              `pgFeeVaFlat`), so this total is the one checkout bills. */}
-          <div className="flex flex-col gap-1 border-t border-border pt-3">
-            <Row label={t("sum.mintValue")}>{formatIDR(subtotalIdr)}</Row>
-            <Row label={t("sum.mintFee")}>
-              {mintFeeIdr == null ? "—" : formatIDR(mintFeeIdr)}
-            </Row>
-            <Row label={t("sum.vaFee")}>{vaFeeIdr == null ? "—" : formatIDR(vaFeeIdr)}</Row>
-            <div className="mt-2 flex items-center justify-between border-t border-border pt-2">
-              <span className="text-sm font-medium text-foreground">{t("sum.totalPayment")}</span>
-              <span className="text-sm font-semibold text-foreground">
-                {totalPayIdr == null ? "—" : `≈ ${formatIDR(totalPayIdr)}`}
-              </span>
-            </div>
-            <p className="text-xs text-muted-text">{t("sum.feeNote")}</p>
+            {/* Kurs beli per metode yang DITAWARKAN — sama dengan "Lihat kurs" di
+                form (keputusan Wisnu 13 Okt 2026): satu angka "Nilai tukar" hanya
+                menampilkan kurs termurah per USDX (VA), padahal Transfer BNI bisa
+                lebih murah totalnya karena tanpa biaya layanan. Metode yang tidak
+                ditawarkan tidak tampil. Tanpa biaya/total: itu dikunci di /pay dan
+                tampil di checkout (§4.3.4). Backend lama tanpa kurs per metode →
+                tetap satu baris "Nilai tukar". */}
+            {bniTransferBuyRate == null && gatewayBuyRate == null ? (
+              <Row label={t("sum.exchangeRate")}>
+                1 USDX ≈ {conversionRate != null ? formatRateIDR(conversionRate) : "—"}
+              </Row>
+            ) : (
+              <>
+                {bniTransferBuyRate != null && (
+                  <Row label={t("mint.rateBni")}>
+                    <span data-testid="mint-review-rate-bni">1 USDX = {formatRateIDR(bniTransferBuyRate)}</span>
+                  </Row>
+                )}
+                {gatewayBuyRate != null && (
+                  <Row label={t("mint.rateVa")}>
+                    <span data-testid="mint-review-rate-va">1 USDX = {formatRateIDR(gatewayBuyRate)}</span>
+                  </Row>
+                )}
+              </>
+            )}
           </div>
 
           <Alert tone="info" title={t("confirm.note")}>
@@ -152,6 +153,9 @@ export function MintReview({ open, onOpenChange }: MintReviewProps) {
             size="lg"
             className="flex-1"
             onClick={handleProceed}
+            // 503 MINT_DISABLED re-read the config to an empty method list:
+            // a second create would get the same 503.
+            disabled={isMintDisabled && !isSubmitting}
             loading={isSubmitting}
             loadingLabel={t("common.processing")}
           >

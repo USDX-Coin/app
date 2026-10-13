@@ -156,7 +156,7 @@ export function TransferForm() {
           </div>
           <div className="flex items-center justify-between gap-2">
             <div className="flex shrink-0 items-center gap-2 rounded-full bg-primary py-1.5 pl-1.5 pr-3 text-primary-foreground">
-              <img src="/image/usdx-coin.svg" alt="" className="size-8 rounded-full" />
+              <img src="/image/logo-coin.png" alt="" className="size-8 rounded-full" />
               <span className="text-base font-semibold tracking-tight">USDX</span>
             </div>
             <Input

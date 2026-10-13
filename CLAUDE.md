@@ -53,8 +53,11 @@ jadi dipakai lewat `duration-(--dur-3)`. Preset spring untuk Animate UI ada di
 `src/lib/motion.ts` — jangan tulis angka spring di komponen. Aturannya: keluar
 selalu lebih cepat daripada masuk.
 
-**Logo**: pakai `/image/usdx-coin.svg` (vektor, 2,3 kB). `usdx-logo.png` hanya
-tersisa sebagai cadangan favicon. **`Logo.svg` adalah logo LAMA — jangan dipakai.**
+**Logo**: satu sumber dengan landing (`usdx.co.id`) — `/image/logo-coin.png`
+(koin, juga favicon) dan `/image/logo-lockup.png` (koin + tulisan USDX). File
+disalin persis dari `landing-page/public/image/`; jangan digambar ulang. Di atas
+panel maroon pakai koin + teks putih (`UsdxMark tone="brand"`), karena tulisan
+coklat-emas di lockup tidak terbaca di maroon.
 
 Spesifikasi lengkap ada di file Figma `USDX (Copy)` → page `DS · Standar 2026-09`,
 dan catatan auditnya di `catatan/audit-ui-2026-09-03/`.
@@ -385,3 +388,13 @@ Key points:
 - Jika implement sesuatu yang TIDAK ada di SOT → masukkan ke "Known Drift > Needs PM Action" dengan category ❓ Decision
 - Jika ada AC yang belum bisa dicapai → mark ⏳ Deferred dengan reason
 - Jika ada action yang harus dilakukan SETELAH merge → masukkan "Post-Merge Actions"
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

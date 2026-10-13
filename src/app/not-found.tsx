@@ -35,7 +35,7 @@ export default function NotFound() {
           <EmptyHeader>
             {/* The coin, not the wordmark: it is the one mark that reads on
                 every surface and in both themes. */}
-            <img src="/image/usdx-coin.svg" alt="USDX" className="mb-2 size-12 rounded-full" />
+            <img src="/image/logo-coin.png" alt="USDX" className="mb-2 size-12 rounded-full" />
             <EmptyMedia kind="empty">
               <Compass />
             </EmptyMedia>

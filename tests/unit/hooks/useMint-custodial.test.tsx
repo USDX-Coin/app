@@ -26,7 +26,10 @@ const MANUAL = "0x1234567890abcdef1234567890abcdef12345678";
 const CONFIG: AppConfig = {
   minMintIdr: "20000.00",
   mintFeePct: "1.0",
-  pgFeeVaFlat: "4000.00",
+  // rev-16: the offered methods (Virtual Account only here).
+  paymentMethods: [
+    { channel: "VA", bank: "NOBU", provider: "DURIANPAY_SNAP", feeType: "FLAT_IDR", feeValue: "4000.00" },
+  ],
   contractAddress: "0x1FF2000000000000000000000000000000000000",
   chain: "polygon",
 };

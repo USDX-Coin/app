@@ -261,7 +261,9 @@ export type RedeemBurnState = "idle" | "submitting" | "submitted" | "error";
 // `TransactionStatus`/`TransactionType` used by the W1-era mocked pages.
 
 export type AmountCurrency = "USD" | "IDR";
-export type PaymentChannel = "VA" | "QRIS";
+// `BANK_TRANSFER` = transfer langsung ke rekening BNI penampung (D25,
+// `bni-integration.md` §4.3.2, common.yaml § PaymentChannel).
+export type PaymentChannel = "VA" | "QRIS" | "BANK_TRANSFER";
 export type VaBank =
   | "BCA"
   | "BNI"
@@ -295,17 +297,44 @@ export type MintOrderStatus =
 // Consumer order type (openapi TransactionType). W2 = MINT; REDEEM effective W3.
 export type ConsumerOrderType = "MINT" | "REDEEM";
 
-// GET /api/v2/rate — base + directional spread for the consumer preview.
-// Mint previews with `effectiveBuyRate`, redeem (W3) with `effectiveSellRate`
-// (rate.yaml § ConsumerRate). The final transaction value is re-snapshotted by
-// the backend at order create — the FE never re-floats these.
+// GET /api/v2/rate — base rate + buy/sell rates for the consumer preview
+// (rate.yaml § ConsumerRate). Mint (D25, `bni-integration.md` §4.3.3) has TWO buy
+// rates: Transfer BNI = the BNI rate the desk copies from wondr by BNI, Virtual
+// Account = base × (1 + Y/100). Redeem previews with `effectiveSellRate`. Final
+// values are locked by the backend (mint: the USDX amount at create, the rate
+// at /pay).
 export interface ConsumerRate {
   baseRate: string;
+  /** @deprecated D25 — no longer used by the consumer mint. */
   spreadBuyPct: string;
   spreadSellPct: string;
-  effectiveBuyRate: string; // baseRate × (1 + spreadBuyPct/100); mint preview
+  /** @deprecated D25 — use `bniTransferBuyRate` / `gatewayBuyRate`. */
+  effectiveBuyRate: string;
+  /**
+   * D25 — Transfer BNI buy rate. `null` while the desk has not set it OR the
+   * method is not offered (production: until the D23 allowlist is live, §4.3.7).
+   * Optional only because a backend from before USDX-749 does not send it.
+   */
+  bniTransferBuyRate?: string | null;
+  /** When the desk last saved `bniTransferBuyRate` (ISO). Null with it. */
+  bniTransferBuyRateUpdatedAt?: string | null;
+  /** D25 — Virtual Account buy rate = baseRate × (1 + Y/100). Absent before USDX-749. */
+  gatewayBuyRate?: string;
   effectiveSellRate: string; // baseRate × (1 − spreadSellPct/100); redeem preview
   updatedAt: string;
+}
+
+// One payment method the backend is OFFERING right now (`enabled && available`),
+// as listed in GET /api/v2/config `paymentMethods[]` (payment-methods.yaml §
+// PaymentMethodSummary, rev-16 §4.3.11). Admin-set from the back office — the app
+// never hardcodes which methods exist or what they cost.
+export interface PaymentMethodSummary {
+  paymentMethodId?: string;
+  channel: PaymentChannel;
+  bank?: string | null;
+  provider: string;
+  feeType: "FLAT_IDR" | "PERCENT";
+  feeValue: string;
 }
 
 // GET /api/v2/config — the app's single source of runtime configuration
@@ -346,8 +375,18 @@ export interface AppConfig {
   redeemPayoutSimulated?: boolean;
   /** Mint fee, PERCENT of the subtotal (fee.yaml `mintFeePct`, e.g. "1.0" = 1%). */
   mintFeePct: string;
-  /** Payment-gateway VA fee, flat IDR (fee.yaml `pgFeeVaFlat`, e.g. "4000.00"). */
-  pgFeeVaFlat: string;
+  /**
+   * @deprecated rev-16 (§4.3.11) — the fee is per method now (`paymentMethods`).
+   * Still sent during the transition; the app must not read it.
+   */
+  pgFeeVaFlat?: string;
+  /**
+   * The mint payment methods OFFERED right now, in display order, each with its
+   * own fee (rev-16, app-config.yaml § paymentMethods). Empty ⟺ create replies
+   * 503 MINT_DISABLED. OPTIONAL only because a backend from before USDX-749 does
+   * not send it — absent is "not known", never "no methods".
+   */
+  paymentMethods?: PaymentMethodSummary[];
   /**
    * USDX token address on `chain`. This ALWAYS means the production token — it
    * is never swapped for the test one, in any mode. null when the chain isn't

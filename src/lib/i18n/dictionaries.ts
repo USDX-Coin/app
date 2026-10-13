@@ -60,7 +60,6 @@ const en: Dict = {
   "theme.toDark": "Switch to dark mode",
   // form
   "form.youWillMint": "You will mint",
-  "form.youWillPay": "You will pay",
   "form.youWillRedeem": "You will redeem",
   "form.youWillReceive": "You will receive",
   "form.youWillSend": "You will send",
@@ -91,20 +90,22 @@ const en: Dict = {
   "sum.amount": "Amount",
   "sum.receiveAmount": "Receive Amount",
   "sum.mintAmount": "Mint Amount",
-  "sum.mintValue": "Mint value",
-  "sum.mintFee": "Mint fee",
-  // VA is the only channel that ships: the provider (DurianPay) declined QRIS, so
-  // the old "QRIS/VA" copy named a channel no user can ever pick (USDX-638).
-  "sum.vaFee": "VA fee",
-  "sum.totalPayment": "Total Payment",
-  "sum.feeNote": "The VA fee is charged once, at payment.",
   // mint form / errors (USDX-201)
   "form.swapCurrency": "Swap currency",
   "mint.rateError": "Couldn't load the rate.",
+  // "Worth" box + the buy rates behind "See rates" (D25 rev-15). The method,
+  // and its total with fees, are shown only at checkout.
+  "mint.idrValue": "Worth",
+  "mint.seeRates": "See rates",
+  "mint.rateBni": "BNI Transfer rate",
+  "mint.rateBniSource": "as in the wondr by BNI app",
+  "mint.rateUpdated": "updated {time}",
+  "mint.rateVa": "Virtual Account rate",
+  "mint.methodChosenLater": "You choose the method on the payment page.",
   // The mint minimum and the fees come from the backend. Without them the app
   // has no honest number to show, so it says so instead of guessing (USDX-638).
-  "mint.configLoading": "Loading the mint limit and fees…",
-  "mint.configError": "Couldn't load the mint limit and fees, so minting is off for now.",
+  "mint.configLoading": "Loading the mint limit and payment methods…",
+  "mint.configError": "Couldn't load the mint limit and payment methods, so minting is off for now.",
   // Minting is closed for this user (USDX-636 opens it to a list of testers while
   // the test bundle runs). The copy says MAINTENANCE and nothing else: "test mode"
   // is our internal word, and someone who isn't part of the test has no reason to
@@ -491,7 +492,7 @@ const en: Dict = {
   "route.send.desc": "No transfer was made and your balance did not change.",
   "route.send.title": "The send page could not be loaded",
   // auth — branding panel
-  "auth.brand.headline": "The Transparent & Regulated USD Stablecoin",
+  "auth.brand.headline": "The Transparent & Fully Backed USD Stablecoin",
   "auth.brand.tagline": "Mint, redeem, bridge, and send USDX across 8 networks — fast, secure, and fully backed.",
   "auth.brand.point1": "Fully backed & audited reserves",
   "auth.brand.point2": "Multi-chain — 8 EVM networks",
@@ -1244,7 +1245,6 @@ const id: Dict = {
   "theme.toLight": "Ganti ke mode terang",
   "theme.toDark": "Ganti ke mode gelap",
   "form.youWillMint": "Anda akan mint",
-  "form.youWillPay": "Anda akan bayar",
   "form.youWillRedeem": "Anda akan redeem",
   "form.youWillReceive": "Anda akan menerima",
   "form.youWillSend": "Anda akan kirim",
@@ -1274,20 +1274,22 @@ const id: Dict = {
   "sum.amount": "Jumlah",
   "sum.receiveAmount": "Jumlah Diterima",
   "sum.mintAmount": "Jumlah Minting",
-  "sum.mintValue": "Nilai mint",
-  "sum.mintFee": "Biaya mint",
-  // VA satu-satunya kanal yang tayang: provider (DurianPay) menolak QRIS, jadi
-  // teks lama "QRIS/VA" menyebut kanal yang tidak pernah bisa dipilih (USDX-638).
-  "sum.vaFee": "Biaya VA",
-  "sum.totalPayment": "Total Pembayaran",
-  "sum.feeNote": "Biaya VA ditagih sekali, saat pembayaran.",
   // mint form / errors (USDX-201)
   "form.swapCurrency": "Tukar mata uang",
   "mint.rateError": "Gagal memuat nilai tukar.",
+  // Kotak "Senilai" + kurs beli di balik "Lihat kurs" (D25 rev-15). Metode dan
+  // total bayarnya (termasuk biaya) hanya tampil di checkout.
+  "mint.idrValue": "Senilai",
+  "mint.seeRates": "Lihat kurs",
+  "mint.rateBni": "Kurs Transfer BNI",
+  "mint.rateBniSource": "sesuai aplikasi wondr by BNI",
+  "mint.rateUpdated": "diperbarui {time}",
+  "mint.rateVa": "Kurs Virtual Account",
+  "mint.methodChosenLater": "Metode dipilih di halaman pembayaran.",
   // Batas minimum dan biaya datang dari backend. Tanpa itu app tidak punya
   // angka yang jujur untuk ditampilkan — jadi dikatakan, bukan ditebak (USDX-638).
-  "mint.configLoading": "Memuat batas minimum dan biaya…",
-  "mint.configError": "Gagal memuat batas minimum dan biaya, jadi mint dimatikan dulu.",
+  "mint.configLoading": "Memuat batas minimum dan metode pembayaran…",
+  "mint.configError": "Gagal memuat batas minimum dan metode pembayaran, jadi mint dimatikan dulu.",
   // Mint sedang ditutup untuk user ini (USDX-636 membukanya hanya untuk daftar
   // penguji selama bundle uji jalan). Teksnya bilang PEMELIHARAAN dan tidak
   // lebih: "mode uji" itu istilah internal kita — user yang tidak ikut pengujian
@@ -1661,7 +1663,7 @@ const id: Dict = {
   "route.send.desc": "Tidak ada transfer yang dibuat dan saldo Anda tidak berubah.",
   "route.send.title": "Halaman kirim gagal dimuat",
   // auth — branding panel
-  "auth.brand.headline": "Stablecoin USD yang Transparan & Teregulasi",
+  "auth.brand.headline": "Stablecoin USD yang Transparan & Dijamin Penuh",
   "auth.brand.tagline": "Mint, redeem, bridge, dan kirim USDX di 8 jaringan — cepat, aman, dan sepenuhnya dijamin.",
   "auth.brand.point1": "Cadangan dijamin penuh & teraudit",
   "auth.brand.point2": "Multi-chain — 8 jaringan EVM",

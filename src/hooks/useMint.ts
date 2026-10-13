@@ -21,6 +21,7 @@ import { env } from "@/lib/env";
 import { validateAmount, validateAddress } from "@/lib/validations";
 import { parseAmount, formatIDR } from "@/lib/utils";
 import { USDX_DECIMALS } from "@/lib/constants";
+import { cheapestBuyRate, offeredBuyRates, subtotalForMinimum } from "@/lib/mint/pricing";
 import { getChainById } from "@/lib/chains";
 import {
   isApiError,
@@ -28,6 +29,12 @@ import {
   isRateLimited,
   isMintUnderMaintenance,
 } from "@/lib/api/errors";
+
+// 503 MINT_DISABLED — no payment method is offered (§4.3.2). Its own code,
+// distinct from MINT_UNDER_MAINTENANCE (app-config.yaml § mintAvailable).
+function isMintDisabledError(error: unknown): boolean {
+  return isApiError(error) && error.status === 503 && error.code === "MINT_DISABLED";
+}
 
 // Maps a create-order failure to an i18n key the review modal renders inline
 // (week2.md § Endpoints Mint error codes).
@@ -44,7 +51,7 @@ function mintErrorKey(error: unknown): string | null {
     // page already uses — a raw 503 would tell the user nothing, and the real
     // reason (a tester-only test bundle) is not theirs to decode.
     if (isMintUnderMaintenance(error)) return "mint.maintenanceNotice";
-    if (error.code === "MINT_DISABLED") return "mint.errDisabled";
+    if (isMintDisabledError(error)) return "mint.errDisabled";
     if (error.status === 403) return "mint.errGate"; // EMAIL/KYC/SUSPENDED gating
   }
   return "mint.errGeneric";
@@ -89,46 +96,40 @@ export function useMint() {
   const isCustodialDestination =
     custodialAvailable && destinationAddress !== "" && destinationAddress === custodial.address;
 
-  const effectiveBuyRate = rateQuery.data ? Number(rateQuery.data.effectiveBuyRate) : null;
+  // D25 (`bni-integration.md` §4.3.3/§4.3.4, rev-15): two buy rates, one per
+  // method — Transfer BNI and Virtual Account. Only the methods the backend is
+  // OFFERING count (`paymentMethods[]` from GET /api/v2/config, set by admin in
+  // the back office), and the form converts with the CHEAPEST of them, both ways:
+  // "Senilai Rp Y" = USDX × that rate, a rupiah entry ÷ that rate = USDX — the
+  // divisor create uses to lock the USDX amount. The total per method, fees
+  // included, is shown only in checkout.
+  const buyRates = useMemo(
+    () => offeredBuyRates(rateQuery.data, config.paymentMethods),
+    [rateQuery.data, config.paymentMethods],
+  );
+  const conversionRate = cheapestBuyRate(buyRates);
   const enteredAmount = parseAmount(store.amount);
 
-  // Derive the USDX amount + IDR subtotal from the entered currency + live rate.
-  // "Anda akan bayar" = subtotal (before fee; fee is shown at checkout).
+  // The USDX amount and its rupiah value at the cheapest buy rate ("Senilai",
+  // before fees).
   const { amountUsdx, subtotalIdr } = useMemo(() => {
-    if (!effectiveBuyRate || enteredAmount <= 0) return { amountUsdx: 0, subtotalIdr: 0 };
-    return store.amountCurrency === "USD"
-      ? { amountUsdx: enteredAmount, subtotalIdr: enteredAmount * effectiveBuyRate }
-      : { amountUsdx: enteredAmount / effectiveBuyRate, subtotalIdr: enteredAmount };
-  }, [enteredAmount, store.amountCurrency, effectiveBuyRate]);
-
-  // What the user actually pays, itemised (week2.md § Fee & Spread). The rates
-  // are the backend's (`mintFeePct` is a percentage of the subtotal, `pgFeeVaFlat`
-  // a flat rupiah amount), so the figures here are the same ones checkout bills.
-  // null while the config or the rate is missing — a payment screen shows a real
-  // number or none at all.
-  //
-  // The arithmetic mirrors `mint-order.pricing.ts` step for step, because the
-  // whole point of showing a total here is that it equals the invoice:
-  //   1. each component is settled to 2 decimals first (`resolveMintAmounts`
-  //      stores them as 2-dp strings), then
-  //   2. the SUM is floored to whole rupiah (`floorTotalPayIdr`).
-  // Flooring a raw float sum instead drifts by a rupiah whenever a component's
-  // third decimal would have rounded up — the exact surprise this ticket exists
-  // to remove.
-  const { mintFeeIdr, vaFeeIdr, totalPayIdr } = useMemo(() => {
-    if (config.mintFeePct == null || config.pgFeeVaFlat == null || subtotalIdr <= 0) {
-      return { mintFeeIdr: null, vaFeeIdr: null, totalPayIdr: null };
+    if (enteredAmount <= 0) return { amountUsdx: 0, subtotalIdr: 0 };
+    // Typed in USDX, the USDX figure needs no rate — it must not collapse to 0
+    // while the rate or the method list is missing (e.g. the Ringkasan after a
+    // 503 MINT_DISABLED re-read the config to an empty list).
+    if (!conversionRate) {
+      return { amountUsdx: store.amountCurrency === "USD" ? enteredAmount : 0, subtotalIdr: 0 };
     }
-    const settle = (value: number) => Number(value.toFixed(2));
-    const subtotal = settle(subtotalIdr);
-    const fee = settle(subtotalIdr * (config.mintFeePct / 100));
-    const va = settle(config.pgFeeVaFlat);
-    return {
-      mintFeeIdr: fee,
-      vaFeeIdr: va,
-      totalPayIdr: Math.floor(subtotal + fee + va),
-    };
-  }, [subtotalIdr, config.mintFeePct, config.pgFeeVaFlat]);
+    return store.amountCurrency === "USD"
+      ? { amountUsdx: enteredAmount, subtotalIdr: enteredAmount * conversionRate }
+      : { amountUsdx: enteredAmount / conversionRate, subtotalIdr: enteredAmount };
+  }, [enteredAmount, store.amountCurrency, conversionRate]);
+
+  // The rupiah minimum is judged like create judges it (§4.3.4): the order is
+  // rejected only when NO offered method passes, so the highest offered rate
+  // decides. Showing "Senilai" at the cheapest rate and judging the minimum at
+  // the highest is not a contradiction — they answer different questions.
+  const minimumSubtotalIdr = subtotalForMinimum(amountUsdx, buyRates);
 
   // The minimum is judged on the IDR subtotal whichever side the user typed on
   // (USDX-638). Denominating in USDX used to take a different branch that skipped
@@ -139,11 +140,11 @@ export function useMint() {
   // no subtotal to judge, and without the config there is no minimum. Neither is
   // guessed — `isFormValid` keeps the button disabled instead.
   const amountError =
-    !store.amount || effectiveBuyRate == null || config.minMintIdr == null
+    !store.amount || conversionRate == null || config.minMintIdr == null
       ? null
       : validateAmount(store.amount, "mint", {
           minIdr: config.minMintIdr,
-          subtotalIdr,
+          subtotalIdr: minimumSubtotalIdr ?? 0,
           amountUsdx,
         });
 
@@ -180,7 +181,10 @@ export function useMint() {
       // form behind it live. Re-read the config instead: it is one shared query,
       // the backend is the authority on the gate, and every surface converges on
       // the same answer.
-      if (isMintUnderMaintenance(error)) config.refetch();
+      // Same for 503 MINT_DISABLED: the last method was switched off in the back
+      // office after the config was read — the list comes back empty and the
+      // form closes with the same sentence.
+      if (isMintUnderMaintenance(error) || isMintDisabledError(error)) config.refetch();
     },
     onSuccess: async (order) => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
@@ -223,16 +227,23 @@ export function useMint() {
   const isMintUnavailable =
     !config.mintAvailable || isMintUnderMaintenance(createMutation.error);
 
+  // No payment method is offered (`paymentMethods: []` ⟺ 503 MINT_DISABLED,
+  // app-config.yaml): nothing could be paid with, so the form says so up front
+  // instead of after the Ringkasan. Only a KNOWN empty list counts — an absent
+  // or still-loading one is "not ready", handled by `isConfigReady`.
+  const isMintDisabled = config.paymentMethods != null && config.paymentMethods.length === 0;
+
   const isFormValid =
     store.amount !== "" &&
     destinationAddress !== "" &&
     !amountError &&
     !addressError &&
-    effectiveBuyRate != null &&
-    // No config, no mint: the amount would be unvalidated and the review screen
-    // would have to invent a fee. Better a disabled button with a reason.
+    conversionRate != null &&
+    // No config, no mint: the amount would be unvalidated and the offered
+    // methods unknown. Better a disabled button with a reason.
     config.isReady &&
     !isMintUnavailable &&
+    !isMintDisabled &&
     amountUsdx > 0;
 
   // Swapping changes which side you type in — not how much you are buying. So it
@@ -250,13 +261,13 @@ export function useMint() {
     if (enteredAmount > 0) {
       // No rate, no swap. Relabelling a figure whose meaning would change by four
       // orders of magnitude is precisely the bug, so hold until the rate lands.
-      if (!effectiveBuyRate) return;
+      if (!conversionRate) return;
       store.setAmount(
         next === "USD"
-          ? toUsdxInput(enteredAmount / effectiveBuyRate)
+          ? toUsdxInput(enteredAmount / conversionRate)
           : // Rupiah has no subunit anywhere else in this flow; whole rupiah is
             // also what keeps the round trip from accumulating a fraction.
-            String(Math.round(enteredAmount * effectiveBuyRate)),
+            String(Math.round(enteredAmount * conversionRate)),
       );
     }
 
@@ -289,7 +300,13 @@ export function useMint() {
     setReviewOpen: store.setReviewOpen,
     // rate
     rate: rateQuery.data ?? null,
-    effectiveBuyRate,
+    // The rate "Senilai" converts with (cheapest offered) and the two method
+    // rates behind "Lihat kurs" — each null while its method is not offered.
+    conversionRate,
+    bniTransferBuyRate: buyRates?.bniTransfer ?? null,
+    bniTransferBuyRateUpdatedAt:
+      buyRates?.bniTransfer != null ? (rateQuery.data?.bniTransferBuyRateUpdatedAt ?? null) : null,
+    gatewayBuyRate: buyRates?.gateway ?? null,
     isRateLoading: rateQuery.isLoading,
     isRateError: rateQuery.isError,
     // A failed rate load needs an action, not just a sentence (finding B8):
@@ -301,6 +318,8 @@ export function useMint() {
     isConfigReady: config.isReady,
     // Mint is closed for this user (config gate, or a 503 mid-session).
     isMintUnavailable,
+    // No payment method is offered right now (`paymentMethods: []`).
+    isMintDisabled,
     isConfigLoading: config.isLoading,
     isConfigError: config.isError,
     isConfigFetching: config.isFetching,
@@ -309,9 +328,6 @@ export function useMint() {
     enteredAmount,
     amountUsdx,
     subtotalIdr,
-    mintFeeIdr,
-    vaFeeIdr,
-    totalPayIdr,
     // validation
     amountError,
     amountErrorVars,

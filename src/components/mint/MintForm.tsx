@@ -173,8 +173,12 @@ export function MintForm() {
   // held to six decimals, so multiplying back leaves a fraction of a rupiah that
   // is not a real part of the price — and on this screen it would read as the
   // amount having moved.
+  // Rounded DOWN, like the backend's total (`api/mint.yaml` § totalPayIdr) and the
+  // checkout's breakdown: Rp 163.312,50 rounded half-up read Rp 163.313 here while
+  // checkout charged Rp 163.312 (dev, 13 Okt 2026). The 1e-6 only absorbs binary
+  // float noise (x.9999999 for a whole rupiah), never a real fraction.
   const idrDisplay =
-    conversionPending && isUsd ? "…" : subtotalIdr > 0 ? ID_NUMBER.format(Math.round(subtotalIdr)) : "0";
+    conversionPending && isUsd ? "…" : subtotalIdr > 0 ? ID_NUMBER.format(Math.floor(subtotalIdr + 1e-6)) : "0";
 
   // The hooks hand back i18n keys (validations.ts returns keys, not sentences —
   // finding D1); the sentence is made here, where the language is known.

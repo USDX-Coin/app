@@ -48,6 +48,8 @@ export function MintReview({ open, onOpenChange }: MintReviewProps) {
     isCustodialDestination,
     amountUsdx,
     conversionRate,
+    bniTransferBuyRate,
+    gatewayBuyRate,
     isMintDisabled,
     submitMint,
     isSubmitting,
@@ -100,14 +102,31 @@ export function MintReview({ open, onOpenChange }: MintReviewProps) {
               )}
               {truncateAddress(destinationAddress)}
             </Row>
-            {/* "Nilai tukar" (week2.md § 2) = the rate the USDX amount was
-                converted with — the cheapest offered buy rate, same as the
-                form's "Senilai" (D25 rev-15). No fee or total here: the final
-                rate and total per method are locked at /pay and shown only in
-                checkout (§4.3.4), so any figure here would be a guess. */}
-            <Row label={t("sum.exchangeRate")}>
-              1 USDX ≈ {conversionRate != null ? formatRateIDR(conversionRate) : "—"}
-            </Row>
+            {/* Kurs beli per metode yang DITAWARKAN — sama dengan "Lihat kurs" di
+                form (keputusan Wisnu 13 Okt 2026): satu angka "Nilai tukar" hanya
+                menampilkan kurs termurah per USDX (VA), padahal Transfer BNI bisa
+                lebih murah totalnya karena tanpa biaya layanan. Metode yang tidak
+                ditawarkan tidak tampil. Tanpa biaya/total: itu dikunci di /pay dan
+                tampil di checkout (§4.3.4). Backend lama tanpa kurs per metode →
+                tetap satu baris "Nilai tukar". */}
+            {bniTransferBuyRate == null && gatewayBuyRate == null ? (
+              <Row label={t("sum.exchangeRate")}>
+                1 USDX ≈ {conversionRate != null ? formatRateIDR(conversionRate) : "—"}
+              </Row>
+            ) : (
+              <>
+                {bniTransferBuyRate != null && (
+                  <Row label={t("mint.rateBni")}>
+                    <span data-testid="mint-review-rate-bni">1 USDX = {formatRateIDR(bniTransferBuyRate)}</span>
+                  </Row>
+                )}
+                {gatewayBuyRate != null && (
+                  <Row label={t("mint.rateVa")}>
+                    <span data-testid="mint-review-rate-va">1 USDX = {formatRateIDR(gatewayBuyRate)}</span>
+                  </Row>
+                )}
+              </>
+            )}
           </div>
 
           <Alert tone="info" title={t("confirm.note")}>

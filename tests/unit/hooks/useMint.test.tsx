@@ -8,7 +8,7 @@ import { mintCheckoutCode } from "@/lib/api/auth-api";
 import { getAppConfig } from "@/lib/api/config-api";
 import { createMintOrder } from "@/lib/api/mint-api";
 import { ApiError } from "@/lib/api/client";
-import type { AppConfig, MintOrderCreated } from "@/types";
+import type { AppConfig, MintOrderCreated, PaymentMethodSummary } from "@/types";
 
 const { pushMock } = vi.hoisted(() => ({ pushMock: vi.fn() }));
 
@@ -40,17 +40,32 @@ const createMintOrderMock = vi.mocked(createMintOrder);
 const CREATED_ORDER = { id: "mint_test_1" } as MintOrderCreated;
 
 const VALID_ADDRESS = "0x1234567890abcdef1234567890abcdef12345678";
-// mock rate: baseRate 16000 × (1 + 2.5%) = 16400
-const EFFECTIVE_RATE = 16400;
-// GET /api/v2/config defaults: Rp 20.000 minimum, 1% mint fee, Rp 4.000 flat VA.
+// Mock rates (D25): Transfer BNI 15.950 (desk, wondr), Virtual Account = 16.000 ×
+// 1.01 = 16.160. With both offered the form converts with the cheapest — BNI.
+const CHEAPEST_RATE = 15_950;
+const VA_RATE = 16_160;
+// GET /api/v2/config defaults: Rp 20.000 minimum, both methods offered.
 const MIN_MINT_IDR = 20_000;
-const VA_FEE_IDR = 4_000;
+const BNI_METHOD: PaymentMethodSummary = {
+  channel: "BANK_TRANSFER",
+  bank: "BNI",
+  provider: "BNI",
+  feeType: "FLAT_IDR",
+  feeValue: "0.00",
+};
+const VA_METHOD: PaymentMethodSummary = {
+  channel: "VA",
+  bank: "NOBU",
+  provider: "DURIANPAY_SNAP",
+  feeType: "FLAT_IDR",
+  feeValue: "4000.00",
+};
 
 function config(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
     minMintIdr: "20000.00",
     mintFeePct: "1.0",
-    pgFeeVaFlat: "4000.00",
+    paymentMethods: [VA_METHOD, BNI_METHOD],
     contractAddress: "0x1FF2000000000000000000000000000000000000",
     chain: "polygon",
     ...overrides,
@@ -58,6 +73,7 @@ function config(overrides: Partial<AppConfig> = {}): AppConfig {
 }
 
 beforeEach(() => {
+  localStorage.removeItem("usdx-mock-payment-methods");
   useMintStore.getState().reset();
   useAuthStore.setState({ token: null });
   pushMock.mockReset();
@@ -83,7 +99,7 @@ describe("useMint", () => {
       useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
       const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
       await waitFor(() => {
-        expect(result.current.effectiveBuyRate).toBe(EFFECTIVE_RATE);
+        expect(result.current.conversionRate).toBe(CHEAPEST_RATE);
         expect(result.current.isConfigReady).toBe(true);
       });
       return result;
@@ -119,10 +135,11 @@ describe("useMint", () => {
       });
 
       test("the SAME amount entered on the USDX side reports the SAME error", async () => {
-        // 1 USDX = Rp 16.400 → a Rp 16.400 subtotal, under the Rp 20.000 floor.
+        // 1 USDX: Senilai Rp 15.950; even at the highest offered rate (VA,
+        // Rp 16.160) the subtotal is under the Rp 20.000 floor.
         const result = await withAmount("1", "USD");
 
-        expect(result.current.subtotalIdr).toBe(EFFECTIVE_RATE);
+        expect(result.current.subtotalIdr).toBe(CHEAPEST_RATE);
         expect(result.current.amountError).toBe("validation.amount.minMint");
         expect(result.current.isFormValid).toBe(false);
       });
@@ -156,7 +173,7 @@ describe("useMint", () => {
         useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
         const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
         // Synchronously (before the rate query resolves) the form can't be valid.
-        expect(result.current.effectiveBuyRate).toBeNull();
+        expect(result.current.conversionRate).toBeNull();
         expect(result.current.isFormValid).toBe(false);
       });
 
@@ -197,11 +214,10 @@ describe("useMint", () => {
         expect(result.current.isConfigReady).toBe(false);
         expect(result.current.isFormValid).toBe(false);
         // No minimum was asserted against an amount the app cannot judge, and no
-        // fee figure was made up for the review screen.
+        // rate was picked without knowing which methods are offered.
         expect(result.current.amountError).toBeNull();
         expect(result.current.minMintIdr).toBeNull();
-        expect(result.current.vaFeeIdr).toBeNull();
-        expect(result.current.totalPayIdr).toBeNull();
+        expect(result.current.conversionRate).toBeNull();
       });
 
       test("an otherwise valid form is not mintable while the config is missing", async () => {
@@ -211,90 +227,130 @@ describe("useMint", () => {
 
         const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
 
-        await waitFor(() => expect(result.current.effectiveBuyRate).toBe(EFFECTIVE_RATE));
         await waitFor(() => expect(result.current.isConfigError).toBe(true), { timeout: 5000 });
         expect(result.current.isFormValid).toBe(false);
       });
     });
   });
 
-  // What the user is about to be billed, shown BEFORE leaving for checkout
-  // (USDX-638). The old review printed the subtotal under "Total Pembayaran" and
-  // promised a fee later; on a Rp 20.000 order that hidden fee is 20%.
-  describe("payment breakdown", () => {
+  // D25 rev-15 (`bni-integration.md` §4.3.3/§4.3.4): the form converts with the
+  // CHEAPEST buy rate among the methods the backend OFFERS (`paymentMethods[]`
+  // from GET /api/v2/config, admin-set). No fee or per-method total is computed
+  // here — those are shown only in checkout.
+  describe("two buy rates (D25)", () => {
+    async function rendered(amount = "100", currency: "USD" | "IDR" = "USD") {
+      useMintStore.getState().setAmountCurrency(currency);
+      useMintStore.getState().setAmount(amount);
+      useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
+      const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+      await waitFor(() => expect(result.current.isConfigReady).toBe(true));
+      return result;
+    }
+
     describe("positive", () => {
-      test("itemises mint fee and flat VA fee into the total the user pays", async () => {
-        useMintStore.getState().setAmountCurrency("IDR");
-        useMintStore.getState().setAmount("100000");
-        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+      test("both offered → 'Senilai' uses the cheaper (BNI) rate; both rates exposed", async () => {
+        const result = await rendered("100");
+        await waitFor(() => expect(result.current.conversionRate).toBe(CHEAPEST_RATE));
 
-        await waitFor(() => expect(result.current.isConfigReady).toBe(true));
-        await waitFor(() => expect(result.current.subtotalIdr).toBe(100_000));
-
-        expect(result.current.mintFeeIdr).toBe(1_000); // 1% of the subtotal
-        expect(result.current.vaFeeIdr).toBe(VA_FEE_IDR); // flat, not a percentage
-        expect(result.current.totalPayIdr).toBe(105_000);
+        expect(result.current.subtotalIdr).toBe(100 * CHEAPEST_RATE);
+        expect(result.current.bniTransferBuyRate).toBe(CHEAPEST_RATE);
+        expect(result.current.bniTransferBuyRateUpdatedAt).toBe("2026-10-02T02:15:00Z");
+        expect(result.current.gatewayBuyRate).toBe(VA_RATE);
+        expect(result.current.isFormValid).toBe(true);
       });
 
-      test("the VA fee stays flat as the order grows", async () => {
-        useMintStore.getState().setAmountCurrency("IDR");
-        useMintStore.getState().setAmount("20000");
+      test("a rupiah entry converts to USDX with the same cheapest rate", async () => {
+        const result = await rendered(String(3 * CHEAPEST_RATE), "IDR");
+        await waitFor(() => expect(result.current.amountUsdx).toBeCloseTo(3, 9));
+        expect(result.current.subtotalIdr).toBe(3 * CHEAPEST_RATE);
+      });
+
+      test("Transfer BNI not offered → only the VA rate counts", async () => {
+        // Production until §4.3.7: the method is off, the rate is null.
+        localStorage.setItem("usdx-mock-payment-methods", "VA");
+        getAppConfigMock.mockResolvedValue(config({ paymentMethods: [VA_METHOD] }));
+        const result = await rendered("100");
+        await waitFor(() => expect(result.current.conversionRate).toBe(VA_RATE));
+
+        expect(result.current.subtotalIdr).toBe(100 * VA_RATE);
+        expect(result.current.bniTransferBuyRate).toBeNull();
+        expect(result.current.bniTransferBuyRateUpdatedAt).toBeNull();
+      });
+    });
+
+    describe("negative", () => {
+      test("no method offered → mint disabled up front, nothing to convert with", async () => {
+        getAppConfigMock.mockResolvedValue(config({ paymentMethods: [] }));
+        const result = await rendered("100");
+
+        expect(result.current.isMintDisabled).toBe(true);
+        expect(result.current.conversionRate).toBeNull();
+        expect(result.current.isFormValid).toBe(false);
+        // Not the maintenance gate — a different reason with its own sentence.
+        expect(result.current.isMintUnavailable).toBe(false);
+      });
+
+      test("a backend without `paymentMethods` → config not ready, no rate guessed", async () => {
+        const { paymentMethods: _omit, ...legacy } = config();
+        void _omit;
+        getAppConfigMock.mockResolvedValue(legacy as AppConfig);
+        useMintStore.getState().setAmount("100");
+        useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
         const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
 
-        await waitFor(() => expect(result.current.isConfigReady).toBe(true));
-        await waitFor(() => expect(result.current.subtotalIdr).toBe(20_000));
+        await waitFor(() => expect(getAppConfigMock).toHaveBeenCalled());
+        await waitFor(() => expect(result.current.rate).not.toBeNull());
+        expect(result.current.isConfigReady).toBe(false);
+        expect(result.current.isMintDisabled).toBe(false);
+        expect(result.current.conversionRate).toBeNull();
+        expect(result.current.isFormValid).toBe(false);
+        // Typed in USDX, the USDX figure needs no rate; the rupiah side waits.
+        expect(result.current.amountUsdx).toBe(100);
+        expect(result.current.subtotalIdr).toBe(0);
+      });
 
-        expect(result.current.vaFeeIdr).toBe(VA_FEE_IDR);
-        expect(result.current.totalPayIdr).toBe(20_000 + 200 + VA_FEE_IDR);
+      test("503 MINT_DISABLED on create re-reads the config", async () => {
+        createMintOrderMock.mockRejectedValueOnce(new ApiError(503, "MINT_DISABLED", "no method"));
+        const result = await rendered("100");
+        await waitFor(() => expect(result.current.isFormValid).toBe(true));
+        const callsBefore = getAppConfigMock.mock.calls.length;
+
+        getAppConfigMock.mockResolvedValue(config({ paymentMethods: [] }));
+        await act(async () => {
+          await result.current.submitMint().catch(() => {});
+        });
+
+        await waitFor(() => expect(result.current.createErrorKey).toBe("mint.errDisabled"));
+        await waitFor(() => expect(result.current.isMintDisabled).toBe(true));
+        expect(getAppConfigMock.mock.calls.length).toBeGreaterThan(callsBefore);
+        // The Ringkasan behind the error keeps the amount the user typed.
+        expect(result.current.amountUsdx).toBe(100);
       });
     });
 
     describe("edge cases", () => {
-      test("no amount entered → no figures at all, not zeroes", async () => {
-        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
-        await waitFor(() => expect(result.current.isConfigReady).toBe(true));
-
-        expect(result.current.mintFeeIdr).toBeNull();
-        expect(result.current.vaFeeIdr).toBeNull();
-        expect(result.current.totalPayIdr).toBeNull();
+      test("the minimum passes when ANY offered method passes (highest rate decides)", async () => {
+        // Rp 19.800 at the BNI rate is 1.241379 USDX; at the VA rate that is a
+        // Rp 20.060 subtotal ≥ Rp 20.000, so create would accept it (§4.3.4).
+        const result = await rendered("19800", "IDR");
+        await waitFor(() => expect(result.current.conversionRate).toBe(CHEAPEST_RATE));
+        expect(result.current.amountError).toBeNull();
       });
 
-      // The backend floors total_pay to whole rupiah (`floorTotalPayIdr`,
-      // mint-order.pricing.ts). A USDX-denominated amount almost always produces
-      // a fractional subtotal, so without the same flooring the review would
-      // quote a rupiah more than the VA actually bills.
-      test("a fractional subtotal is floored to whole rupiah, like the invoice", async () => {
-        useMintStore.getState().setAmount("0.123"); // USD side
-        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
-
-        await waitFor(() => expect(result.current.isConfigReady).toBe(true));
-        await waitFor(() => expect(result.current.subtotalIdr).toBeCloseTo(2017.2, 4));
-
-        // 2017.20 subtotal + 20.17 mint fee (1%, settled to 2 dp) + 4000.00 VA
-        // = 6037.37 → floored to 6037.
-        expect(result.current.mintFeeIdr).toBe(20.17);
-        expect(result.current.vaFeeIdr).toBe(4_000);
-        expect(result.current.totalPayIdr).toBe(6_037);
+      test("…and fails when the only offered method is below the minimum", async () => {
+        getAppConfigMock.mockResolvedValue(config({ paymentMethods: [BNI_METHOD] }));
+        const result = await rendered("19800", "IDR");
+        await waitFor(() => expect(result.current.conversionRate).toBe(CHEAPEST_RATE));
+        expect(result.current.gatewayBuyRate).toBeNull();
+        expect(result.current.amountError).toBe("validation.amount.minMint");
       });
 
-      test("components settle to 2 dp BEFORE the sum is floored", async () => {
-        // 0.7 USDX × 16,400 = 11,480 exactly; a 0.755% fee lands on 86.674 and
-        // must become 86.67 before the sum, which is what the backend stores.
-        getAppConfigMock.mockResolvedValue(config({ mintFeePct: "0.755" }));
-        useMintStore.getState().setAmount("0.7");
-        const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
-
-        await waitFor(() => expect(result.current.mintFeeIdr).toBe(86.67));
-        expect(result.current.totalPayIdr).toBe(15_566); // 11480 + 86.67 + 4000 = 15566.67
-      });
-
-      test("the total is always a whole number of rupiah", async () => {
-        for (const amount of ["0.123", "1.7", "13.31"]) {
-          useMintStore.getState().setAmount(amount);
-          const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
-          await waitFor(() => expect(result.current.totalPayIdr).not.toBeNull());
-          expect(Number.isInteger(result.current.totalPayIdr)).toBe(true);
-        }
+      test("a BNI rate whose method is not in `paymentMethods` is not used", async () => {
+        // The rate endpoint still sends 15.950, but the back office has BNI off.
+        getAppConfigMock.mockResolvedValue(config({ paymentMethods: [VA_METHOD] }));
+        const result = await rendered("100");
+        await waitFor(() => expect(result.current.conversionRate).toBe(VA_RATE));
+        expect(result.current.bniTransferBuyRate).toBeNull();
       });
     });
   });
@@ -304,18 +360,18 @@ describe("useMint", () => {
       test("USD input: amountUsdx = entered, subtotalIdr = entered × rate", async () => {
         useMintStore.getState().setAmount("100");
         const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
-        await waitFor(() => expect(result.current.effectiveBuyRate).toBe(EFFECTIVE_RATE));
+        await waitFor(() => expect(result.current.conversionRate).toBe(CHEAPEST_RATE));
         expect(result.current.amountUsdx).toBe(100);
-        expect(result.current.subtotalIdr).toBe(100 * EFFECTIVE_RATE);
+        expect(result.current.subtotalIdr).toBe(100 * CHEAPEST_RATE);
       });
 
       test("IDR input: amountUsdx = entered / rate, subtotalIdr = entered", async () => {
         useMintStore.getState().setAmountCurrency("IDR");
-        useMintStore.getState().setAmount(String(100 * EFFECTIVE_RATE));
+        useMintStore.getState().setAmount(String(100 * CHEAPEST_RATE));
         const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
-        await waitFor(() => expect(result.current.effectiveBuyRate).toBe(EFFECTIVE_RATE));
+        await waitFor(() => expect(result.current.conversionRate).toBe(CHEAPEST_RATE));
         expect(result.current.amountUsdx).toBe(100);
-        expect(result.current.subtotalIdr).toBe(100 * EFFECTIVE_RATE);
+        expect(result.current.subtotalIdr).toBe(100 * CHEAPEST_RATE);
       });
 
       test("selectedChain is locked to Polygon", () => {
@@ -328,7 +384,7 @@ describe("useMint", () => {
       test("zero amount yields zero derived amounts", async () => {
         useMintStore.getState().setAmount("0");
         const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
-        await waitFor(() => expect(result.current.effectiveBuyRate).toBe(EFFECTIVE_RATE));
+        await waitFor(() => expect(result.current.conversionRate).toBe(CHEAPEST_RATE));
         expect(result.current.amountUsdx).toBe(0);
         expect(result.current.subtotalIdr).toBe(0);
       });
@@ -345,7 +401,7 @@ describe("useMint", () => {
       useMintStore.getState().setAmountCurrency(currency);
       useMintStore.getState().setAmount(amount);
       const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
-      await waitFor(() => expect(result.current.effectiveBuyRate).toBe(EFFECTIVE_RATE));
+      await waitFor(() => expect(result.current.conversionRate).toBe(CHEAPEST_RATE));
       return result;
     }
 
@@ -362,9 +418,9 @@ describe("useMint", () => {
 
         act(() => result.current.toggleCurrency());
 
-        // 19,000 / 16,400 = 1.158537 USDX — not 19,000 USDX.
+        // 19,000 / 15,950 = 1.191223 USDX — not 19,000 USDX.
         expect(useMintStore.getState().amountCurrency).toBe("USD");
-        expect(Number(useMintStore.getState().amount)).toBeCloseTo(19_000 / EFFECTIVE_RATE, 6);
+        expect(Number(useMintStore.getState().amount)).toBeCloseTo(19_000 / CHEAPEST_RATE, 6);
         // The purchase is unchanged: the rupiah side still reads ~Rp 19.000.
         await waitFor(() => expect(result.current.subtotalIdr).toBeCloseTo(19_000, 1));
       });
@@ -375,13 +431,13 @@ describe("useMint", () => {
         act(() => result.current.toggleCurrency());
 
         expect(useMintStore.getState().amountCurrency).toBe("IDR");
-        expect(useMintStore.getState().amount).toBe(String(2 * EFFECTIVE_RATE));
+        expect(useMintStore.getState().amount).toBe(String(2 * CHEAPEST_RATE));
         await waitFor(() => expect(result.current.amountUsdx).toBeCloseTo(2, 6));
       });
 
       test("a whole USDX figure keeps its plain spelling, no trailing zeros", async () => {
-        // 32,800 / 16,400 = exactly 2 — the field should read "2", not "2.000000".
-        const result = await ready(String(2 * EFFECTIVE_RATE), "IDR");
+        // 31,900 / 15,950 = exactly 2 — the field should read "2", not "2.000000".
+        const result = await ready(String(2 * CHEAPEST_RATE), "IDR");
 
         act(() => result.current.toggleCurrency());
 
@@ -404,7 +460,7 @@ describe("useMint", () => {
         useMintStore.getState().setAmount("19000");
         // Rendered without waiting: the rate query has not resolved.
         const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
-        expect(result.current.effectiveBuyRate).toBeNull();
+        expect(result.current.conversionRate).toBeNull();
 
         act(() => result.current.toggleCurrency());
 

@@ -23,6 +23,7 @@ import { MintReview } from "@/components/mint/MintReview";
 import { AddressBookPicker } from "@/components/mint/AddressBookPicker";
 import { AddressScannerDialog } from "@/components/mint/AddressScannerDialog";
 import { MintFormSkeleton } from "@/components/mint/MintFormSkeleton";
+import { MintRatesPopover } from "@/components/mint/MintRatesPopover";
 import { useLang } from "@/providers/LanguageProvider";
 
 // The amount is a real `Input`, stripped of its own box because it already sits
@@ -32,6 +33,12 @@ import { useLang } from "@/providers/LanguageProvider";
 // first, which reads as a rendering fault rather than as focus. The box owns it
 // via `has-[:focus-visible]`, so keyboard focus is still visible (finding E2)
 // but it outlines the thing a person actually perceives as the field.
+// Whole rupiah in Indonesian digits ("1.620.000") — the computed "Senilai" figure.
+// The chip already says Rp, so no prefix. The editable input stays raw digits:
+// `parseAmount` reads "." as the decimal point, so grouping dots there would
+// change the amount being typed.
+const ID_NUMBER = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 });
+
 const AMOUNT_INPUT_CLASS =
   "h-auto min-w-0 flex-1 rounded-md border-0 bg-transparent px-1 py-0 text-right text-2xl font-semibold tracking-tight shadow-none ring-0 outline-none focus-visible:border-0 focus-visible:ring-0 md:text-2xl dark:bg-transparent pointer-fine:hover:border-transparent";
 
@@ -48,8 +55,11 @@ function AmountBox({
   computed,
   ariaLabel,
   disabled,
+  labelAside,
 }: {
   label: string;
+  /** Sits at the end of the label row — "Lihat kurs" on the "Senilai" box. */
+  labelAside?: React.ReactNode;
   chip: React.ReactNode;
   isInput: boolean;
   value: string;
@@ -60,7 +70,10 @@ function AmountBox({
 }) {
   return (
     <div className="flex flex-col gap-4 rounded-xl bg-muted p-4 transition-control has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-focus-ring has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-card">
-      <p className="text-sm font-medium text-muted-text">{label}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-medium text-muted-text">{label}</p>
+        {labelAside}
+      </div>
       <div className="flex items-center justify-between gap-2">
         {chip}
         {isInput ? (
@@ -92,7 +105,11 @@ export function MintForm() {
     toggleCurrency,
     amountUsdx,
     subtotalIdr,
-    effectiveBuyRate,
+    conversionRate,
+    bniTransferBuyRate,
+    bniTransferBuyRateUpdatedAt,
+    gatewayBuyRate,
+    rate,
     isRateLoading,
     isRateError,
     isRateFetching,
@@ -108,6 +125,7 @@ export function MintForm() {
     addressError,
     isFormValid,
     isMintUnavailable,
+    isMintDisabled,
     isConfigReady,
     isConfigLoading,
     isConfigFetching,
@@ -127,17 +145,36 @@ export function MintForm() {
   // card (B12 — Mint had no loading state). `isLoading` is false on every later
   // refetch, so this is the first paint only; after that only derived values
   // wait. All hooks above have already run, so the early return is safe.
-  if (isRateLoading && !effectiveBuyRate) return <MintFormSkeleton />;
+  if (isRateLoading && !rate) return <MintFormSkeleton />;
+
+  // Minting can't go ahead at all: closed for this user (maintenance) or no
+  // payment method offered. Either way nothing should take input.
+  const isClosed = isMintUnavailable || isMintDisabled;
+
+  // The rate answered and the methods are known, yet no offered method has a
+  // usable rate (e.g. a backend from before D25 that sends no `gatewayBuyRate`).
+  // There is no honest number to convert with, so say the rate failed and offer
+  // a retry — never fall back to the deprecated `effectiveBuyRate`.
+  const isRateUnusable =
+    !!rate && isConfigReady && !isMintDisabled && conversionRate == null;
+  const showRateError = isRateError || isRateUnusable;
 
   const onAmountChange = (value: string) => setAmount(value.replace(/[^0-9.]/g, ""));
-  const usdxDisplay = isRateLoading && amount ? "…" : amountUsdx > 0 ? formatAmount(amountUsdx) : "0";
+  // Which currency the amount is denominated in. The denominated box is the
+  // editable one and sits on top; its counter-value sits below.
+  const isUsd = amountCurrency === "USD";
+
+  // No usable conversion rate yet (rate or method list still loading, or
+  // unusable): the counter-value is pending, not a confident "0".
+  const conversionPending = !!amount && (isRateLoading || (conversionRate == null && !isClosed));
+  const usdxDisplay = conversionPending && !isUsd ? "…" : amountUsdx > 0 ? formatAmount(amountUsdx) : "0";
   // Whole rupiah, like every other rupiah figure in this flow (`formatIDR` in the
   // Ringkasan). Without it a swapped amount reads "19,000.01": the USDX side is
   // held to six decimals, so multiplying back leaves a fraction of a rupiah that
   // is not a real part of the price — and on this screen it would read as the
   // amount having moved.
   const idrDisplay =
-    isRateLoading && amount ? "…" : subtotalIdr > 0 ? formatAmount(Math.round(subtotalIdr)) : "0";
+    conversionPending && isUsd ? "…" : subtotalIdr > 0 ? ID_NUMBER.format(Math.round(subtotalIdr)) : "0";
 
   // The hooks hand back i18n keys (validations.ts returns keys, not sentences —
   // finding D1); the sentence is made here, where the language is known.
@@ -146,9 +183,6 @@ export function MintForm() {
   const amountErrorText = translateValidation(t, amountError, amountErrorVars);
   const addressErrorText = translateValidation(t, addressError);
 
-  // Which currency the amount is denominated in. The denominated box is the
-  // editable one and sits on top; its counter-value sits below.
-  const isUsd = amountCurrency === "USD";
 
   const usdxChip = (
     <div className="flex shrink-0 items-center gap-2 rounded-full bg-primary py-1.5 pl-1.5 pr-3 text-primary-foreground">
@@ -175,32 +209,44 @@ export function MintForm() {
     </div>
   );
 
-  // USDX box: the mint amount. Editable & labelled "mint" when denominating in
-  // USDX; otherwise it's the "you will receive" counter-value.
+  // USDX box: always "Anda akan mint X USDX" (D25 rev-15) — the amount locked
+  // at create. Editable when denominating in USDX.
   const usdxBox = (
     <AmountBox
-      label={isUsd ? t("form.youWillMint") : t("form.youWillReceive")}
+      label={t("form.youWillMint")}
       chip={usdxChip}
       isInput={isUsd}
       value={amount}
       onChange={onAmountChange}
       computed={usdxDisplay}
-      ariaLabel={isUsd ? t("form.youWillMint") : t("form.youWillReceive")}
-      disabled={isMintUnavailable}
+      ariaLabel={t("form.youWillMint")}
+      disabled={isClosed}
     />
   );
 
-  // IDR box: always "you will pay"; editable when denominating in IDR.
+  // IDR box "Senilai Rp Y": the rupiah value at the CHEAPEST offered buy rate,
+  // before fees (D25 rev-15); editable when denominating in IDR, converted back
+  // with the same rate. What is actually paid, per method and with fees, is
+  // shown only in checkout; "Lihat kurs" on this box lists the offered rates.
   const idrBox = (
     <AmountBox
-      label={t("form.youWillPay")}
+      label={t("mint.idrValue")}
       chip={idrChip}
       isInput={!isUsd}
       value={amount}
       onChange={onAmountChange}
       computed={idrDisplay}
-      ariaLabel={t("form.youWillPay")}
-      disabled={isMintUnavailable}
+      ariaLabel={t("mint.idrValue")}
+      disabled={isClosed}
+      labelAside={
+        conversionRate == null ? undefined : (
+          <MintRatesPopover
+            bniTransferBuyRate={bniTransferBuyRate}
+            bniTransferBuyRateUpdatedAt={bniTransferBuyRateUpdatedAt}
+            gatewayBuyRate={gatewayBuyRate}
+          />
+        )
+      }
     />
   );
 
@@ -219,6 +265,14 @@ export function MintForm() {
       {isMintUnavailable && (
         <Alert tone="warning" title={t("mint.maintenanceTitle")}>
           {t("mint.maintenanceNotice")}
+        </Alert>
+      )}
+      {/* No payment method is offered (`paymentMethods: []` from the back
+          office ⟺ create would answer 503 MINT_DISABLED). Same placement and
+          reason as the maintenance notice: told before typing, not after. */}
+      {!isMintUnavailable && isMintDisabled && (
+        <Alert tone="warning" data-testid="mint-disabled-notice">
+          {t("mint.errDisabled")}
         </Alert>
       )}
 
@@ -247,7 +301,9 @@ export function MintForm() {
                 variant="outline"
                 size="icon"
                 onClick={toggleCurrency}
-                disabled={isMintUnavailable}
+                // A typed amount can't be converted without a rate; the swap
+                // would silently do nothing (useMint holds it), so say so.
+                disabled={isClosed || (!!amount && conversionRate == null)}
                 aria-label={t("form.swapCurrency")}
                 className="absolute left-1/2 top-1/2 size-11 -translate-x-1/2 -translate-y-1/2 rounded-full"
               >
@@ -264,34 +320,33 @@ export function MintForm() {
           </p>
         )}
 
-        {/* Exchange rate (live). A failed load now carries the action it asks
-            for — "Coba lagi" used to be a sentence with nothing to click (B8). */}
-        <div className="flex flex-col gap-2">
-          <p className="text-sm font-medium text-muted-text">{t("form.exchangeRate")}</p>
-          {isRateError ? (
-            <Alert
-              tone="danger"
-              shape="strip"
-              action={
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => refetchRate()}
-                  loading={isRateFetching}
-                  loadingLabel={t("common.processing")}
-                >
-                  {t("common.retry")}
-                </Button>
-              }
-            >
-              {t("mint.rateError")}
-            </Alert>
-          ) : (
-            <p className="text-base font-medium tracking-tight text-foreground">
-              1 USDX ≈ {effectiveBuyRate ? formatAmount(effectiveBuyRate) : "…"} IDR
-            </p>
-          )}
-        </div>
+        {/* A failed rate load carries the action it asks for — "Coba lagi"
+            used to be a sentence with nothing to click (B8). The rates
+            themselves sit behind "Lihat kurs" on the "Senilai" box (D25). */}
+        {showRateError && !isClosed && (
+          <Alert
+            tone="danger"
+            shape="strip"
+            action={
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  refetchRate();
+                  // An unusable rate can be the config's stale method list
+                  // just as well as the rate — re-read both.
+                  if (isRateUnusable) refetchConfig();
+                }}
+                loading={isRateFetching}
+                loadingLabel={t("common.processing")}
+              >
+                {t("common.retry")}
+              </Button>
+            }
+          >
+            {t("mint.rateError")}
+          </Alert>
+        )}
 
         {/* Destination source (USDX-567): a user with an ACTIVE custodial wallet
             sees "Wallet custodial saya" first and by default — the address is
@@ -311,11 +366,11 @@ export function MintForm() {
               className="w-full"
               size="default"
             >
-              <ToggleGroupItem value="custodial" className="flex-1" disabled={isMintUnavailable}>
+              <ToggleGroupItem value="custodial" className="flex-1" disabled={isClosed}>
                 <Wallet />
                 {t("mint.destCustodial")}
               </ToggleGroupItem>
-              <ToggleGroupItem value="manual" className="flex-1" disabled={isMintUnavailable}>
+              <ToggleGroupItem value="manual" className="flex-1" disabled={isClosed}>
                 <BookText />
                 {t("mint.destManual")}
               </ToggleGroupItem>
@@ -349,7 +404,7 @@ export function MintForm() {
                 variant="link"
                 size="sm"
                 className="-mr-3"
-                disabled={isMintUnavailable}
+                disabled={isClosed}
                 onClick={() => setPickerOpen(true)}
               >
                 {t("form.addAddressBook")}
@@ -361,7 +416,7 @@ export function MintForm() {
                 placeholder={t("form.addressPh")}
                 value={manualAddress}
                 onChange={(e) => setDestinationAddress(e.target.value)}
-                disabled={isMintUnavailable}
+                disabled={isClosed}
                 aria-invalid={!!addressErrorText}
                 aria-describedby="mint-address-error"
               />
@@ -370,7 +425,7 @@ export function MintForm() {
                   <TooltipTrigger asChild>
                     <InputGroupButton
                       size="icon"
-                      disabled={isMintUnavailable}
+                      disabled={isClosed}
                       onClick={() => setPickerOpen(true)}
                       aria-label={t("addrbook.pickTitle")}
                     >
@@ -383,7 +438,7 @@ export function MintForm() {
                   <TooltipTrigger asChild>
                     <InputGroupButton
                       size="icon"
-                      disabled={isMintUnavailable}
+                      disabled={isClosed}
                       onClick={() => setScanOpen(true)}
                       aria-label={t("scan.open")}
                     >
@@ -399,11 +454,11 @@ export function MintForm() {
         )}
       </div>
 
-      {/* The minimum and the fees are backend-owned (USDX-635/638). Until they
-          land there is no honest amount to validate against and no fee to show,
-          so Mint is off and says why — rather than falling back to a guessed
+      {/* The minimum and the offered payment methods are backend-owned
+          (USDX-635/638, rev-16). Until they land there is no honest amount to
+          validate against and no rate to convert with, so Mint is off and says why — rather than falling back to a guessed
           bound that would silently reject a perfectly valid Rp 20.000. */}
-      {!isConfigReady && !isMintUnavailable && (
+      {!isConfigReady && !isClosed && (
         <Alert
           tone={isConfigLoading ? "info" : "danger"}
           shape="strip"
@@ -434,7 +489,7 @@ export function MintForm() {
         // Closed for everyone while minting is unavailable — including the
         // non-VERIFIED path, which otherwise opens the KYC dialog and invites
         // someone to finish KYC for an action they still could not take.
-        disabled={isMintUnavailable || (gate.verified && !isFormValid)}
+        disabled={isClosed || (gate.verified && !isFormValid)}
         onClick={() => gate.guard(() => setReviewOpen(true))}
       >
         {t("btn.mint")}

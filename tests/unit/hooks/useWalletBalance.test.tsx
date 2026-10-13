@@ -47,7 +47,7 @@ function setConfig(
     minMintIdr: 20_000,
     minRedeemIdr: 20_000,
     mintFeePct: 1,
-    pgFeeVaFlat: 4_000,
+    paymentMethods: [],
     contractAddress,
     testContractAddress,
     // Tidak relevan untuk saldo — spanduk redeem yang membacanya (USDX-683).
@@ -300,7 +300,7 @@ describe("useWalletBalance", () => {
         minMintIdr: null,
         minRedeemIdr: null,
         mintFeePct: null,
-        pgFeeVaFlat: null,
+        paymentMethods: null,
         contractAddress: null,
         testContractAddress: null,
         redeemPayoutSimulated: null,

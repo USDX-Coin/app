@@ -160,14 +160,21 @@ export function MintForm() {
   const showRateError = isRateError || isRateUnusable;
 
   const onAmountChange = (value: string) => setAmount(value.replace(/[^0-9.]/g, ""));
-  const usdxDisplay = isRateLoading && amount ? "…" : amountUsdx > 0 ? formatAmount(amountUsdx) : "0";
+  // Which currency the amount is denominated in. The denominated box is the
+  // editable one and sits on top; its counter-value sits below.
+  const isUsd = amountCurrency === "USD";
+
+  // No usable conversion rate yet (rate or method list still loading, or
+  // unusable): the counter-value is pending, not a confident "0".
+  const conversionPending = !!amount && (isRateLoading || (conversionRate == null && !isClosed));
+  const usdxDisplay = conversionPending && !isUsd ? "…" : amountUsdx > 0 ? formatAmount(amountUsdx) : "0";
   // Whole rupiah, like every other rupiah figure in this flow (`formatIDR` in the
   // Ringkasan). Without it a swapped amount reads "19,000.01": the USDX side is
   // held to six decimals, so multiplying back leaves a fraction of a rupiah that
   // is not a real part of the price — and on this screen it would read as the
   // amount having moved.
   const idrDisplay =
-    isRateLoading && amount ? "…" : subtotalIdr > 0 ? ID_NUMBER.format(Math.round(subtotalIdr)) : "0";
+    conversionPending && isUsd ? "…" : subtotalIdr > 0 ? ID_NUMBER.format(Math.round(subtotalIdr)) : "0";
 
   // The hooks hand back i18n keys (validations.ts returns keys, not sentences —
   // finding D1); the sentence is made here, where the language is known.
@@ -176,9 +183,6 @@ export function MintForm() {
   const amountErrorText = translateValidation(t, amountError, amountErrorVars);
   const addressErrorText = translateValidation(t, addressError);
 
-  // Which currency the amount is denominated in. The denominated box is the
-  // editable one and sits on top; its counter-value sits below.
-  const isUsd = amountCurrency === "USD";
 
   const usdxChip = (
     <div className="flex shrink-0 items-center gap-2 rounded-full bg-primary py-1.5 pl-1.5 pr-3 text-primary-foreground">
@@ -297,7 +301,9 @@ export function MintForm() {
                 variant="outline"
                 size="icon"
                 onClick={toggleCurrency}
-                disabled={isClosed}
+                // A typed amount can't be converted without a rate; the swap
+                // would silently do nothing (useMint holds it), so say so.
+                disabled={isClosed || (!!amount && conversionRate == null)}
                 aria-label={t("form.swapCurrency")}
                 className="absolute left-1/2 top-1/2 size-11 -translate-x-1/2 -translate-y-1/2 rounded-full"
               >
@@ -325,7 +331,12 @@ export function MintForm() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => refetchRate()}
+                onClick={() => {
+                  refetchRate();
+                  // An unusable rate can be the config's stale method list
+                  // just as well as the rate — re-read both.
+                  if (isRateUnusable) refetchConfig();
+                }}
                 loading={isRateFetching}
                 loadingLabel={t("common.processing")}
               >

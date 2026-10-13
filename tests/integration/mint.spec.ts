@@ -230,5 +230,25 @@ test.describe("Mint Page", () => {
       await expect(page.getByRole("button", { name: "Mint", exact: true })).toBeDisabled();
       await expect(page.getByRole("button", { name: "See rates" })).toHaveCount(0);
     });
+
+    test("last method switched off mid-session → 503 in the Ringkasan, proceed off", async ({
+      page,
+    }) => {
+      await page.getByPlaceholder("0", { exact: true }).fill("100");
+      await page.getByPlaceholder("0x5DC489Ad05Efc").fill(VALID_ADDRESS);
+      await page.getByRole("button", { name: "Mint", exact: true }).click();
+      const dialog = page.getByRole("dialog");
+      await expect(dialog.getByText("Transaction Summary")).toBeVisible();
+
+      // The back office turns the last method off after the config was read.
+      await page.evaluate(() => localStorage.setItem("usdx-mock-payment-methods", ""));
+      await dialog.getByRole("button", { name: "Proceed Payment" }).click();
+
+      await expect(dialog.getByText("Minting isn't available yet")).toBeVisible();
+      await expect(dialog.getByRole("button", { name: "Proceed Payment" })).toBeDisabled();
+      // The summary keeps the amount the user chose.
+      await expect(dialog.getByText("100 USDX").first()).toBeVisible();
+      await expect(page).toHaveURL(/\/mint$/);
+    });
   });
 });

@@ -304,6 +304,9 @@ describe("useMint", () => {
         expect(result.current.isMintDisabled).toBe(false);
         expect(result.current.conversionRate).toBeNull();
         expect(result.current.isFormValid).toBe(false);
+        // Typed in USDX, the USDX figure needs no rate; the rupiah side waits.
+        expect(result.current.amountUsdx).toBe(100);
+        expect(result.current.subtotalIdr).toBe(0);
       });
 
       test("503 MINT_DISABLED on create re-reads the config", async () => {
@@ -320,6 +323,8 @@ describe("useMint", () => {
         await waitFor(() => expect(result.current.createErrorKey).toBe("mint.errDisabled"));
         await waitFor(() => expect(result.current.isMintDisabled).toBe(true));
         expect(getAppConfigMock.mock.calls.length).toBeGreaterThan(callsBefore);
+        // The Ringkasan behind the error keeps the amount the user typed.
+        expect(result.current.amountUsdx).toBe(100);
       });
     });
 

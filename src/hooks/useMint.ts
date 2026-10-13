@@ -113,7 +113,13 @@ export function useMint() {
   // The USDX amount and its rupiah value at the cheapest buy rate ("Senilai",
   // before fees).
   const { amountUsdx, subtotalIdr } = useMemo(() => {
-    if (!conversionRate || enteredAmount <= 0) return { amountUsdx: 0, subtotalIdr: 0 };
+    if (enteredAmount <= 0) return { amountUsdx: 0, subtotalIdr: 0 };
+    // Typed in USDX, the USDX figure needs no rate — it must not collapse to 0
+    // while the rate or the method list is missing (e.g. the Ringkasan after a
+    // 503 MINT_DISABLED re-read the config to an empty list).
+    if (!conversionRate) {
+      return { amountUsdx: store.amountCurrency === "USD" ? enteredAmount : 0, subtotalIdr: 0 };
+    }
     return store.amountCurrency === "USD"
       ? { amountUsdx: enteredAmount, subtotalIdr: enteredAmount * conversionRate }
       : { amountUsdx: enteredAmount / conversionRate, subtotalIdr: enteredAmount };

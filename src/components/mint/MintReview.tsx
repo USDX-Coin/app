@@ -48,6 +48,7 @@ export function MintReview({ open, onOpenChange }: MintReviewProps) {
     isCustodialDestination,
     amountUsdx,
     conversionRate,
+    isMintDisabled,
     submitMint,
     isSubmitting,
     createErrorKey,
@@ -133,6 +134,9 @@ export function MintReview({ open, onOpenChange }: MintReviewProps) {
             size="lg"
             className="flex-1"
             onClick={handleProceed}
+            // 503 MINT_DISABLED re-read the config to an empty method list:
+            // a second create would get the same 503.
+            disabled={isMintDisabled && !isSubmitting}
             loading={isSubmitting}
             loadingLabel={t("common.processing")}
           >

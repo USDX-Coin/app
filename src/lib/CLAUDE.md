@@ -10,7 +10,8 @@ Shared utilities, validation rules, constants, chain config, and mock API layer.
 | `validations.ts` | All form validators — return an i18n key or `null`; `translateValidation(t, key)` renders it |
 | `constants.ts` | Exchange rate (1:1), redeem min/max, mint ceiling, brand color. The mint MINIMUM is not here — it comes from `GET /api/v2/config` (USDX-638) |
 | `chains.ts` | 8 supported chains with id, name, icon, contract address |
-| `api/config-api.ts` | `getAppConfig()` → `GET /api/v2/config` — mint minimum (IDR), fee rates, token address, mint mode |
+| `api/config-api.ts` | `getAppConfig()` → `GET /api/v2/config` — mint minimum (IDR), offered payment methods (`paymentMethods[]`, rev-16 — `pgFeeVaFlat` is deprecated and never read), token address, mint mode |
+| `mint/pricing.ts` | D25 buy rates: `offeredBuyRates` (a rate counts only if its method is in `paymentMethods[]` and the rate is usable), `cheapestBuyRate` ("Senilai" + IDR→USDX divisor), `subtotalForMinimum` (minimum judged at the highest offered rate, like create) |
 | `uuid.ts` | `uuidv7()` — the `Idempotency-Key` (RFC 9562 v7, time-ordered) |
 | `wallet-transfer.ts` | The only reader of a custodial transfer's raw `status` / `failureReason` (USDX-701): unknown status → PENDING (the contract's default branch), CONFIRMED/FAILED final, unknown reason on FAILED → no technical label (still FAILED) |
 | `api/mock-api.ts` | Mock backend — login, register, transactions, mint/redeem orders |

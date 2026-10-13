@@ -39,6 +39,70 @@ describe("mockGetConsumerRate", () => {
       expect(rate.effectiveBuyRate).toBe("16400.00");
       expect(typeof rate.updatedAt).toBe("string");
     });
+
+    test("D25: two buy rates — Transfer BNI (desk/wondr) and Virtual Account (base + Y%)", async () => {
+      const rate = await mockGetConsumerRate();
+      expect(rate.bniTransferBuyRate).toBe("15950.00");
+      expect(rate.bniTransferBuyRateUpdatedAt).toBe("2026-10-02T02:15:00Z");
+      expect(rate.gatewayBuyRate).toBe("16160.00");
+    });
+  });
+
+  describe("negative", () => {
+    afterEach(() => localStorage.removeItem("usdx-mock-payment-methods"));
+
+    test("BNI not offered → bniTransferBuyRate and its time are null", async () => {
+      localStorage.setItem("usdx-mock-payment-methods", "VA");
+      const rate = await mockGetConsumerRate();
+      expect(rate.bniTransferBuyRate).toBeNull();
+      expect(rate.bniTransferBuyRateUpdatedAt).toBeNull();
+      expect(rate.gatewayBuyRate).toBe("16160.00");
+    });
+  });
+});
+
+// D25 rev-15 (§4.3.4): create locks the USDX amount; a rupiah entry is divided
+// by the CHEAPEST offered buy rate. No method offered → 503 MINT_DISABLED.
+describe("mockCreateMintOrder — D25 conversion", () => {
+  afterEach(() => localStorage.removeItem("usdx-mock-payment-methods"));
+
+  describe("positive", () => {
+    test("IDR entry ÷ the cheapest offered rate (BNI 15.950)", async () => {
+      const order = await mockCreateMintOrder({
+        userAddress: "0xMint00000000000000000000000000000000000b",
+        amount: String(2 * 15950),
+        amountCurrency: "IDR",
+        chain: "polygon",
+      });
+      expect(order.amount).toBe("2.00");
+    });
+  });
+
+  describe("negative", () => {
+    test("no method offered → 503 MINT_DISABLED", async () => {
+      localStorage.setItem("usdx-mock-payment-methods", "");
+      await expect(
+        mockCreateMintOrder({
+          userAddress: "0xMint00000000000000000000000000000000000c",
+          amount: "100",
+          amountCurrency: "USD",
+          chain: "polygon",
+        }),
+      ).rejects.toMatchObject({ status: 503, code: "MINT_DISABLED" });
+    });
+  });
+
+  describe("edge cases", () => {
+    test("BNI not offered → divided by the VA rate (16.160)", async () => {
+      localStorage.setItem("usdx-mock-payment-methods", "VA");
+      const order = await mockCreateMintOrder({
+        userAddress: "0xMint00000000000000000000000000000000000d",
+        amount: String(2 * 16160),
+        amountCurrency: "IDR",
+        chain: "polygon",
+      });
+      expect(order.amount).toBe("2.00");
+    });
   });
 });
 

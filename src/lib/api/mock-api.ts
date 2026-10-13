@@ -43,6 +43,7 @@ import type {
   RedeemOrderDetail,
   RedeemStatus,
   BurnMode,
+  PaymentMethodSummary,
 } from "@/types";
 import {
   MOCK_CONTRACT_ADDRESS,
@@ -547,6 +548,12 @@ export async function mockGetBankAccounts(): Promise<BankAccount[]> {
 // for their unit tests until those legacy mocks are retired.
 
 const MOCK_BASE_RATE = 16000;
+// D25 buy rates (`bni-integration.md` §4.3.3): Transfer BNI = the BNI rate the
+// desk copies from wondr (15.950 here, so it is the cheapest, as it usually is),
+// Virtual Account = base × (1 + Y/100) = 16.160.
+const MOCK_BNI_TRANSFER_BUY_RATE = 15950;
+const MOCK_BNI_RATE_UPDATED_AT = "2026-10-02T02:15:00Z"; // 09.15 WIB
+const MOCK_GATEWAY_MARKUP_PCT = 1;
 const MOCK_SPREAD_BUY_PCT = 2.5;
 const MOCK_SPREAD_SELL_PCT = 2.0;
 // Mint minimum, in RUPIAH — mirrors `fee_configs.min_mint_idr` (USDX-635). The
@@ -575,6 +582,47 @@ const MOCK_VA_BANKS: VaBank[] = [
 ];
 
 const mockEffectiveBuyRate = () => MOCK_BASE_RATE * (1 + MOCK_SPREAD_BUY_PCT / 100);
+const mockGatewayBuyRate = () => MOCK_BASE_RATE * (1 + MOCK_GATEWAY_MARKUP_PCT / 100);
+
+// E2E seam (mock-only): which payment methods the back office has switched on
+// (rev-16 `payment_methods`). Absent = Transfer BNI + VA. Otherwise a comma list
+// of channels — "VA" (BNI not offered, as in production until §4.3.7),
+// "BANK_TRANSFER", or "" (none offered → 503 MINT_DISABLED).
+const PAYMENT_METHODS_KEY = "usdx-mock-payment-methods";
+function mockOfferedChannels(): Set<string> {
+  const all = new Set(["BANK_TRANSFER", "VA"]);
+  try {
+    if (typeof localStorage === "undefined") return all;
+    const raw = localStorage.getItem(PAYMENT_METHODS_KEY);
+    if (raw == null) return all;
+    return new Set(raw.split(",").map((c) => c.trim()).filter(Boolean));
+  } catch {
+    return all;
+  }
+}
+
+function mockPaymentMethods(): PaymentMethodSummary[] {
+  const offered = mockOfferedChannels();
+  const methods: PaymentMethodSummary[] = [];
+  if (offered.has("BANK_TRANSFER")) {
+    methods.push({ channel: "BANK_TRANSFER", bank: "BNI", provider: "BNI", feeType: "FLAT_IDR", feeValue: "0.00" });
+  }
+  if (offered.has("VA")) {
+    for (const bank of MOCK_VA_BANKS) {
+      methods.push({ channel: "VA", bank, provider: "MOCK", feeType: "FLAT_IDR", feeValue: idr(MOCK_PG_FEE_VA) });
+    }
+  }
+  return methods;
+}
+
+/** The cheapest buy rate among the offered methods — create's IDR divisor (§4.3.4). */
+function mockCheapestBuyRate(): number | null {
+  const offered = mockOfferedChannels();
+  const rates: number[] = [];
+  if (offered.has("BANK_TRANSFER")) rates.push(MOCK_BNI_TRANSFER_BUY_RATE);
+  if (offered.has("VA")) rates.push(mockGatewayBuyRate());
+  return rates.length > 0 ? Math.min(...rates) : null;
+}
 const mockEffectiveSellRate = () => MOCK_BASE_RATE * (1 - MOCK_SPREAD_SELL_PCT / 100);
 const idr = (n: number) => n.toFixed(2);
 
@@ -585,6 +633,10 @@ export async function mockGetConsumerRate(): Promise<ConsumerRate> {
     spreadBuyPct: String(MOCK_SPREAD_BUY_PCT),
     spreadSellPct: String(MOCK_SPREAD_SELL_PCT),
     effectiveBuyRate: idr(mockEffectiveBuyRate()),
+    // Null while the BNI method is not offered (rate.yaml § ConsumerRate).
+    bniTransferBuyRate: mockOfferedChannels().has("BANK_TRANSFER") ? idr(MOCK_BNI_TRANSFER_BUY_RATE) : null,
+    bniTransferBuyRateUpdatedAt: mockOfferedChannels().has("BANK_TRANSFER") ? MOCK_BNI_RATE_UPDATED_AT : null,
+    gatewayBuyRate: idr(mockGatewayBuyRate()),
     effectiveSellRate: idr(mockEffectiveSellRate()),
     updatedAt: new Date().toISOString(),
   };
@@ -645,7 +697,9 @@ export async function mockGetAppConfig(): Promise<AppConfig> {
     minMintIdr: idr(MOCK_MIN_MINT_IDR),
     minRedeemIdr: idr(MOCK_MIN_REDEEM_IDR),
     mintFeePct: String(MOCK_MINT_FEE_PCT),
+    // Deprecated (rev-16) but still sent during the transition, like the real one.
     pgFeeVaFlat: idr(MOCK_PG_FEE_VA),
+    paymentMethods: mockPaymentMethods(),
     contractAddress: MOCK_CONTRACT_ADDRESS,
     chain: "polygon",
     // Absent unless deliberately armed: before USDX-636 the backend does not send
@@ -831,7 +885,13 @@ export async function mockCreateMintOrder(req: CreateMintOrderRequest): Promise<
   await delay(600);
   maybeThrowRateLimited(); // 429 RATE_LIMITED seam (USDX-252)
   maybeThrowUnderMaintenance(); // 503 MINT_UNDER_MAINTENANCE seam (USDX-640)
-  const rate = mockEffectiveBuyRate();
+  // D25: no method offered → 503 MINT_DISABLED (§4.3.2). Otherwise the USDX
+  // amount is locked here, a rupiah entry converted with the CHEAPEST offered
+  // buy rate (§4.3.4) — the same divisor as the form's "Senilai".
+  const rate = mockCheapestBuyRate();
+  if (rate == null) {
+    throw new ApiError(503, "MINT_DISABLED", "Tidak ada metode pembayaran yang tersedia");
+  }
   const amountUsdx = req.amountCurrency === "USD" ? Number(req.amount) : Number(req.amount) / rate;
   const subtotalIdr = req.amountCurrency === "IDR" ? Number(req.amount) : amountUsdx * rate;
   const mintFeeIdr = subtotalIdr * (MOCK_MINT_FEE_PCT / 100);

@@ -1,8 +1,8 @@
 "use client";
 
 // Runtime config for the consumer app (USDX-635). GET /api/v2/config
-// (app-config.yaml) — the mint and redeem minimums in rupiah, the fee rates shown
-// before checkout, the token address the balance is read from, and the mint bundle
+// (app-config.yaml) — the mint and redeem minimums in rupiah, the mint payment
+// methods on offer (rev-16, each with its own fee), the token address the balance is read from, and the mint bundle
 // in force. Same shape and caching as `useConsumerRate`.
 //
 // The numbers arrive as decimal strings and are parsed ONCE here, at the edge.
@@ -13,7 +13,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { getAppConfig } from "@/lib/api/config-api";
-import type { AppConfig } from "@/types";
+import type { AppConfig, PaymentMethodSummary } from "@/types";
 
 export const APP_CONFIG_KEY = ["app-config"];
 
@@ -55,8 +55,14 @@ export interface AppConfigRead {
   redeemPayoutSimulated: boolean | null;
   /** Mint fee as a percentage of the subtotal (`mintFeePct`, "1.0" → 1). */
   mintFeePct: number | null;
-  /** Flat VA fee in IDR (`pgFeeVaFlat`). */
-  pgFeeVaFlat: number | null;
+  /**
+   * The mint payment methods the backend is OFFERING right now (rev-16,
+   * `paymentMethods[]` — admin-set from the back office), in display order.
+   * `null` = not known: still loading, failed, or a backend from before
+   * USDX-749 that does not send the field. `[]` = known to be none, i.e. create
+   * would answer 503 MINT_DISABLED. The deprecated `pgFeeVaFlat` is never read.
+   */
+  paymentMethods: PaymentMethodSummary[] | null;
   /** Production USDX token address for `chain`, or null when the backend has none. */
   contractAddress: string | null;
   /** Test-mint token address — non-null only in TEST mode, absent before USDX-636. */
@@ -74,9 +80,10 @@ export interface AppConfigRead {
    */
   mintMode: "PROD" | "TEST";
   /**
-   * The three numbers the MINT screen needs are all present. `minRedeemIdr` is
-   * not among them on purpose (USDX-682): it does not exist backend-side yet, and
-   * gating this flag on it would switch the mint screen off.
+   * What the MINT screen needs is present: the minimum and the list of offered
+   * payment methods (D25 rev-15: the form converts with the cheapest rate among
+   * the OFFERED methods, so without the list there is no honest conversion).
+   * `minRedeemIdr` is not among them on purpose (USDX-682).
    */
   isReady: boolean;
   isLoading: boolean;
@@ -97,14 +104,14 @@ export function useAppConfig(): AppConfigRead {
   const minMintIdr = toNumber(config?.minMintIdr);
   const minRedeemIdr = toNumber(config?.minRedeemIdr);
   const mintFeePct = toNumber(config?.mintFeePct);
-  const pgFeeVaFlat = toNumber(config?.pgFeeVaFlat);
+  const paymentMethods = Array.isArray(config?.paymentMethods) ? config.paymentMethods : null;
 
   return {
     config,
     minMintIdr,
     minRedeemIdr,
     mintFeePct,
-    pgFeeVaFlat,
+    paymentMethods,
     contractAddress: config?.contractAddress ?? null,
     testContractAddress: config?.testContractAddress ?? null,
     // Absent / not-yet-loaded stays null — never coerced to a boolean, because
@@ -112,7 +119,7 @@ export function useAppConfig(): AppConfigRead {
     redeemPayoutSimulated: config?.redeemPayoutSimulated ?? null,
     mintAvailable: config?.mintAvailable !== false,
     mintMode: config?.mintMode === "TEST" ? "TEST" : "PROD",
-    isReady: minMintIdr != null && mintFeePct != null && pgFeeVaFlat != null,
+    isReady: minMintIdr != null && paymentMethods != null,
     isLoading: query.isLoading,
     isError: query.isError,
     isFetching: query.isFetching,

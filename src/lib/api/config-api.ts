@@ -2,8 +2,8 @@
 // to hardcode: the mint minimum (in rupiah), the fee rates it shows before
 // checkout, and the token address the balance is read from.
 //
-//   GET /api/v2/config → { minMintIdr, mintFeePct, pgFeeVaFlat, contractAddress,
-//                          chain, mintMode? }
+//   GET /api/v2/config → { minMintIdr, mintFeePct, paymentMethods[], contractAddress,
+//                          chain, mintMode? }   (pgFeeVaFlat: deprecated, rev-16)
 //
 // Needs a consumer session — 401 without one, so callers must be inside the
 // dashboard shell. Routes to the mock layer when `env.useMock` (app-config.yaml).

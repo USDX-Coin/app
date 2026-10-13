@@ -22,7 +22,8 @@ import {
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useMint } from "@/hooks/useMint";
-import { formatAmount, formatIDR, truncateAddress } from "@/lib/utils";
+import { formatAmount, truncateAddress } from "@/lib/utils";
+import { formatRateIDR } from "@/components/mint/MintRatesPopover";
 import { useLang } from "@/providers/LanguageProvider";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -46,11 +47,7 @@ export function MintReview({ open, onOpenChange }: MintReviewProps) {
     destinationAddress,
     isCustodialDestination,
     amountUsdx,
-    subtotalIdr,
-    mintFeeIdr,
-    vaFeeIdr,
-    totalPayIdr,
-    effectiveBuyRate,
+    conversionRate,
     submitMint,
     isSubmitting,
     createErrorKey,
@@ -102,30 +99,14 @@ export function MintReview({ open, onOpenChange }: MintReviewProps) {
               )}
               {truncateAddress(destinationAddress)}
             </Row>
+            {/* "Nilai tukar" (week2.md § 2) = the rate the USDX amount was
+                converted with — the cheapest offered buy rate, same as the
+                form's "Senilai" (D25 rev-15). No fee or total here: the final
+                rate and total per method are locked at /pay and shown only in
+                checkout (§4.3.4), so any figure here would be a guess. */}
             <Row label={t("sum.exchangeRate")}>
-              1 USDX ≈ {effectiveBuyRate ? formatAmount(effectiveBuyRate) : "—"} IDR
+              1 USDX ≈ {conversionRate != null ? formatRateIDR(conversionRate) : "—"}
             </Row>
-          </div>
-
-          {/* What the user is about to be billed, itemised (USDX-638). This block
-              used to print the SUBTOTAL under the label "Total Pembayaran" and
-              then a sentence saying a fee would be added later — so on a Rp 20.000
-              purchase the Rp 4.000 VA fee, a fifth of the order, first appeared
-              on the next origin. The rates are the backend's (`mintFeePct`,
-              `pgFeeVaFlat`), so this total is the one checkout bills. */}
-          <div className="flex flex-col gap-1 border-t border-border pt-3">
-            <Row label={t("sum.mintValue")}>{formatIDR(subtotalIdr)}</Row>
-            <Row label={t("sum.mintFee")}>
-              {mintFeeIdr == null ? "—" : formatIDR(mintFeeIdr)}
-            </Row>
-            <Row label={t("sum.vaFee")}>{vaFeeIdr == null ? "—" : formatIDR(vaFeeIdr)}</Row>
-            <div className="mt-2 flex items-center justify-between border-t border-border pt-2">
-              <span className="text-sm font-medium text-foreground">{t("sum.totalPayment")}</span>
-              <span className="text-sm font-semibold text-foreground">
-                {totalPayIdr == null ? "—" : `≈ ${formatIDR(totalPayIdr)}`}
-              </span>
-            </div>
-            <p className="text-xs text-muted-text">{t("sum.feeNote")}</p>
           </div>
 
           <Alert tone="info" title={t("confirm.note")}>

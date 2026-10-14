@@ -97,9 +97,8 @@ const en: Dict = {
   // and its total with fees, are shown only at checkout.
   "mint.idrValue": "Worth",
   "mint.seeRates": "See rates",
-  "mint.rateBni": "BNI Transfer rate",
-  "mint.rateBniSource": "as in the wondr by BNI app",
-  "mint.rateUpdated": "updated {time}",
+  "mint.rateBni": "BNI Transfer",
+  "mint.rateBniNote": "Follows BNI's rate in the wondr app · no fee",
   "mint.rateVa": "Virtual Account rate",
   "mint.methodChosenLater": "You choose the method on the payment page.",
   // The mint minimum and the fees come from the backend. Without them the app
@@ -1281,9 +1280,8 @@ const id: Dict = {
   // total bayarnya (termasuk biaya) hanya tampil di checkout.
   "mint.idrValue": "Senilai",
   "mint.seeRates": "Lihat kurs",
-  "mint.rateBni": "Kurs Transfer BNI",
-  "mint.rateBniSource": "sesuai aplikasi wondr by BNI",
-  "mint.rateUpdated": "diperbarui {time}",
+  "mint.rateBni": "Transfer BNI",
+  "mint.rateBniNote": "Kurs mengikuti BNI di aplikasi wondr · tanpa biaya",
   "mint.rateVa": "Kurs Virtual Account",
   "mint.methodChosenLater": "Metode dipilih di halaman pembayaran.",
   // Batas minimum dan biaya datang dari backend. Tanpa itu app tidak punya

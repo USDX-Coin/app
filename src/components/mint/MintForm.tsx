@@ -106,9 +106,8 @@ export function MintForm() {
     amountUsdx,
     subtotalIdr,
     conversionRate,
-    bniTransferBuyRate,
-    bniTransferBuyRateUpdatedAt,
     gatewayBuyRate,
+    offersBniTransfer,
     rate,
     isRateLoading,
     isRateError,
@@ -245,8 +244,7 @@ export function MintForm() {
       labelAside={
         conversionRate == null ? undefined : (
           <MintRatesPopover
-            bniTransferBuyRate={bniTransferBuyRate}
-            bniTransferBuyRateUpdatedAt={bniTransferBuyRateUpdatedAt}
+            offersBniTransfer={offersBniTransfer}
             gatewayBuyRate={gatewayBuyRate}
           />
         )

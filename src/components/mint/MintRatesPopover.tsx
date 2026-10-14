@@ -2,8 +2,8 @@
 
 // "Lihat kurs" beside the "Senilai" box of the mint form (D25 rev-15,
 // `phase-2/week2.md § 1. Form Mint`). A small popover with each OFFERED method —
-// Virtual Account with its buy rate, and Transfer BNI WITHOUT a number ("kurs
-// mengikuti BNI di aplikasi wondr · tanpa biaya": since USDX-749 the customer
+// Virtual Account with its buy rate, and Transfer BNI WITHOUT a number ("Transfer
+// BNI: kurs mengikuti BNI di aplikasi wondr": since USDX-749 the customer
 // sends USD from wondr and BNI converts their rupiah at its own rate, which we
 // do not know — PM decision 14 Oct 2026) — plus "Metode dipilih di halaman
 // pembayaran." Information only: the method, and its total with fees, belong to
@@ -60,10 +60,9 @@ export function MintRatesPopover({ offersBniTransfer, gatewayBuyRate }: MintRate
           </div>
         )}
         {offersBniTransfer && (
-          <div className="flex flex-col gap-0.5 text-sm" data-testid="mint-rate-bni">
-            <span className="text-foreground">{t("mint.rateBni")}</span>
-            <span className="text-xs text-muted-text">{t("mint.rateBniNote")}</span>
-          </div>
+          <p className="text-sm text-foreground" data-testid="mint-rate-bni">
+            {t("mint.rateBniLine")}
+          </p>
         )}
         <p className="border-t border-border pt-3 text-xs text-muted-text">
           {t("mint.methodChosenLater")}

@@ -40,9 +40,8 @@ test.describe("Mint Page", () => {
       const details = page.getByTestId("mint-rate-details");
       await expect(details).toBeVisible();
       // USDX-749: Transfer BNI is described, never priced.
-      await expect(page.getByTestId("mint-rate-bni")).toContainText("BNI Transfer");
-      await expect(page.getByTestId("mint-rate-bni")).toContainText(
-        "Follows BNI's rate in the wondr app · no fee",
+      await expect(page.getByTestId("mint-rate-bni")).toHaveText(
+        "BNI transfer: follows BNI's rate in the wondr app",
       );
       await expect(page.getByTestId("mint-rate-bni")).not.toContainText("Rp");
       await expect(page.getByTestId("mint-rate-va")).toContainText("Virtual Account rate");
@@ -60,7 +59,7 @@ test.describe("Mint Page", () => {
         "Metode dipilih di halaman pembayaran.",
       );
       await expect(page.getByTestId("mint-rate-bni")).toContainText(
-        "Kurs mengikuti BNI di aplikasi wondr · tanpa biaya",
+        "Transfer BNI: kurs mengikuti BNI di aplikasi wondr",
       );
     });
 

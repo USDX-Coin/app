@@ -26,7 +26,7 @@ describe("MintRatesPopover", () => {
       const details = screen.getByTestId("mint-rate-details");
       expect(screen.getByTestId("mint-rate-va")).toHaveTextContent("Kurs Virtual AccountRp 16.160");
       expect(screen.getByTestId("mint-rate-bni")).toHaveTextContent(
-        "Transfer BNIKurs mengikuti BNI di aplikasi wondr · tanpa biaya",
+        /^Transfer BNI: kurs mengikuti BNI di aplikasi wondr$/,
       );
       expect(details).toHaveTextContent("Metode dipilih di halaman pembayaran.");
     });
@@ -42,7 +42,7 @@ describe("MintRatesPopover", () => {
     test("the BNI row never carries a rupiah figure, a '≈' or an update time", () => {
       renderPopover({ offersBniTransfer: true });
       const bni = screen.getByTestId("mint-rate-bni");
-      expect(bni).not.toHaveTextContent(/Rp|≈|\d|diperbarui/);
+      expect(bni).not.toHaveTextContent(/Rp|≈|\d|diperbarui|·|tanpa biaya/);
     });
 
     test("BNI not offered → no BNI row, the VA rate stays", () => {

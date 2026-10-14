@@ -6,7 +6,7 @@ import { MintReview } from "@/components/mint/MintReview";
 // Ringkasan Transaksi menampilkan kurs beli tiap metode yang ditawarkan, sama
 // dengan "Lihat kurs" (keputusan Wisnu 13 Okt 2026) — bukan satu "Nilai tukar"
 // yang hanya menunjukkan kurs VA. Transfer BNI tanpa angka (keputusan PM 14 Okt
-// 2026, USDX-749): "Kurs mengikuti BNI di aplikasi wondr · tanpa biaya".
+// 2026, USDX-749): "Transfer BNI: kurs mengikuti BNI di aplikasi wondr".
 
 const mint = {
   selectedChain: { name: "Polygon", icon: "/polygon.svg" },
@@ -42,9 +42,8 @@ describe("MintReview — kurs per metode", () => {
   describe("positive", () => {
     test("both methods offered → the VA rate and the BNI row without a number", () => {
       renderReview();
-      expect(screen.getByText("Transfer BNI")).toBeInTheDocument();
       expect(screen.getByTestId("mint-review-rate-bni")).toHaveTextContent(
-        /^Kurs mengikuti BNI di aplikasi wondr · tanpa biaya$/,
+        /^Transfer BNI: kurs mengikuti BNI di aplikasi wondr$/,
       );
       expect(screen.getByText("Kurs Virtual Account")).toBeInTheDocument();
       expect(screen.getByTestId("mint-review-rate-va")).toHaveTextContent("1 USDX = Rp 16.331,25");
@@ -55,7 +54,7 @@ describe("MintReview — kurs per metode", () => {
   describe("negative", () => {
     test("the BNI row never carries a rupiah figure", () => {
       renderReview();
-      expect(screen.getByTestId("mint-review-rate-bni")).not.toHaveTextContent(/Rp|≈|\d/);
+      expect(screen.getByTestId("mint-review-rate-bni")).not.toHaveTextContent(/Rp|≈|\d|·|tanpa biaya/);
     });
 
     test("Transfer BNI not offered → only the Virtual Account rate", () => {

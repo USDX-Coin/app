@@ -121,15 +121,9 @@ export function MintReview({ open, onOpenChange }: MintReviewProps) {
                   </Row>
                 )}
                 {offersBniTransfer && (
-                  <div className="flex items-start justify-between gap-3 text-sm">
-                    <span className="shrink-0 text-muted-text">{t("mint.rateBni")}</span>
-                    <span
-                      className="text-right font-medium text-foreground"
-                      data-testid="mint-review-rate-bni"
-                    >
-                      {t("mint.rateBniNote")}
-                    </span>
-                  </div>
+                  <p className="text-sm text-muted-text" data-testid="mint-review-rate-bni">
+                    {t("mint.rateBniLine")}
+                  </p>
                 )}
               </>
             )}

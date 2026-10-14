@@ -21,6 +21,7 @@ import { isHistoryItemType, isTransferItem } from "@/lib/history-item";
 import {
   formatDateTime,
   formatIDR,
+  formatTransferUSD,
   isSameAddress,
   cn,
 } from "@/lib/utils";
@@ -108,6 +109,16 @@ function subtotalValue(tx: ConsumerTransaction): string | null {
 }
 function totalValue(tx: ConsumerTransaction): string | null {
   return tx.type === "REDEEM" ? tx.netPayoutIdr : tx.totalPayIdr;
+}
+
+// The "Total" cell, formatted in the currency the customer actually transferred. Transfer BNI is
+// a USD transfer since USDX-749 (`payCurrency: "USD"`): its total is `totalPayUsd` ("$3,47") —
+// its `totalPayIdr` is only the rupiah equivalent and must not be shown as what was paid. No
+// `totalPayUsd` → "—", never a fallback to rupiah. Everything else stays rupiah.
+function totalText(tx: ConsumerTransaction): string {
+  if (tx.type === "MINT" && tx.payCurrency === "USD") return formatTransferUSD(tx.totalPayUsd);
+  const value = totalValue(tx);
+  return value == null ? "—" : formatIDR(Number(value));
 }
 
 // Filter /history (custodial-wallet.md §5.7, USDX-713): "all" = keempat jenis
@@ -380,7 +391,7 @@ export function TransactionList() {
                   {/* Total adalah angka yang benar-benar berpindah tangan —
                       Figma memberinya Nominal/Tabel Medium supaya ia menonjol
                       dari Subtotal di sebelahnya. */}
-                  <TableCell className="text-right font-medium tabular-nums text-foreground">{idrOrDash(totalValue(tx))}</TableCell>
+                  <TableCell className="text-right font-medium tabular-nums text-foreground">{totalText(tx)}</TableCell>
                   <TableCell className="text-foreground">{chainLabel(tx.chain)}</TableCell>
                   <TableCell><TxHashCell chain={tx.chain} txHash={tx.txHash} /></TableCell>
                   <TableCell className="w-[212px]">
@@ -418,7 +429,7 @@ export function TransactionList() {
                 <AmountCell amount={tx.amount} />
               </div>
               <CardRow label={t("tx.subtotal")} value={idrOrDash(subtotalValue(tx))} />
-              <CardRow label={t("tx.totalPay")} value={idrOrDash(totalValue(tx))} />
+              <CardRow label={t("tx.totalPay")} value={totalText(tx)} />
               <CardRow label={t("tx.chain")} value={chainLabel(tx.chain)} />
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-text">{t("tx.txHash")}</span>

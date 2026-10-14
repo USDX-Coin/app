@@ -200,3 +200,78 @@ describe("TransactionList — custodial wallet marker", () => {
     });
   });
 });
+
+// USDX-749 (PM 14 Oct 2026): Transfer BNI is a USD transfer — its history total is the USD paid,
+// never the rupiah equivalent the backend also sends.
+describe("TransactionList — Transfer BNI total in USD", () => {
+  function bniUsd(id: string, amount: string, over: Partial<ConsumerTransaction> = {}): ConsumerTransaction {
+    return {
+      ...tx(id, "MINT", amount, MANUAL),
+      subtotalIdr: "55520.00",
+      totalPayIdr: "55520.00",
+      totalPayUsd: amount,
+      payCurrency: "USD",
+      ...over,
+    };
+  }
+
+  beforeEach(() => setUser(undefined));
+
+  describe("positive", () => {
+    test("payCurrency USD → the Total cell shows $3,47, not the rupiah equivalent", async () => {
+      serve([bniUsd("m1", "3.47")]);
+      renderList();
+
+      const r = await row("3,47");
+      const cells = within(r).getAllByRole("cell");
+      expect(cells.some((c) => c.textContent === "$3,47")).toBe(true);
+      expect(cells.filter((c) => c.textContent === "Rp 55.520")).toHaveLength(1); // Subtotal only
+    });
+
+    test("the mobile card shows the same USD total", async () => {
+      serve([bniUsd("m1", "3.47")]);
+      renderList();
+
+      await screen.findByRole("table");
+      expect(screen.getAllByText("$3,47").length).toBe(2); // table cell + mobile card
+    });
+  });
+
+  describe("negative", () => {
+    test("a rupiah mint (VA / legacy rupiah Transfer BNI, payCurrency IDR) stays in rupiah", async () => {
+      serve([{ ...tx("m1", "MINT", "11", MANUAL), payCurrency: "IDR", totalPayUsd: null }]);
+      renderList();
+
+      const r = await row("11,00");
+      expect(within(r).getByText("Rp 163.000")).toBeInTheDocument();
+      expect(within(r).queryByText(/\$/)).toBeNull();
+    });
+  });
+
+  describe("edge case", () => {
+    test("USD without totalPayUsd → '—', no fallback to rupiah", async () => {
+      serve([bniUsd("m1", "3.47", { totalPayUsd: null })]);
+      renderList();
+
+      const r = await row("3,47");
+      const cells = within(r).getAllByRole("cell");
+      expect(cells.filter((c) => c.textContent === "Rp 55.520")).toHaveLength(1); // Subtotal only
+      expect(cells.some((c) => c.textContent === "—")).toBe(true);
+    });
+
+    test("an older backend without payCurrency → rupiah as before", async () => {
+      serve([tx("m1", "MINT", "11", MANUAL)]);
+      renderList();
+
+      expect(within(await row("11,00")).getByText("Rp 163.000")).toBeInTheDocument();
+    });
+
+    test("thousands of dollars keep the id-ID style", async () => {
+      serve([bniUsd("m1", "1234.56")]);
+      renderList();
+
+      await screen.findByRole("table");
+      expect(screen.getAllByText("$1.234,56").length).toBeGreaterThan(0);
+    });
+  });
+});

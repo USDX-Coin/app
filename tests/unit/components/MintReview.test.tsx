@@ -5,7 +5,8 @@ import { MintReview } from "@/components/mint/MintReview";
 
 // Ringkasan Transaksi menampilkan kurs beli tiap metode yang ditawarkan, sama
 // dengan "Lihat kurs" (keputusan Wisnu 13 Okt 2026) — bukan satu "Nilai tukar"
-// yang hanya menunjukkan kurs VA.
+// yang hanya menunjukkan kurs VA. Transfer BNI tanpa angka (keputusan PM 14 Okt
+// 2026, USDX-749): "Transfer BNI: kurs mengikuti BNI di aplikasi wondr".
 
 const mint = {
   selectedChain: { name: "Polygon", icon: "/polygon.svg" },
@@ -13,8 +14,8 @@ const mint = {
   isCustodialDestination: false,
   amountUsdx: 10,
   conversionRate: 16331.25 as number | null,
-  bniTransferBuyRate: 16400 as number | null,
   gatewayBuyRate: 16331.25 as number | null,
+  offersBniTransfer: true,
   isMintDisabled: false,
   submitMint: vi.fn(() => Promise.resolve()),
   isSubmitting: false,
@@ -33,16 +34,17 @@ function renderReview() {
 
 beforeEach(() => {
   mint.conversionRate = 16331.25;
-  mint.bniTransferBuyRate = 16400;
+  mint.offersBniTransfer = true;
   mint.gatewayBuyRate = 16331.25;
 });
 
 describe("MintReview — kurs per metode", () => {
   describe("positive", () => {
-    test("both methods offered → the BNI and the Virtual Account rate, labelled", () => {
+    test("both methods offered → the VA rate and the BNI row without a number", () => {
       renderReview();
-      expect(screen.getByText("Kurs Transfer BNI")).toBeInTheDocument();
-      expect(screen.getByTestId("mint-review-rate-bni")).toHaveTextContent("1 USDX = Rp 16.400");
+      expect(screen.getByTestId("mint-review-rate-bni")).toHaveTextContent(
+        /^Transfer BNI: kurs mengikuti BNI di aplikasi wondr$/,
+      );
       expect(screen.getByText("Kurs Virtual Account")).toBeInTheDocument();
       expect(screen.getByTestId("mint-review-rate-va")).toHaveTextContent("1 USDX = Rp 16.331,25");
       expect(screen.queryByText("Nilai tukar")).toBeNull();
@@ -50,25 +52,31 @@ describe("MintReview — kurs per metode", () => {
   });
 
   describe("negative", () => {
+    test("the BNI row never carries a rupiah figure", () => {
+      renderReview();
+      expect(screen.getByTestId("mint-review-rate-bni")).not.toHaveTextContent(/Rp|≈|\d|·|tanpa biaya/);
+    });
+
     test("Transfer BNI not offered → only the Virtual Account rate", () => {
-      mint.bniTransferBuyRate = null;
+      mint.offersBniTransfer = false;
       renderReview();
       expect(screen.queryByTestId("mint-review-rate-bni")).toBeNull();
       expect(screen.getByTestId("mint-review-rate-va")).toHaveTextContent("Rp 16.331,25");
     });
 
-    test("Virtual Account not offered → only the BNI rate", () => {
+    test("Virtual Account not offered → only the BNI row, no 'Nilai tukar' figure", () => {
       mint.gatewayBuyRate = null;
-      mint.conversionRate = 16400;
+      mint.conversionRate = null;
       renderReview();
       expect(screen.queryByTestId("mint-review-rate-va")).toBeNull();
-      expect(screen.getByTestId("mint-review-rate-bni")).toHaveTextContent("Rp 16.400");
+      expect(screen.getByTestId("mint-review-rate-bni")).toBeInTheDocument();
+      expect(screen.queryByText("Nilai tukar")).toBeNull();
     });
   });
 
   describe("edge cases", () => {
     test("a backend without per-method rates keeps the single 'Nilai tukar' row", () => {
-      mint.bniTransferBuyRate = null;
+      mint.offersBniTransfer = false;
       mint.gatewayBuyRate = null;
       mint.conversionRate = 16250;
       renderReview();

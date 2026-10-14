@@ -35,15 +35,15 @@ test.describe("Mint Page", () => {
       await expect(page.getByText(/1 USDX ≈/)).toHaveCount(0);
     });
 
-    test("'See rates' lists both rates, the wondr time and the method note", async ({ page }) => {
+    test("'See rates' lists the VA rate, the BNI row without a number and the method note", async ({ page }) => {
       await page.getByRole("button", { name: "See rates" }).click();
       const details = page.getByTestId("mint-rate-details");
       await expect(details).toBeVisible();
-      await expect(page.getByTestId("mint-rate-bni")).toContainText("BNI Transfer rate");
-      await expect(page.getByTestId("mint-rate-bni")).toContainText("Rp 15.950");
-      await expect(page.getByTestId("mint-rate-bni")).toContainText(
-        "as in the wondr by BNI app · updated 09.15 WIB",
+      // USDX-749: Transfer BNI is described, never priced.
+      await expect(page.getByTestId("mint-rate-bni")).toHaveText(
+        "BNI transfer: follows BNI's rate in the wondr app",
       );
+      await expect(page.getByTestId("mint-rate-bni")).not.toContainText("Rp");
       await expect(page.getByTestId("mint-rate-va")).toContainText("Virtual Account rate");
       await expect(page.getByTestId("mint-rate-va")).toContainText("Rp 16.160");
       await expect(details).toContainText("You choose the method on the payment page.");
@@ -59,7 +59,7 @@ test.describe("Mint Page", () => {
         "Metode dipilih di halaman pembayaran.",
       );
       await expect(page.getByTestId("mint-rate-bni")).toContainText(
-        "sesuai aplikasi wondr by BNI · diperbarui 09.15 WIB",
+        "Transfer BNI: kurs mengikuti BNI di aplikasi wondr",
       );
     });
 

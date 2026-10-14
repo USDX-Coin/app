@@ -108,6 +108,13 @@ export function useMint() {
     [rateQuery.data, config.paymentMethods],
   );
   const conversionRate = cheapestBuyRate(buyRates);
+  // Transfer BNI offered? (`paymentMethods[]` lists BANK_TRANSFER). Unknown —
+  // config not loaded yet, or an old backend without the field — counts as NOT
+  // offered. Since USDX-749 (PM decision 14 Oct 2026) Transfer BNI never shows
+  // a rupiah figure: BNI converts the customer's rupiah at its own rate in
+  // wondr, so "Lihat kurs" and the Ringkasan describe it instead of pricing it.
+  const offersBniTransfer =
+    config.paymentMethods?.some((m) => m.channel === "BANK_TRANSFER") === true;
   const enteredAmount = parseAmount(store.amount);
 
   // The USDX amount and its rupiah value at the cheapest buy rate ("Senilai",
@@ -307,6 +314,7 @@ export function useMint() {
     bniTransferBuyRateUpdatedAt:
       buyRates?.bniTransfer != null ? (rateQuery.data?.bniTransferBuyRateUpdatedAt ?? null) : null,
     gatewayBuyRate: buyRates?.gateway ?? null,
+    offersBniTransfer,
     isRateLoading: rateQuery.isLoading,
     isRateError: rateQuery.isError,
     // A failed rate load needs an action, not just a sentence (finding B8):

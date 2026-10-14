@@ -6,6 +6,7 @@ import {
   formatDuration,
   formatTokenAmount,
   formatUSD,
+  formatTransferUSD,
   isSameAddress,
   truncateAddress,
   parseAmount,
@@ -263,6 +264,32 @@ describe("formatTokenAmount", () => {
     });
     test("a non-numeric amount renders an em dash", () => {
       expect(formatTokenAmount("abc")).toBe("—");
+    });
+  });
+});
+
+// USDX-749: USD yang ditransfer untuk Transfer BNI, gaya id-ID seperti checkout.
+describe("formatTransferUSD", () => {
+  describe("positive", () => {
+    test("cents with a comma, thousands with a dot", () => {
+      expect(formatTransferUSD("3.47")).toBe("$3,47");
+      expect(formatTransferUSD("1234.5")).toBe("$1.234,50");
+      expect(formatTransferUSD(0.47)).toBe("$0,47");
+    });
+  });
+
+  describe("negative", () => {
+    test("null, empty, not a number → em dash", () => {
+      expect(formatTransferUSD(null)).toBe("—");
+      expect(formatTransferUSD(undefined)).toBe("—");
+      expect(formatTransferUSD("")).toBe("—");
+      expect(formatTransferUSD("abc")).toBe("—");
+    });
+  });
+
+  describe("edge cases", () => {
+    test("whole dollars keep two decimals", () => {
+      expect(formatTransferUSD("3")).toBe("$3,00");
     });
   });
 });

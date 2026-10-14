@@ -584,6 +584,12 @@ export interface ConsumerTransaction {
   subtotalIdr: string | null; // MINT: amount × effectiveBuyRate. Null for redeem.
   grossIdr: string | null; // REDEEM: amount × effectiveSellRate (pre-fee). Null for mint.
   totalPayIdr: string | null; // MINT: total paid (null before channel pick). REDEEM: null.
+  // USDX-749 (PM 14 Oct 2026): Transfer BNI is a USD transfer. `totalPayUsd` = the exact USD
+  // paid ("3.47", unique code in cents included); `payCurrency` = what was transferred — "USD"
+  // for those orders (their `totalPayIdr` is only the rupiah equivalent), "IDR" for every other
+  // mint incl. a legacy rupiah Transfer BNI order, null for redeem. Optional: older backends.
+  totalPayUsd?: string | null;
+  payCurrency?: "USD" | "IDR" | null;
   netPayoutIdr: string | null; // REDEEM: IDR received (gross − fee). Null for mint.
   effectiveRate: string; // snapshot rate (buy for mint, sell for redeem)
   chain: string;

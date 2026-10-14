@@ -52,6 +52,20 @@ export function formatUSD(value: number): string {
   }).format(value);
 }
 
+// Nominal USD yang DITRANSFER nasabah (Transfer BNI sejak USDX-749), gaya id-ID dan selalu dua
+// desimal — "$3,47", "$1.234,50" — sama dengan halaman checkout yang menagihnya. Sengaja bukan
+// `formatUSD` (en-US, "$3.47"): satu angka yang sama tidak boleh berganti tanda desimal antara
+// checkout dan riwayat. Null/kosong/bukan angka → "—".
+export function formatTransferUSD(value: string | number | null | undefined): string {
+  if (value == null || value === "") return "—";
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return "—";
+  return `$${new Intl.NumberFormat("id-ID", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n)}`;
+}
+
 // Tampilkan IDR sebagai rupiah bulat (tanpa ,00 di belakang) biar bersih dibaca —
 // konsisten dengan halaman checkout. Display-only; nominal otoritatif tetap dari backend.
 export function formatIDR(value: number): string {

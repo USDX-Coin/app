@@ -1,9 +1,11 @@
 "use client";
 
 // "Lihat kurs" beside the "Senilai" box of the mint form (D25 rev-15,
-// `phase-2/week2.md § 1. Form Mint`). A small popover with the buy rate of each
-// OFFERED method — Transfer BNI (the desk's rate, as in wondr by BNI, with the
-// time it was updated) and Virtual Account — plus "Metode dipilih di halaman
+// `phase-2/week2.md § 1. Form Mint`). A small popover with each OFFERED method —
+// Virtual Account with its buy rate, and Transfer BNI WITHOUT a number ("Transfer
+// BNI: kurs mengikuti BNI di aplikasi wondr": since USDX-749 the customer
+// sends USD from wondr and BNI converts their rupiah at its own rate, which we
+// do not know — PM decision 14 Oct 2026) — plus "Metode dipilih di halaman
 // pembayaran." Information only: the method, and its total with fees, belong to
 // the payment page (checkout `/pay`). A row whose method is not offered is
 // hidden — a rate nobody can pay with must not be shown (`rate.yaml`).
@@ -20,35 +22,15 @@ export function formatRateIDR(value: number): string {
   }).format(value)}`;
 }
 
-/** "09.15 WIB" — the desk's rate time, always in Jakarta time. Null on a bad value. */
-export function formatRateTime(iso: string | null): string | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  const time = new Intl.DateTimeFormat("id-ID", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-    timeZone: "Asia/Jakarta",
-  }).format(d);
-  return `${time} WIB`;
-}
-
 interface MintRatesPopoverProps {
-  /** Transfer BNI rate, null while that method is not offered. */
-  bniTransferBuyRate: number | null;
-  bniTransferBuyRateUpdatedAt: string | null;
+  /** Transfer BNI is offered (`paymentMethods[]`). Shown without a number. */
+  offersBniTransfer: boolean;
   /** Virtual Account rate, null while no VA method is offered. */
   gatewayBuyRate: number | null;
 }
 
-export function MintRatesPopover({
-  bniTransferBuyRate,
-  bniTransferBuyRateUpdatedAt,
-  gatewayBuyRate,
-}: MintRatesPopoverProps) {
+export function MintRatesPopover({ offersBniTransfer, gatewayBuyRate }: MintRatesPopoverProps) {
   const { t } = useLang();
-  const updated = formatRateTime(bniTransferBuyRateUpdatedAt);
 
   return (
     <Popover>
@@ -66,20 +48,6 @@ export function MintRatesPopover({
         className="flex flex-col gap-3"
         data-testid="mint-rate-details"
       >
-        {bniTransferBuyRate != null && (
-          <div className="flex flex-col gap-0.5" data-testid="mint-rate-bni">
-            <div className="flex items-baseline justify-between gap-3 text-sm">
-              <span className="text-foreground">{t("mint.rateBni")}</span>
-              <span className="font-semibold text-foreground tabular-nums">
-                {formatRateIDR(bniTransferBuyRate)}
-              </span>
-            </div>
-            <span className="text-xs text-muted-text">
-              {t("mint.rateBniSource")}
-              {updated && <> · {t("mint.rateUpdated", { time: updated })}</>}
-            </span>
-          </div>
-        )}
         {gatewayBuyRate != null && (
           <div
             className="flex items-baseline justify-between gap-3 text-sm"
@@ -90,6 +58,11 @@ export function MintRatesPopover({
               {formatRateIDR(gatewayBuyRate)}
             </span>
           </div>
+        )}
+        {offersBniTransfer && (
+          <p className="text-sm text-foreground" data-testid="mint-rate-bni">
+            {t("mint.rateBniLine")}
+          </p>
         )}
         <p className="border-t border-border pt-3 text-xs text-muted-text">
           {t("mint.methodChosenLater")}

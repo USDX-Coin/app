@@ -256,6 +256,7 @@ describe("useMint", () => {
         expect(result.current.bniTransferBuyRate).toBe(CHEAPEST_RATE);
         expect(result.current.bniTransferBuyRateUpdatedAt).toBe("2026-10-02T02:15:00Z");
         expect(result.current.gatewayBuyRate).toBe(VA_RATE);
+        expect(result.current.offersBniTransfer).toBe(true);
         expect(result.current.isFormValid).toBe(true);
       });
 
@@ -275,6 +276,16 @@ describe("useMint", () => {
         expect(result.current.subtotalIdr).toBe(100 * VA_RATE);
         expect(result.current.bniTransferBuyRate).toBeNull();
         expect(result.current.bniTransferBuyRateUpdatedAt).toBeNull();
+        expect(result.current.offersBniTransfer).toBe(false);
+      });
+
+      test("USDX-749: BNI offered with a null rate → offered, 'Senilai' on the VA rate", async () => {
+        localStorage.setItem("usdx-mock-payment-methods", "VA");
+        getAppConfigMock.mockResolvedValue(config({ paymentMethods: [VA_METHOD, BNI_METHOD] }));
+        const result = await rendered("100");
+        await waitFor(() => expect(result.current.conversionRate).toBe(VA_RATE));
+        expect(result.current.offersBniTransfer).toBe(true);
+        expect(result.current.subtotalIdr).toBe(100 * VA_RATE);
       });
     });
 
@@ -284,6 +295,7 @@ describe("useMint", () => {
         const result = await rendered("100");
 
         expect(result.current.isMintDisabled).toBe(true);
+        expect(result.current.offersBniTransfer).toBe(false);
         expect(result.current.conversionRate).toBeNull();
         expect(result.current.isFormValid).toBe(false);
         // Not the maintenance gate — a different reason with its own sentence.
@@ -302,6 +314,8 @@ describe("useMint", () => {
         await waitFor(() => expect(result.current.rate).not.toBeNull());
         expect(result.current.isConfigReady).toBe(false);
         expect(result.current.isMintDisabled).toBe(false);
+        // Unknown whether Transfer BNI is offered → its row is not shown.
+        expect(result.current.offersBniTransfer).toBe(false);
         expect(result.current.conversionRate).toBeNull();
         expect(result.current.isFormValid).toBe(false);
         // Typed in USDX, the USDX figure needs no rate; the rupiah side waits.

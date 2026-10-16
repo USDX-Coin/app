@@ -115,6 +115,7 @@ describe("useMint — custodial destination", () => {
       });
       expect(createMintOrderMock).toHaveBeenCalledWith(
         expect.objectContaining({ userAddress: CUSTODIAL, chain: "polygon" }),
+        expect.any(String),
       );
     });
 

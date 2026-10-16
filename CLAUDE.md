@@ -151,6 +151,9 @@ module level.
 ### Multi-Step Forms
 Mint and Redeem keep their state in Zustand stores; the Ringkasan is a modal:
 - Mint: single form view → Ringkasan modal → cross-origin checkout handoff (USDX-201/225).
+  `Idempotency-Key` (UUID v7, USDX-749 anti-dobel) is minted once per purchase intent by
+  `mintStore.ensureRequestKey()` and re-sent by every retry, so a create whose answer was lost
+  returns the SAME order; editing amount / currency / destination, or the handoff, drops it.
   A custodial-wallet owner gets a destination switch (`mintStore.destinationSource`):
   "wallet custodial saya" (default — the profile address fills `userAddress`, no new
   API field, `custodial-wallet.md` §5.2) or "alamat lain" (the unchanged manual path)

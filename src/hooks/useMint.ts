@@ -173,14 +173,19 @@ export function useMint() {
 
   const createMutation = useMutation({
     mutationFn: () =>
-      createMintOrder({
-        userAddress: destinationAddress.trim(),
-        // Backend interprets `amount` by `amountCurrency`: USD = USDX amount,
-        // IDR = subtotal (mint value). Pass the raw input either way.
-        amount: store.amount.trim(),
-        amountCurrency: store.amountCurrency,
-        chain: store.chainId,
-      }),
+      createMintOrder(
+        {
+          userAddress: destinationAddress.trim(),
+          // Backend interprets `amount` by `amountCurrency`: USD = USDX amount,
+          // IDR = subtotal (mint value). Pass the raw input either way.
+          amount: store.amount.trim(),
+          amountCurrency: store.amountCurrency,
+          chain: store.chainId,
+        },
+        // USDX-749 anti-dobel: same intent → same key, so a retry after a dropped
+        // connection gets back the order the first attempt already made.
+        useMintStore.getState().ensureRequestKey(),
+      ),
     onError: (error) => {
       // The gate closed while the user was filling the form. `useMutation` state
       // is per hook instance — MintForm and MintReview each call useMint() — so a

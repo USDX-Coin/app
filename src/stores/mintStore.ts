@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { AmountCurrency } from "@/types";
 import { MINT_CHAIN_ID } from "@/lib/constants";
+import { uuidv7 } from "@/lib/uuid";
 
 // Mint form state (USDX-201). The review (Ringkasan) is now a modal and the
 // post-create flow hands off (cross-origin) to the own-hosted checkout repo
@@ -36,6 +37,12 @@ interface MintState {
   destinationSource: MintDestinationSource;
   reviewOpen: boolean;
   handoffPending: boolean;
+  // USDX-749 anti-dobel — `Idempotency-Key` of the purchase being filled in. It stays the same while
+  // amount, currency and destination stay the same: a retry after a network error, or closing and
+  // reopening the Ringkasan, re-sends it and the backend answers with the SAME order instead of a new
+  // one. Any edit to the intent clears it; so does the handoff (the next purchase is a new intent).
+  requestKey: string | null;
+  ensureRequestKey: () => string;
   setAmount: (amount: string) => void;
   setAmountCurrency: (currency: AmountCurrency) => void;
   setDestinationAddress: (address: string) => void;
@@ -53,15 +60,36 @@ const initialState = {
   destinationSource: "custodial" as MintDestinationSource,
   reviewOpen: false,
   handoffPending: false,
+  requestKey: null as string | null,
 };
 
-export const useMintStore = create<MintState>()((set) => ({
+export const useMintStore = create<MintState>()((set, get) => ({
   ...initialState,
-  setAmount: (amount) => set({ amount }),
-  setAmountCurrency: (amountCurrency) => set({ amountCurrency }),
-  setDestinationAddress: (address) => set({ destinationAddress: address }),
-  setDestinationSource: (destinationSource) => set({ destinationSource }),
+  ensureRequestKey: () => {
+    const existing = get().requestKey;
+    if (existing) return existing;
+    const key = uuidv7();
+    set({ requestKey: key });
+    return key;
+  },
+  setAmount: (amount) =>
+    set((s) => ({ amount, requestKey: amount === s.amount ? s.requestKey : null })),
+  setAmountCurrency: (amountCurrency) =>
+    set((s) => ({
+      amountCurrency,
+      requestKey: amountCurrency === s.amountCurrency ? s.requestKey : null,
+    })),
+  setDestinationAddress: (address) =>
+    set((s) => ({
+      destinationAddress: address,
+      requestKey: address === s.destinationAddress ? s.requestKey : null,
+    })),
+  setDestinationSource: (destinationSource) =>
+    set((s) => ({
+      destinationSource,
+      requestKey: destinationSource === s.destinationSource ? s.requestKey : null,
+    })),
   setReviewOpen: (reviewOpen) => set({ reviewOpen }),
-  beginHandoff: () => set({ handoffPending: true }),
+  beginHandoff: () => set({ handoffPending: true, requestKey: null }),
   reset: () => set(initialState),
 }));

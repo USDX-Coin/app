@@ -35,6 +35,16 @@ describe("mintStore", () => {
       expect(useMintStore.getState().handoffPending).toBe(true);
     });
 
+    test("ensureRequestKey: same intent → same key (USDX-749 anti-dobel)", () => {
+      useMintStore.getState().setAmount("3");
+      const first = useMintStore.getState().ensureRequestKey();
+      expect(first).toMatch(/^[0-9a-f-]{36}$/);
+      useMintStore.getState().setReviewOpen(false);
+      useMintStore.getState().setReviewOpen(true);
+      useMintStore.getState().setAmount("3");
+      expect(useMintStore.getState().ensureRequestKey()).toBe(first);
+    });
+
     test("reset restores initial state", () => {
       useMintStore.getState().setAmount("500");
       useMintStore.getState().setAmountCurrency("IDR");
@@ -98,6 +108,30 @@ describe("mintStore", () => {
 
     test("chain is locked to Polygon (Phase 2 Polygon-only)", () => {
       expect(useMintStore.getState().chainId).toBe("polygon");
+    });
+  });
+  describe("edge case", () => {
+    test("changing amount, currency, address or source clears the key → new intent, new key", () => {
+      const st = () => useMintStore.getState();
+      const k1 = st().ensureRequestKey();
+      st().setAmount("5");
+      const k2 = st().ensureRequestKey();
+      expect(k2).not.toBe(k1);
+      st().setAmountCurrency("IDR");
+      const k3 = st().ensureRequestKey();
+      expect(k3).not.toBe(k2);
+      st().setDestinationAddress("0xabc");
+      const k4 = st().ensureRequestKey();
+      expect(k4).not.toBe(k3);
+      st().setDestinationSource("manual");
+      expect(st().ensureRequestKey()).not.toBe(k4);
+    });
+
+    test("beginHandoff clears the key — the next purchase is a new intent even with the same input", () => {
+      const k1 = useMintStore.getState().ensureRequestKey();
+      useMintStore.getState().beginHandoff();
+      expect(useMintStore.getState().requestKey).toBeNull();
+      expect(useMintStore.getState().ensureRequestKey()).not.toBe(k1);
     });
   });
 });

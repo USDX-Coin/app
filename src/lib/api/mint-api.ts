@@ -15,9 +15,16 @@ import type { MintOrderCreated } from "@/types";
 import type { CreateMintOrderRequest } from "./types";
 import { mockCreateMintOrder } from "./mock-api";
 
+// `idempotencyKey` (USDX-749 anti-dobel): one per purchase intent, re-sent on every retry — the
+// backend returns the order that key already created instead of a second one.
 export async function createMintOrder(
   req: CreateMintOrderRequest,
+  idempotencyKey: string,
 ): Promise<MintOrderCreated> {
   if (env.useMock) return mockCreateMintOrder(req);
-  return apiFetch<MintOrderCreated>("/api/v2/mint", { method: "POST", body: req });
+  return apiFetch<MintOrderCreated>("/api/v2/mint", {
+    method: "POST",
+    body: req,
+    headers: { "Idempotency-Key": idempotencyKey },
+  });
 }

@@ -369,6 +369,57 @@ describe("useMint", () => {
     });
   });
 
+  describe("anti-dobel Idempotency-Key (USDX-749)", () => {
+    async function rendered(amount = "100") {
+      useMintStore.getState().setAmount(amount);
+      useMintStore.getState().setDestinationAddress(VALID_ADDRESS);
+      const { result } = renderHook(() => useMint(), { wrapper: createWrapper() });
+      await waitFor(() => expect(result.current.isConfigReady).toBe(true));
+      return result;
+    }
+
+    describe("positive", () => {
+      test("create sends the intent's key as the second argument", async () => {
+        const result = await rendered("100");
+        await waitFor(() => expect(result.current.isFormValid).toBe(true));
+        await act(async () => {
+          await result.current.submitMint().catch(() => {});
+        });
+        const key = createMintOrderMock.mock.calls[0][1];
+        expect(key).toMatch(/^[0-9a-f-]{36}$/);
+      });
+    });
+
+    describe("negative", () => {
+      test("a failed attempt (network) keeps the key — the retry re-sends the SAME one", async () => {
+        createMintOrderMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+        const result = await rendered("100");
+        await waitFor(() => expect(result.current.isFormValid).toBe(true));
+        await act(async () => {
+          await result.current.submitMint().catch(() => {});
+        });
+        await act(async () => {
+          await result.current.submitMint().catch(() => {});
+        });
+        expect(createMintOrderMock).toHaveBeenCalledTimes(2);
+        expect(createMintOrderMock.mock.calls[1][1]).toBe(createMintOrderMock.mock.calls[0][1]);
+      });
+    });
+
+    describe("edge cases", () => {
+      test("after a successful create the next purchase gets a NEW key", async () => {
+        const result = await rendered("100");
+        await waitFor(() => expect(result.current.isFormValid).toBe(true));
+        await act(async () => {
+          await result.current.submitMint().catch(() => {});
+        });
+        const first = createMintOrderMock.mock.calls[0][1];
+        await waitFor(() => expect(useMintStore.getState().requestKey).toBeNull());
+        expect(useMintStore.getState().ensureRequestKey()).not.toBe(first);
+      });
+    });
+  });
+
   describe("calculations", () => {
     describe("positive", () => {
       test("USD input: amountUsdx = entered, subtotalIdr = entered × rate", async () => {
